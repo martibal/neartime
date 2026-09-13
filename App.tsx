@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,10 +10,12 @@ import {
   View,
 } from 'react-native';
 import MapView, { Callout, Marker } from 'react-native-maps';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { DEFAULT_ORIGIN, formatDistance, getTravelMinutes, modeLabel, mockPlaces, querySummary, runQuery } from './src/core/neartime';
 import { categories, openForOptions, reviewOptions, sortOptions, travelModes, travelOptions } from './src/domain/options';
 import type { Coordinate, OpenForMinutes, Place, ReviewMinimum, SearchQuery, SortKey, TravelMinutes, TravelMode } from './src/domain/types';
+import { executeSearch, mockSearchProvider } from './src/providers';
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
@@ -39,6 +40,8 @@ export default function App() {
   const [resultsVisible, setResultsVisible] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('time');
+  const [providerResults, setProviderResults] = useState<Place[]>([]);
+  const [providerStatus, setProviderStatus] = useState('Mock provider ready · 0 cost units');
 
   const query = useMemo<SearchQuery>(() => ({
     category,
@@ -50,7 +53,7 @@ export default function App() {
     openForMinutes,
   }), [category, travelMode, maxMinutes, minimumRating, minimumReviews, openNow, openForMinutes]);
 
-  const { filtered: filteredResults, sorted: sortedResults } = useMemo(
+  const { filtered: filteredResults } = useMemo(
     () => runQuery(mockPlaces, query, sortKey),
     [query, sortKey],
   );
@@ -76,226 +79,251 @@ export default function App() {
     }
   };
 
+  const runProviderSearch = async (nextSortKey: SortKey = sortKey, openModal = true) => {
+    try {
+      setProviderStatus('Running through provider boundary…');
+      const result = await executeSearch(mockSearchProvider, query, nextSortKey);
+      setProviderResults(result.places);
+      setProviderStatus(`${result.provider} · ${result.costUnits} cost units · external call: no`);
+      if (openModal) setResultsVisible(true);
+    } catch (error) {
+      setProviderResults([]);
+      setProviderStatus(error instanceof Error ? error.message : 'Search blocked');
+      if (openModal) setResultsVisible(true);
+    }
+  };
+
   useEffect(() => {
     void requestCurrentLocation();
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.brand}>NearTime</Text>
-            <Text style={styles.tagline}>Find the best places within your time.</Text>
-          </View>
-          <View style={styles.profileDot} />
-        </View>
-
-        <TouchableOpacity style={styles.locationCard} onPress={() => void requestCurrentLocation()}>
-          <View style={styles.locationTextWrap}>
-            <Text style={styles.eyebrow}>STARTING FROM</Text>
-            <Text style={styles.locationTitle}>📍 {locationLabel}</Text>
-          </View>
-          <Text style={styles.locationAction}>Refresh</Text>
-        </TouchableOpacity>
-
-        <View style={styles.sectionBlock}>
-          <Text style={styles.sectionTitle}>What do you need?</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
-            {categories.map((item) => (
-              <Chip key={item.label} label={`${item.emoji} ${item.label}`} active={category === item.label} onPress={() => setCategory(item.label)} />
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Travel mode</Text>
-            <Text style={styles.sectionValue}>{travelMode}</Text>
-          </View>
-          <View style={styles.modeRow}>
-            {travelModes.map((item) => (
-              <TouchableOpacity key={item.label} onPress={() => setTravelMode(item.label)} style={[styles.modeButton, travelMode === item.label && styles.modeButtonActive]}>
-                <Text style={styles.modeEmoji}>{item.emoji}</Text>
-                <Text style={[styles.modeText, travelMode === item.label && styles.modeTextActive]}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Maximum {modeLabel(travelMode)} time</Text>
-            <Text style={styles.sectionValue}>{maxMinutes} min</Text>
-          </View>
-          <View style={styles.timeRow}>
-            {travelOptions.map((minutes) => (
-              <TouchableOpacity key={minutes} onPress={() => setMaxMinutes(minutes)} style={[styles.timeButton, maxMinutes === minutes && styles.timeButtonActive]}>
-                <Text style={[styles.timeButtonText, maxMinutes === minutes && styles.timeButtonTextActive]}>{minutes}</Text>
-                <Text style={[styles.timeButtonUnit, maxMinutes === minutes && styles.timeButtonTextActive]}>min</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.filtersCard}>
-          <View style={styles.filterBlock}>
-            <Text style={styles.filterLabel}>Minimum rating</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactRow}>
-              {[4.0, 4.3, 4.5, 4.7].map((rating) => (
-                <Chip key={rating} label={`${rating.toFixed(1)} ★`} active={minimumRating === rating} onPress={() => setMinimumRating(rating)} />
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.filterBlock}>
-            <Text style={styles.filterLabel}>Minimum reviews</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactRow}>
-              {reviewOptions.map((reviews) => (
-                <Chip key={reviews} label={reviews === 0 ? 'Any' : `${reviews.toLocaleString()}+`} active={minimumReviews === reviews} onPress={() => setMinimumReviews(reviews)} />
-              ))}
-            </ScrollView>
-          </View>
-
-          <TouchableOpacity accessibilityRole="switch" accessibilityState={{ checked: openNow }} onPress={() => setOpenNow((value) => !value)} style={styles.toggleRow}>
-            <View style={styles.toggleTextWrap}>
-              <Text style={styles.filterLabel}>Open now</Text>
-              <Text style={styles.filterHint}>Hide places that are currently closed</Text>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="dark" />
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.brand}>NearTime</Text>
+              <Text style={styles.tagline}>Find the best places within your time.</Text>
             </View>
-            <View style={[styles.toggle, openNow && styles.toggleActive]}>
-              <View style={[styles.toggleKnob, openNow && styles.toggleKnobActive]} />
+            <View style={styles.profileDot} />
+          </View>
+
+          <TouchableOpacity style={styles.locationCard} onPress={() => void requestCurrentLocation()}>
+            <View style={styles.locationTextWrap}>
+              <Text style={styles.eyebrow}>STARTING FROM</Text>
+              <Text style={styles.locationTitle}>📍 {locationLabel}</Text>
             </View>
+            <Text style={styles.locationAction}>Refresh</Text>
           </TouchableOpacity>
 
-          <View style={styles.filterBlock}>
-            <Text style={styles.filterLabel}>Must stay open for</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactRow}>
-              {openForOptions.map((minutes) => (
-                <Chip key={minutes} label={minutes === 0 ? 'Any time' : `${minutes / 60}h+`} active={openForMinutes === minutes} onPress={() => setOpenForMinutes(minutes)} />
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionTitle}>What do you need?</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
+              {categories.map((item) => (
+                <Chip key={item.label} label={`${item.emoji} ${item.label}`} active={category === item.label} onPress={() => setCategory(item.label)} />
               ))}
             </ScrollView>
           </View>
-        </View>
 
-        <View style={styles.summaryBar}>
-          <View style={styles.summaryTextWrap}>
-            <Text style={styles.summaryMain}>{filteredResults.length} {filteredResults.length === 1 ? 'match' : 'matches'}</Text>
-            <Text style={styles.summaryDetail} numberOfLines={2}>{querySummary(query)}</Text>
-          </View>
-          <TouchableOpacity style={styles.seeResultsButton} onPress={() => setResultsVisible(true)}>
-            <Text style={styles.seeResultsButtonText}>See results</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.mapShell}>
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            mapType="standard"
-            initialRegion={{ ...DEFAULT_ORIGIN, latitudeDelta: 0.022, longitudeDelta: 0.022 }}
-            showsUserLocation={locationReady}
-            showsMyLocationButton={locationReady}
-            toolbarEnabled={false}
-            loadingEnabled
-            loadingBackgroundColor="#E9EEE8"
-          >
-            {filteredResults.map((place) => {
-              const coordinate = { latitude: origin.latitude + place.latitudeOffset, longitude: origin.longitude + place.longitudeOffset };
-              const minutes = getTravelMinutes(place, travelMode);
-              return (
-                <Marker key={place.id} coordinate={coordinate} anchor={{ x: 0.5, y: 1 }}>
-                  <View style={styles.mapTimePin}><Text style={styles.mapTimePinText}>{minutes} min</Text></View>
-                  <Callout onPress={() => setSelectedPlace(place)}>
-                    <View style={styles.callout}>
-                      <Text style={styles.calloutTitle}>{place.name}</Text>
-                      <Text style={styles.calloutText}>{place.rating.toFixed(1)} ★ · {place.reviewCount.toLocaleString()} reviews</Text>
-                    </View>
-                  </Callout>
-                </Marker>
-              );
-            })}
-          </MapView>
-          <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>LIVE MAP · MOCK PLACES</Text></View>
-        </View>
-
-        <TouchableOpacity style={styles.largeResultsButton} onPress={() => setResultsVisible(true)}>
-          <Text style={styles.largeResultsButtonText}>See {filteredResults.length} {filteredResults.length === 1 ? 'result' : 'results'}</Text>
-        </TouchableOpacity>
-
-        <View style={styles.devNotice}>
-          <Text style={styles.devNoticeTitle}>Prototype mode</Text>
-          <Text style={styles.devNoticeText}>The query engine, sorting and place repository are now separated from the UI. Data is still local mock data, so no Places or Routes charges are possible.</Text>
-        </View>
-      </ScrollView>
-
-      <Modal visible={resultsVisible} animationType="slide" onRequestClose={() => setResultsVisible(false)}>
-        <SafeAreaView style={styles.modalSafeArea}>
-          <View style={styles.modalHeader}>
-            <View>
-              <Text style={styles.modalTitle}>Results</Text>
-              <Text style={styles.modalSubtitle}>{filteredResults.length} places match your filters</Text>
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Travel mode</Text>
+              <Text style={styles.sectionValue}>{travelMode}</Text>
             </View>
-            <TouchableOpacity onPress={() => setResultsVisible(false)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
+            <View style={styles.modeRow}>
+              {travelModes.map((item) => (
+                <TouchableOpacity key={item.label} onPress={() => setTravelMode(item.label)} style={[styles.modeButton, travelMode === item.label && styles.modeButtonActive]}>
+                  <Text style={styles.modeEmoji}>{item.emoji}</Text>
+                  <Text style={[styles.modeText, travelMode === item.label && styles.modeTextActive]}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
-            {sortOptions.map((option) => (
-              <Chip key={option.key} label={option.label} active={sortKey === option.key} onPress={() => setSortKey(option.key)} />
-            ))}
-          </ScrollView>
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Maximum {modeLabel(travelMode)} time</Text>
+              <Text style={styles.sectionValue}>{maxMinutes} min</Text>
+            </View>
+            <View style={styles.timeRow}>
+              {travelOptions.map((minutes) => (
+                <TouchableOpacity key={minutes} onPress={() => setMaxMinutes(minutes)} style={[styles.timeButton, maxMinutes === minutes && styles.timeButtonActive]}>
+                  <Text style={[styles.timeButtonText, maxMinutes === minutes && styles.timeButtonTextActive]}>{minutes}</Text>
+                  <Text style={[styles.timeButtonUnit, maxMinutes === minutes && styles.timeButtonTextActive]}>min</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
-          <ScrollView contentContainerStyle={styles.resultsList}>
-            {sortedResults.length === 0 ? (
-              <View style={styles.emptyState}><Text style={styles.emptyTitle}>No matches</Text><Text style={styles.emptyText}>Increase travel time or relax one of the filters.</Text></View>
-            ) : (
-              sortedResults.map((place) => {
-                const travelMinutes = getTravelMinutes(place, travelMode);
+          <View style={styles.filtersCard}>
+            <View style={styles.filterBlock}>
+              <Text style={styles.filterLabel}>Minimum rating</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactRow}>
+                {[4.0, 4.3, 4.5, 4.7].map((rating) => (
+                  <Chip key={rating} label={`${rating.toFixed(1)} ★`} active={minimumRating === rating} onPress={() => setMinimumRating(rating)} />
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.filterBlock}>
+              <Text style={styles.filterLabel}>Minimum reviews</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactRow}>
+                {reviewOptions.map((reviews) => (
+                  <Chip key={reviews} label={reviews === 0 ? 'Any' : `${reviews.toLocaleString()}+`} active={minimumReviews === reviews} onPress={() => setMinimumReviews(reviews)} />
+                ))}
+              </ScrollView>
+            </View>
+
+            <TouchableOpacity accessibilityRole="switch" accessibilityState={{ checked: openNow }} onPress={() => setOpenNow((value) => !value)} style={styles.toggleRow}>
+              <View style={styles.toggleTextWrap}>
+                <Text style={styles.filterLabel}>Open now</Text>
+                <Text style={styles.filterHint}>Hide places that are currently closed</Text>
+              </View>
+              <View style={[styles.toggle, openNow && styles.toggleActive]}>
+                <View style={[styles.toggleKnob, openNow && styles.toggleKnobActive]} />
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.filterBlock}>
+              <Text style={styles.filterLabel}>Must stay open for</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactRow}>
+                {openForOptions.map((minutes) => (
+                  <Chip key={minutes} label={minutes === 0 ? 'Any time' : `${minutes / 60}h+`} active={openForMinutes === minutes} onPress={() => setOpenForMinutes(minutes)} />
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+
+          <View style={styles.summaryBar}>
+            <View style={styles.summaryTextWrap}>
+              <Text style={styles.summaryMain}>{filteredResults.length} {filteredResults.length === 1 ? 'match' : 'matches'}</Text>
+              <Text style={styles.summaryDetail} numberOfLines={2}>{querySummary(query)}</Text>
+            </View>
+            <TouchableOpacity style={styles.seeResultsButton} onPress={() => void runProviderSearch()}>
+              <Text style={styles.seeResultsButtonText}>See results</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.mapShell}>
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              mapType="standard"
+              initialRegion={{ ...DEFAULT_ORIGIN, latitudeDelta: 0.022, longitudeDelta: 0.022 }}
+              showsUserLocation={locationReady}
+              showsMyLocationButton={locationReady}
+              toolbarEnabled={false}
+              loadingEnabled
+              loadingBackgroundColor="#E9EEE8"
+            >
+              {filteredResults.map((place) => {
+                const coordinate = { latitude: origin.latitude + place.latitudeOffset, longitude: origin.longitude + place.longitudeOffset };
+                const minutes = getTravelMinutes(place, travelMode);
                 return (
-                  <TouchableOpacity key={place.id} style={styles.resultCard} onPress={() => setSelectedPlace(place)}>
-                    <View style={styles.resultTopRow}>
-                      <View style={styles.resultTitleWrap}>
-                        <Text style={styles.travelTime}>{travelMinutes} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)}</Text>
-                        <Text style={styles.placeName}>{place.name}</Text>
+                  <Marker key={place.id} coordinate={coordinate} anchor={{ x: 0.5, y: 1 }}>
+                    <View style={styles.mapTimePin}><Text style={styles.mapTimePinText}>{minutes} min</Text></View>
+                    <Callout onPress={() => setSelectedPlace(place)}>
+                      <View style={styles.callout}>
+                        <Text style={styles.calloutTitle}>{place.name}</Text>
+                        <Text style={styles.calloutText}>{place.rating.toFixed(1)} ★ · {place.reviewCount.toLocaleString()} reviews</Text>
                       </View>
-                      <View style={styles.ratingBadge}><Text style={styles.ratingBadgeText}>{place.rating.toFixed(1)} ★</Text></View>
-                    </View>
-                    <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · Open for {Math.floor(place.closesInMinutes / 60)}h {place.closesInMinutes % 60}m</Text>
-                    <Text style={styles.placeAddress}>{place.address}</Text>
-                  </TouchableOpacity>
+                    </Callout>
+                  </Marker>
                 );
-              })
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
-      <Modal visible={selectedPlace !== null} transparent animationType="slide" onRequestClose={() => setSelectedPlace(null)}>
-        <View style={styles.detailBackdrop}>
-          <View style={styles.detailSheet}>
-            {selectedPlace && (
-              <>
-                <View style={styles.detailHandle} />
-                <View style={styles.detailHeaderRow}>
-                  <View style={styles.detailTitleWrap}>
-                    <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
-                    <Text style={styles.detailSub}>{selectedPlace.rating.toFixed(1)} ★ · {selectedPlace.reviewCount.toLocaleString()} reviews · {selectedPlace.price}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setSelectedPlace(null)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
-                </View>
-                <Text style={styles.detailLead}>{getTravelMinutes(selectedPlace, travelMode)} min {modeLabel(travelMode)} · {formatDistance(selectedPlace.distanceMeters)}</Text>
-                <Text style={styles.detailLine}>📍 {selectedPlace.address}</Text>
-                <Text style={styles.detailLine}>🕒 Open for {Math.floor(selectedPlace.closesInMinutes / 60)}h {selectedPlace.closesInMinutes % 60}m</Text>
-                <Text style={styles.detailLine}>📞 {selectedPlace.phone}</Text>
-                <Text style={styles.detailLine}>🌐 {selectedPlace.website}</Text>
-                <View style={styles.highlightRow}>{selectedPlace.highlights.map((item) => <View key={item} style={styles.highlightPill}><Text style={styles.highlightText}>{item}</Text></View>)}</View>
-                <TouchableOpacity style={styles.directionsButton}><Text style={styles.directionsButtonText}>Show directions</Text></TouchableOpacity>
-              </>
-            )}
+              })}
+            </MapView>
+            <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>LIVE MAP · MOCK PLACES</Text></View>
           </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+
+          <TouchableOpacity style={styles.largeResultsButton} onPress={() => void runProviderSearch()}>
+            <Text style={styles.largeResultsButtonText}>See {filteredResults.length} {filteredResults.length === 1 ? 'result' : 'results'}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.devNotice}>
+            <Text style={styles.devNoticeTitle}>Protected prototype mode</Text>
+            <Text style={styles.devNoticeText}>UI → query → provider boundary → mock provider → results is live. Billable providers must pass the hard cost gate first; external APIs remain locked.</Text>
+            <Text style={styles.devNoticeStatus}>{providerStatus}</Text>
+          </View>
+        </ScrollView>
+
+        <Modal visible={resultsVisible} animationType="slide" onRequestClose={() => setResultsVisible(false)}>
+          <SafeAreaView style={styles.modalSafeArea}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Results</Text>
+                <Text style={styles.modalSubtitle}>{providerResults.length} places from protected mock provider</Text>
+              </View>
+              <TouchableOpacity onPress={() => setResultsVisible(false)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
+              {sortOptions.map((option) => (
+                <Chip
+                  key={option.key}
+                  label={option.label}
+                  active={sortKey === option.key}
+                  onPress={() => {
+                    setSortKey(option.key);
+                    void runProviderSearch(option.key, false);
+                  }}
+                />
+              ))}
+            </ScrollView>
+
+            <ScrollView contentContainerStyle={styles.resultsList}>
+              {providerResults.length === 0 ? (
+                <View style={styles.emptyState}><Text style={styles.emptyTitle}>No matches</Text><Text style={styles.emptyText}>Increase travel time or relax one of the filters.</Text></View>
+              ) : (
+                providerResults.map((place) => {
+                  const travelMinutes = getTravelMinutes(place, travelMode);
+                  return (
+                    <TouchableOpacity key={place.id} style={styles.resultCard} onPress={() => setSelectedPlace(place)}>
+                      <View style={styles.resultTopRow}>
+                        <View style={styles.resultTitleWrap}>
+                          <Text style={styles.travelTime}>{travelMinutes} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)}</Text>
+                          <Text style={styles.placeName}>{place.name}</Text>
+                        </View>
+                        <View style={styles.ratingBadge}><Text style={styles.ratingBadgeText}>{place.rating.toFixed(1)} ★</Text></View>
+                      </View>
+                      <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · Open for {Math.floor(place.closesInMinutes / 60)}h {place.closesInMinutes % 60}m</Text>
+                      <Text style={styles.placeAddress}>{place.address}</Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
+        <Modal visible={selectedPlace !== null} transparent animationType="slide" onRequestClose={() => setSelectedPlace(null)}>
+          <View style={styles.detailBackdrop}>
+            <View style={styles.detailSheet}>
+              {selectedPlace && (
+                <>
+                  <View style={styles.detailHandle} />
+                  <View style={styles.detailHeaderRow}>
+                    <View style={styles.detailTitleWrap}>
+                      <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
+                      <Text style={styles.detailSub}>{selectedPlace.rating.toFixed(1)} ★ · {selectedPlace.reviewCount.toLocaleString()} reviews · {selectedPlace.price}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setSelectedPlace(null)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
+                  </View>
+                  <Text style={styles.detailLead}>{getTravelMinutes(selectedPlace, travelMode)} min {modeLabel(travelMode)} · {formatDistance(selectedPlace.distanceMeters)}</Text>
+                  <Text style={styles.detailLine}>📍 {selectedPlace.address}</Text>
+                  <Text style={styles.detailLine}>🕒 Open for {Math.floor(selectedPlace.closesInMinutes / 60)}h {selectedPlace.closesInMinutes % 60}m</Text>
+                  <Text style={styles.detailLine}>📞 {selectedPlace.phone}</Text>
+                  <Text style={styles.detailLine}>🌐 {selectedPlace.website}</Text>
+                  <View style={styles.highlightRow}>{selectedPlace.highlights.map((item) => <View key={item} style={styles.highlightPill}><Text style={styles.highlightText}>{item}</Text></View>)}</View>
+                  <TouchableOpacity style={styles.directionsButton}><Text style={styles.directionsButtonText}>Show directions</Text></TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -364,6 +392,7 @@ const styles = StyleSheet.create({
   devNotice: { borderRadius: 16, backgroundColor: '#FFF6E3', padding: 13, borderWidth: 1, borderColor: '#E9D4A5' },
   devNoticeTitle: { fontSize: 12, fontWeight: '800', color: '#765F2E' },
   devNoticeText: { marginTop: 2, fontSize: 11, lineHeight: 16, color: '#765F2E' },
+  devNoticeStatus: { marginTop: 7, fontSize: 10, fontWeight: '800', color: '#765F2E' },
   modalSafeArea: { flex: 1, backgroundColor: '#F7F7F5' },
   modalHeader: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   modalTitle: { fontSize: 26, fontWeight: '800', color: '#171917' },
