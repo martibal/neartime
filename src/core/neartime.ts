@@ -59,6 +59,7 @@ export function runQuery(places: Place[], query: SearchQuery, sortKey: SortKey) 
 
 export function querySummary(query: SearchQuery) {
   const parts = [
+    query.category,
     query.travelMode,
     `≤ ${query.maxMinutes} min`,
     `≥ ${query.minimumRating.toFixed(1)} ★`,
