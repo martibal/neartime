@@ -12,72 +12,9 @@ import {
 } from 'react-native';
 import MapView, { Callout, Marker } from 'react-native-maps';
 
-type Category = 'Restaurant' | 'Cafe' | 'Grocery' | 'Pharmacy' | 'Parking';
-type TravelMinutes = 5 | 10 | 15 | 20;
-type TravelMode = 'Walk' | 'Drive' | 'Bike';
-type ReviewMinimum = 0 | 100 | 300 | 1000;
-type OpenForMinutes = 0 | 60 | 120 | 180;
-type Coordinate = { latitude: number; longitude: number };
-type SortKey = 'time' | 'rating' | 'distance' | 'price' | 'reviews' | 'open';
-
-type Place = {
-  id: string;
-  name: string;
-  category: Category;
-  walkMinutes: number;
-  driveMinutes: number;
-  bikeMinutes: number;
-  distanceMeters: number;
-  rating: number;
-  reviewCount: number;
-  priceLevel: number;
-  price: string;
-  open: boolean;
-  closesInMinutes: number;
-  address: string;
-  phone: string;
-  website: string;
-  highlights: string[];
-  latitudeOffset: number;
-  longitudeOffset: number;
-};
-
-const DEFAULT_ORIGIN: Coordinate = { latitude: 59.9139, longitude: 10.7522 };
-
-const categories: Array<{ label: Category; emoji: string }> = [
-  { label: 'Restaurant', emoji: '🍽️' },
-  { label: 'Cafe', emoji: '☕' },
-  { label: 'Grocery', emoji: '🛒' },
-  { label: 'Pharmacy', emoji: '💊' },
-  { label: 'Parking', emoji: '🅿️' },
-];
-
-const travelOptions: TravelMinutes[] = [5, 10, 15, 20];
-const travelModes: Array<{ label: TravelMode; emoji: string }> = [
-  { label: 'Walk', emoji: '🚶' },
-  { label: 'Drive', emoji: '🚗' },
-  { label: 'Bike', emoji: '🚲' },
-];
-const reviewOptions: ReviewMinimum[] = [0, 100, 300, 1000];
-const openForOptions: OpenForMinutes[] = [0, 60, 120, 180];
-const sortOptions: Array<{ key: SortKey; label: string }> = [
-  { key: 'time', label: 'Travel time' },
-  { key: 'rating', label: 'Rating' },
-  { key: 'distance', label: 'Distance' },
-  { key: 'price', label: 'Price' },
-  { key: 'reviews', label: 'Reviews' },
-  { key: 'open', label: 'Open longest' },
-];
-
-const mockPlaces: Place[] = [
-  { id: '1', name: 'Osteria Centro', category: 'Restaurant', walkMinutes: 6, driveMinutes: 3, bikeMinutes: 3, distanceMeters: 430, rating: 4.7, reviewCount: 842, priceLevel: 2, price: '$$', open: true, closesInMinutes: 165, address: 'Centralgata 12', phone: '+47 22 11 22 33', website: 'osteriacentro.example', highlights: ['Dine-in', 'Reservations', 'Outdoor seating'], latitudeOffset: 0.0038, longitudeOffset: -0.0028 },
-  { id: '2', name: 'Trattoria Verde', category: 'Restaurant', walkMinutes: 9, driveMinutes: 4, bikeMinutes: 5, distanceMeters: 690, rating: 4.5, reviewCount: 1204, priceLevel: 2, price: '$$', open: true, closesInMinutes: 240, address: 'Parkveien 8', phone: '+47 22 44 55 66', website: 'trattoriaverde.example', highlights: ['Vegetarian options', 'Takeout', 'Reservations'], latitudeOffset: -0.0048, longitudeOffset: 0.0038 },
-  { id: '3', name: 'Corner Table', category: 'Restaurant', walkMinutes: 13, driveMinutes: 6, bikeMinutes: 7, distanceMeters: 980, rating: 4.3, reviewCount: 311, priceLevel: 1, price: '$', open: true, closesInMinutes: 95, address: 'Storgata 41', phone: '+47 22 77 88 99', website: 'cornertable.example', highlights: ['Casual', 'Takeout'], latitudeOffset: 0.0065, longitudeOffset: 0.0052 },
-  { id: '4', name: 'North Coffee', category: 'Cafe', walkMinutes: 4, driveMinutes: 2, bikeMinutes: 2, distanceMeters: 280, rating: 4.6, reviewCount: 517, priceLevel: 2, price: '$$', open: true, closesInMinutes: 140, address: 'Kaffegata 3', phone: '+47 22 12 13 14', website: 'northcoffee.example', highlights: ['Coffee', 'Breakfast', 'Takeout'], latitudeOffset: 0.0022, longitudeOffset: 0.0018 },
-  { id: '5', name: 'City Market', category: 'Grocery', walkMinutes: 7, driveMinutes: 3, bikeMinutes: 4, distanceMeters: 510, rating: 4.2, reviewCount: 189, priceLevel: 1, price: '$', open: true, closesInMinutes: 310, address: 'Torget 5', phone: '+47 22 90 90 90', website: 'citymarket.example', highlights: ['Groceries', 'Fresh food'], latitudeOffset: -0.0032, longitudeOffset: -0.0035 },
-  { id: '6', name: 'Central Pharmacy', category: 'Pharmacy', walkMinutes: 8, driveMinutes: 4, bikeMinutes: 5, distanceMeters: 620, rating: 4.4, reviewCount: 96, priceLevel: 2, price: '$$', open: true, closesInMinutes: 75, address: 'Apotekveien 2', phone: '+47 22 66 77 88', website: 'centralpharmacy.example', highlights: ['Pharmacy', 'Health products'], latitudeOffset: 0.0044, longitudeOffset: 0.004 },
-  { id: '7', name: 'Station Garage', category: 'Parking', walkMinutes: 12, driveMinutes: 5, bikeMinutes: 8, distanceMeters: 900, rating: 4.1, reviewCount: 273, priceLevel: 2, price: '$$', open: true, closesInMinutes: 720, address: 'Stasjonsplassen 1', phone: '+47 22 33 44 55', website: 'stationgarage.example', highlights: ['Covered parking', 'EV charging'], latitudeOffset: -0.005, longitudeOffset: 0.0012 },
-];
+import { DEFAULT_ORIGIN, formatDistance, getTravelMinutes, modeLabel, mockPlaces, querySummary, runQuery } from './src/core/neartime';
+import { categories, openForOptions, reviewOptions, sortOptions, travelModes, travelOptions } from './src/domain/options';
+import type { Coordinate, OpenForMinutes, Place, ReviewMinimum, SearchQuery, SortKey, TravelMinutes, TravelMode } from './src/domain/types';
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
@@ -87,25 +24,9 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
   );
 }
 
-function getTravelMinutes(place: Place, mode: TravelMode) {
-  if (mode === 'Drive') return place.driveMinutes;
-  if (mode === 'Bike') return place.bikeMinutes;
-  return place.walkMinutes;
-}
-
-function modeLabel(mode: TravelMode) {
-  if (mode === 'Drive') return 'drive';
-  if (mode === 'Bike') return 'bike';
-  return 'walk';
-}
-
-function formatDistance(meters: number) {
-  return meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1)} km`;
-}
-
 export default function App() {
   const mapRef = useRef<MapView | null>(null);
-  const [category, setCategory] = useState<Category>('Restaurant');
+  const [category, setCategory] = useState<SearchQuery['category']>('Restaurant');
   const [travelMode, setTravelMode] = useState<TravelMode>('Walk');
   const [maxMinutes, setMaxMinutes] = useState<TravelMinutes>(10);
   const [minimumRating, setMinimumRating] = useState(4.0);
@@ -118,6 +39,21 @@ export default function App() {
   const [resultsVisible, setResultsVisible] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('time');
+
+  const query = useMemo<SearchQuery>(() => ({
+    category,
+    travelMode,
+    maxMinutes,
+    minimumRating,
+    minimumReviews,
+    openNow,
+    openForMinutes,
+  }), [category, travelMode, maxMinutes, minimumRating, minimumReviews, openNow, openForMinutes]);
+
+  const { filtered: filteredResults, sorted: sortedResults } = useMemo(
+    () => runQuery(mockPlaces, query, sortKey),
+    [query, sortKey],
+  );
 
   const requestCurrentLocation = async () => {
     try {
@@ -144,31 +80,6 @@ export default function App() {
     void requestCurrentLocation();
   }, []);
 
-  const filteredResults = useMemo(
-    () =>
-      mockPlaces
-        .filter((place) => place.category === category)
-        .filter((place) => getTravelMinutes(place, travelMode) <= maxMinutes)
-        .filter((place) => place.rating >= minimumRating)
-        .filter((place) => place.reviewCount >= minimumReviews)
-        .filter((place) => !openNow || place.open)
-        .filter((place) => openForMinutes === 0 || place.closesInMinutes >= openForMinutes),
-    [category, maxMinutes, minimumRating, minimumReviews, openNow, openForMinutes, travelMode],
-  );
-
-  const sortedResults = useMemo(() => {
-    const copy = [...filteredResults];
-    copy.sort((a, b) => {
-      if (sortKey === 'rating') return b.rating - a.rating;
-      if (sortKey === 'distance') return a.distanceMeters - b.distanceMeters;
-      if (sortKey === 'price') return a.priceLevel - b.priceLevel;
-      if (sortKey === 'reviews') return b.reviewCount - a.reviewCount;
-      if (sortKey === 'open') return b.closesInMinutes - a.closesInMinutes;
-      return getTravelMinutes(a, travelMode) - getTravelMinutes(b, travelMode);
-    });
-    return copy;
-  }, [filteredResults, sortKey, travelMode]);
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -181,7 +92,7 @@ export default function App() {
           <View style={styles.profileDot} />
         </View>
 
-        <TouchableOpacity style={styles.locationCard} accessibilityRole="button" onPress={() => void requestCurrentLocation()}>
+        <TouchableOpacity style={styles.locationCard} onPress={() => void requestCurrentLocation()}>
           <View style={styles.locationTextWrap}>
             <Text style={styles.eyebrow}>STARTING FROM</Text>
             <Text style={styles.locationTitle}>📍 {locationLabel}</Text>
@@ -268,9 +179,9 @@ export default function App() {
         </View>
 
         <View style={styles.summaryBar}>
-          <View>
+          <View style={styles.summaryTextWrap}>
             <Text style={styles.summaryMain}>{filteredResults.length} {filteredResults.length === 1 ? 'match' : 'matches'}</Text>
-            <Text style={styles.summaryDetail}>{travelMode} · ≤ {maxMinutes} min · ≥ {minimumRating.toFixed(1)} ★</Text>
+            <Text style={styles.summaryDetail} numberOfLines={2}>{querySummary(query)}</Text>
           </View>
           <TouchableOpacity style={styles.seeResultsButton} onPress={() => setResultsVisible(true)}>
             <Text style={styles.seeResultsButtonText}>See results</Text>
@@ -314,7 +225,7 @@ export default function App() {
 
         <View style={styles.devNotice}>
           <Text style={styles.devNoticeTitle}>Prototype mode</Text>
-          <Text style={styles.devNoticeText}>Places and details are still mock data. No Google Places or Routes charges are possible in this build.</Text>
+          <Text style={styles.devNoticeText}>The query engine, sorting and place repository are now separated from the UI. Data is still local mock data, so no Places or Routes charges are possible.</Text>
         </View>
       </ScrollView>
 
@@ -434,8 +345,9 @@ const styles = StyleSheet.create({
   toggleKnob: { width: 21, height: 21, borderRadius: 11, backgroundColor: '#FFFFFF' },
   toggleKnobActive: { transform: [{ translateX: 19 }] },
   summaryBar: { borderRadius: 16, backgroundColor: '#183C2C', paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  summaryTextWrap: { flex: 1 },
   summaryMain: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  summaryDetail: { marginTop: 2, color: '#DDEBE4', fontSize: 11, fontWeight: '600' },
+  summaryDetail: { marginTop: 2, color: '#DDEBE4', fontSize: 11, lineHeight: 15, fontWeight: '600' },
   seeResultsButton: { borderRadius: 12, backgroundColor: '#FFFFFF', paddingHorizontal: 13, paddingVertical: 9 },
   seeResultsButtonText: { color: '#183C2C', fontSize: 12, fontWeight: '800' },
   mapShell: { height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: '#E9EEE8', position: 'relative' },
@@ -453,12 +365,12 @@ const styles = StyleSheet.create({
   devNoticeTitle: { fontSize: 12, fontWeight: '800', color: '#765F2E' },
   devNoticeText: { marginTop: 2, fontSize: 11, lineHeight: 16, color: '#765F2E' },
   modalSafeArea: { flex: 1, backgroundColor: '#F7F7F5' },
-  modalHeader: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalHeader: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   modalTitle: { fontSize: 26, fontWeight: '800', color: '#171917' },
-  modalSubtitle: { marginTop: 2, fontSize: 13, color: '#737873' },
-  closeButton: { fontSize: 14, fontWeight: '800', color: '#28684A' },
-  sortRow: { gap: 7, paddingHorizontal: 18, paddingBottom: 12 },
-  resultsList: { paddingHorizontal: 16, paddingBottom: 40, gap: 10 },
+  modalSubtitle: { marginTop: 2, fontSize: 12, color: '#737873' },
+  closeButton: { color: '#28684A', fontSize: 13, fontWeight: '800' },
+  sortRow: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
+  resultsList: { padding: 18, gap: 10, paddingBottom: 40 },
   emptyState: { borderRadius: 16, backgroundColor: '#FFFFFF', padding: 16, borderWidth: 1, borderColor: '#E4E7E2' },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: '#262926' },
   emptyText: { marginTop: 3, fontSize: 12, color: '#767C76' },
@@ -470,19 +382,19 @@ const styles = StyleSheet.create({
   ratingBadge: { borderRadius: 999, backgroundColor: '#EEF4EF', paddingHorizontal: 10, paddingVertical: 6 },
   ratingBadgeText: { fontSize: 12, fontWeight: '800', color: '#234C37' },
   placeMeta: { fontSize: 12, lineHeight: 17, color: '#737873' },
-  placeAddress: { fontSize: 12, color: '#4C514C' },
-  detailBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.25)' },
+  placeAddress: { fontSize: 12, color: '#515751' },
+  detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', justifyContent: 'flex-end' },
   detailSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 28, gap: 12 },
-  detailHandle: { width: 42, height: 5, borderRadius: 3, backgroundColor: '#D4D7D3', alignSelf: 'center' },
-  detailHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 14 },
+  detailHandle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 2, backgroundColor: '#D5D8D4', marginBottom: 2 },
+  detailHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   detailTitleWrap: { flex: 1 },
-  detailTitle: { fontSize: 23, fontWeight: '800', color: '#171917' },
-  detailSub: { marginTop: 3, fontSize: 13, color: '#666C66' },
+  detailTitle: { fontSize: 24, fontWeight: '800', color: '#171917' },
+  detailSub: { marginTop: 3, fontSize: 12, color: '#6F756F' },
   detailLead: { fontSize: 14, fontWeight: '800', color: '#25704D' },
-  detailLine: { fontSize: 14, color: '#383C38' },
+  detailLine: { fontSize: 13, color: '#424742' },
   highlightRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  highlightPill: { borderRadius: 999, backgroundColor: '#EEF4EF', paddingHorizontal: 10, paddingVertical: 6 },
-  highlightText: { fontSize: 11, fontWeight: '700', color: '#234C37' },
-  directionsButton: { minHeight: 46, borderRadius: 13, backgroundColor: '#183C2C', alignItems: 'center', justifyContent: 'center' },
+  highlightPill: { borderRadius: 999, backgroundColor: '#F0F3EF', paddingHorizontal: 10, paddingVertical: 7 },
+  highlightText: { fontSize: 11, fontWeight: '700', color: '#465047' },
+  directionsButton: { minHeight: 46, borderRadius: 13, backgroundColor: '#183C2C', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   directionsButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
 });
