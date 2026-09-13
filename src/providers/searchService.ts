@@ -7,8 +7,8 @@ import {
   updateReservationStatus,
 } from '../cost';
 import type { ExternalApiService, UsageSnapshot } from '../cost';
-import type { SearchQuery, SortKey } from '../domain/types';
-import type { SearchProvider, SearchProviderResult } from './types';
+import type { Coordinate, SearchQuery, SortKey } from '../domain/types';
+import type { SearchProvider, SearchProviderContext, SearchProviderResult } from './types';
 
 let usageSnapshot: UsageSnapshot = emptyUsageSnapshot();
 
@@ -21,11 +21,13 @@ export async function executeSearch(
   query: SearchQuery,
   sortKey: SortKey,
   deviceId = 'prototype-device',
+  origin?: Coordinate,
 ): Promise<SearchProviderResult> {
   const estimatedCostUnits = provider.estimateCostUnits(query);
+  const context: SearchProviderContext = { deviceId, origin };
 
   if (provider.kind === 'mock') {
-    const places = await provider.search(query, sortKey);
+    const places = await provider.search(query, sortKey, context);
     return {
       places,
       provider: provider.id,
@@ -49,7 +51,7 @@ export async function executeSearch(
   usageSnapshot = appendReservation(usageSnapshot, decision.reservation);
 
   try {
-    const places = await runReservedExternalCall(decision, () => provider.search(query, sortKey));
+    const places = await runReservedExternalCall(decision, () => provider.search(query, sortKey, context));
     usageSnapshot = updateReservationStatus(usageSnapshot, decision.reservation.id, 'committed');
     return {
       places,
