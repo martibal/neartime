@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   seeResultsButton: { borderRadius: 12, backgroundColor: '#FFFFFF', paddingHorizontal: 13, paddingVertical: 9 },
   seeResultsButtonText: { color: '#183C2C', fontSize: 12, fontWeight: '800' },
   mapShell: { height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: '#E9EEE8', position: 'relative' },
-  map: { ...StyleSheet.absoluteFillObject },
+  map: { top: 0, right: 0, bottom: 0, left: 0, position: 'absolute' },
   mapBadge: { position: 'absolute', top: 12, left: 12, borderRadius: 999, backgroundColor: '#183C2C', paddingHorizontal: 10, paddingVertical: 6 },
   mapBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
   mapTimePin: { borderRadius: 999, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#1D6846', paddingHorizontal: 9, paddingVertical: 6 },
