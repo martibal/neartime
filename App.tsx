@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   mockWarningTitle: { fontSize: 12, fontWeight: '800', color: '#6A592D' },
   mockWarningText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: '#75663D' },
   mapShell: { height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: '#DDE5DD', position: 'relative' },
-  map: { ...StyleSheet.absoluteFillObject },
+  map: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   mapBadge: { position: 'absolute', top: 12, left: 12, borderRadius: 999, backgroundColor: '#183C2C', paddingHorizontal: 10, paddingVertical: 6 },
   mapBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
   recenterButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D7DCD6' },
