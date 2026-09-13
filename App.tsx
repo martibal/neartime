@@ -1,15 +1,8 @@
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import MapView, { Callout, Marker } from 'react-native-maps';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import MapView, { Callout, Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { DEFAULT_ORIGIN, formatDistance, getTravelMinutes, modeLabel, mockPlaces, querySummary, runQuery } from './src/core/neartime';
@@ -17,12 +10,18 @@ import { categories, openForOptions, reviewOptions, sortOptions, travelModes, tr
 import type { Coordinate, OpenForMinutes, Place, ReviewMinimum, SearchQuery, SortKey, TravelMinutes, TravelMode } from './src/domain/types';
 import { executeSearch, mockSearchProvider } from './src/providers';
 
+const REGION_DELTA = 0.022;
+
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
     <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
+}
+
+function toRegion(coordinate: Coordinate): Region {
+  return { ...coordinate, latitudeDelta: REGION_DELTA, longitudeDelta: REGION_DELTA };
 }
 
 export default function App() {
@@ -35,8 +34,11 @@ export default function App() {
   const [openNow, setOpenNow] = useState(true);
   const [openForMinutes, setOpenForMinutes] = useState<OpenForMinutes>(0);
   const [origin, setOrigin] = useState<Coordinate>(DEFAULT_ORIGIN);
+  const [mapRegion, setMapRegion] = useState<Region>(toRegion(DEFAULT_ORIGIN));
   const [locationReady, setLocationReady] = useState(false);
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
   const [locationLabel, setLocationLabel] = useState('Finding your location…');
+  const [mapReady, setMapReady] = useState(false);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('time');
@@ -53,10 +55,7 @@ export default function App() {
     openForMinutes,
   }), [category, travelMode, maxMinutes, minimumRating, minimumReviews, openNow, openForMinutes]);
 
-  const { filtered: filteredResults } = useMemo(
-    () => runQuery(mockPlaces, query, sortKey),
-    [query, sortKey],
-  );
+  const { filtered: filteredResults } = useMemo(() => runQuery(mockPlaces, query, sortKey), [query, sortKey]);
 
   const requestCurrentLocation = async () => {
     try {
@@ -67,21 +66,32 @@ export default function App() {
         setLocationReady(false);
         return;
       }
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const nextOrigin = { latitude: current.coords.latitude, longitude: current.coords.longitude };
+      const nextRegion = toRegion(nextOrigin);
       setOrigin(nextOrigin);
+      setMapRegion(nextRegion);
+      setLocationAccuracy(current.coords.accuracy ?? null);
       setLocationReady(true);
       setLocationLabel('My current location');
-      mapRef.current?.animateToRegion({ ...nextOrigin, latitudeDelta: 0.022, longitudeDelta: 0.022 }, 500);
+      requestAnimationFrame(() => mapRef.current?.animateToRegion(nextRegion, 350));
     } catch {
       setLocationLabel('Could not read current location');
       setLocationReady(false);
+      setLocationAccuracy(null);
     }
+  };
+
+  const recenterMap = () => {
+    const nextRegion = toRegion(origin);
+    setMapRegion(nextRegion);
+    mapRef.current?.animateToRegion(nextRegion, 300);
   };
 
   const runProviderSearch = async (nextSortKey: SortKey = sortKey, openModal = true) => {
     try {
-      setProviderStatus('Running through provider boundary…');
+      setProviderStatus('Running protected mock provider…');
       const result = await executeSearch(mockSearchProvider, query, nextSortKey);
       setProviderResults(result.places);
       setProviderStatus(`${result.provider} · ${result.costUnits} cost units · external call: no`);
@@ -114,6 +124,11 @@ export default function App() {
             <View style={styles.locationTextWrap}>
               <Text style={styles.eyebrow}>STARTING FROM</Text>
               <Text style={styles.locationTitle}>📍 {locationLabel}</Text>
+              {locationReady && (
+                <Text style={styles.locationDiagnostic}>
+                  GPS {origin.latitude.toFixed(5)}, {origin.longitude.toFixed(5)}{locationAccuracy !== null ? ` · ±${Math.round(locationAccuracy)} m` : ''}
+                </Text>
+              )}
             </View>
             <Text style={styles.locationAction}>Refresh</Text>
           </TouchableOpacity>
@@ -181,9 +196,7 @@ export default function App() {
                 <Text style={styles.filterLabel}>Open now</Text>
                 <Text style={styles.filterHint}>Hide places that are currently closed</Text>
               </View>
-              <View style={[styles.toggle, openNow && styles.toggleActive]}>
-                <View style={[styles.toggleKnob, openNow && styles.toggleKnobActive]} />
-              </View>
+              <View style={[styles.toggle, openNow && styles.toggleActive]}><View style={[styles.toggleKnob, openNow && styles.toggleKnobActive]} /></View>
             </TouchableOpacity>
 
             <View style={styles.filterBlock}>
@@ -198,25 +211,32 @@ export default function App() {
 
           <View style={styles.summaryBar}>
             <View style={styles.summaryTextWrap}>
-              <Text style={styles.summaryMain}>{filteredResults.length} {filteredResults.length === 1 ? 'match' : 'matches'}</Text>
+              <Text style={styles.summaryMain}>{filteredResults.length} mock {filteredResults.length === 1 ? 'match' : 'matches'} · {category}</Text>
               <Text style={styles.summaryDetail} numberOfLines={2}>{querySummary(query)}</Text>
             </View>
-            <TouchableOpacity style={styles.seeResultsButton} onPress={() => void runProviderSearch()}>
-              <Text style={styles.seeResultsButtonText}>See results</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={styles.seeResultsButton} onPress={() => void runProviderSearch()}><Text style={styles.seeResultsButtonText}>See results</Text></TouchableOpacity>
+          </View>
+
+          <View style={styles.mockWarning}>
+            <Text style={styles.mockWarningTitle}>Test results only</Text>
+            <Text style={styles.mockWarningText}>These names are local placeholder data, not businesses found near your GPS position. Real Places search is still locked behind the cost gate.</Text>
           </View>
 
           <View style={styles.mapShell}>
             <MapView
               ref={mapRef}
+              provider={PROVIDER_GOOGLE}
               style={styles.map}
               mapType="standard"
-              initialRegion={{ ...DEFAULT_ORIGIN, latitudeDelta: 0.022, longitudeDelta: 0.022 }}
+              region={mapRegion}
+              onRegionChangeComplete={setMapRegion}
+              onMapReady={() => setMapReady(true)}
               showsUserLocation={locationReady}
-              showsMyLocationButton={locationReady}
+              showsMyLocationButton={false}
               toolbarEnabled={false}
-              loadingEnabled
-              loadingBackgroundColor="#E9EEE8"
+              cacheEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
             >
               {filteredResults.map((place) => {
                 const coordinate = { latitude: origin.latitude + place.latitudeOffset, longitude: origin.longitude + place.longitudeOffset };
@@ -226,7 +246,7 @@ export default function App() {
                     <View style={styles.mapTimePin}><Text style={styles.mapTimePinText}>{minutes} min</Text></View>
                     <Callout onPress={() => setSelectedPlace(place)}>
                       <View style={styles.callout}>
-                        <Text style={styles.calloutTitle}>{place.name}</Text>
+                        <Text style={styles.calloutTitle}>{place.name} · MOCK</Text>
                         <Text style={styles.calloutText}>{place.rating.toFixed(1)} ★ · {place.reviewCount.toLocaleString()} reviews</Text>
                       </View>
                     </Callout>
@@ -234,16 +254,17 @@ export default function App() {
                 );
               })}
             </MapView>
-            <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>LIVE MAP · MOCK PLACES</Text></View>
+            <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>{mapReady ? 'MAP READY' : 'LOADING MAP'} · MOCK PLACES</Text></View>
+            <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}><Text style={styles.recenterText}>◎</Text></TouchableOpacity>
           </View>
 
           <TouchableOpacity style={styles.largeResultsButton} onPress={() => void runProviderSearch()}>
-            <Text style={styles.largeResultsButtonText}>See {filteredResults.length} {filteredResults.length === 1 ? 'result' : 'results'}</Text>
+            <Text style={styles.largeResultsButtonText}>See {filteredResults.length} mock {filteredResults.length === 1 ? 'result' : 'results'}</Text>
           </TouchableOpacity>
 
           <View style={styles.devNotice}>
             <Text style={styles.devNoticeTitle}>Protected prototype mode</Text>
-            <Text style={styles.devNoticeText}>UI → query → provider boundary → mock provider → results is live. Billable providers must pass the hard cost gate first; external APIs remain locked.</Text>
+            <Text style={styles.devNoticeText}>GPS is live. Query/filter logic is live. Place names and travel times remain mock data. Google Places is present only as a locked provider boundary; external APIs cannot run under the current zero-cost policy.</Text>
             <Text style={styles.devNoticeStatus}>{providerStatus}</Text>
           </View>
         </ScrollView>
@@ -252,47 +273,34 @@ export default function App() {
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Results</Text>
-                <Text style={styles.modalSubtitle}>{providerResults.length} places from protected mock provider</Text>
+                <Text style={styles.modalTitle}>{category} results</Text>
+                <Text style={styles.modalSubtitle}>{providerResults.length} mock places · not live nearby businesses</Text>
               </View>
               <TouchableOpacity onPress={() => setResultsVisible(false)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
               {sortOptions.map((option) => (
-                <Chip
-                  key={option.key}
-                  label={option.label}
-                  active={sortKey === option.key}
-                  onPress={() => {
-                    setSortKey(option.key);
-                    void runProviderSearch(option.key, false);
-                  }}
-                />
+                <Chip key={option.key} label={option.label} active={sortKey === option.key} onPress={() => { setSortKey(option.key); void runProviderSearch(option.key, false); }} />
               ))}
             </ScrollView>
 
             <ScrollView contentContainerStyle={styles.resultsList}>
               {providerResults.length === 0 ? (
-                <View style={styles.emptyState}><Text style={styles.emptyTitle}>No matches</Text><Text style={styles.emptyText}>Increase travel time or relax one of the filters.</Text></View>
-              ) : (
-                providerResults.map((place) => {
-                  const travelMinutes = getTravelMinutes(place, travelMode);
-                  return (
-                    <TouchableOpacity key={place.id} style={styles.resultCard} onPress={() => setSelectedPlace(place)}>
-                      <View style={styles.resultTopRow}>
-                        <View style={styles.resultTitleWrap}>
-                          <Text style={styles.travelTime}>{travelMinutes} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)}</Text>
-                          <Text style={styles.placeName}>{place.name}</Text>
-                        </View>
-                        <View style={styles.ratingBadge}><Text style={styles.ratingBadgeText}>{place.rating.toFixed(1)} ★</Text></View>
-                      </View>
-                      <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · Open for {Math.floor(place.closesInMinutes / 60)}h {place.closesInMinutes % 60}m</Text>
-                      <Text style={styles.placeAddress}>{place.address}</Text>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
+                <View style={styles.emptyState}><Text style={styles.emptyTitle}>No mock matches</Text><Text style={styles.emptyText}>Increase travel time or relax one of the filters.</Text></View>
+              ) : providerResults.map((place) => (
+                <TouchableOpacity key={place.id} style={styles.resultCard} onPress={() => setSelectedPlace(place)}>
+                  <View style={styles.resultTopRow}>
+                    <View style={styles.resultTitleWrap}>
+                      <Text style={styles.travelTime}>{getTravelMinutes(place, travelMode)} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)} · MOCK</Text>
+                      <Text style={styles.placeName}>{place.name}</Text>
+                    </View>
+                    <View style={styles.ratingBadge}><Text style={styles.ratingBadgeText}>{place.rating.toFixed(1)} ★</Text></View>
+                  </View>
+                  <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · Open for {Math.floor(place.closesInMinutes / 60)}h {place.closesInMinutes % 60}m</Text>
+                  <Text style={styles.placeAddress}>{place.address}</Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </SafeAreaView>
         </Modal>
@@ -304,19 +312,13 @@ export default function App() {
                 <>
                   <View style={styles.detailHandle} />
                   <View style={styles.detailHeaderRow}>
-                    <View style={styles.detailTitleWrap}>
-                      <Text style={styles.detailTitle}>{selectedPlace.name}</Text>
-                      <Text style={styles.detailSub}>{selectedPlace.rating.toFixed(1)} ★ · {selectedPlace.reviewCount.toLocaleString()} reviews · {selectedPlace.price}</Text>
-                    </View>
+                    <View style={styles.detailTitleWrap}><Text style={styles.detailTitle}>{selectedPlace.name}</Text><Text style={styles.detailSub}>MOCK PLACE · {selectedPlace.rating.toFixed(1)} ★ · {selectedPlace.reviewCount.toLocaleString()} reviews</Text></View>
                     <TouchableOpacity onPress={() => setSelectedPlace(null)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
                   </View>
                   <Text style={styles.detailLead}>{getTravelMinutes(selectedPlace, travelMode)} min {modeLabel(travelMode)} · {formatDistance(selectedPlace.distanceMeters)}</Text>
                   <Text style={styles.detailLine}>📍 {selectedPlace.address}</Text>
                   <Text style={styles.detailLine}>🕒 Open for {Math.floor(selectedPlace.closesInMinutes / 60)}h {selectedPlace.closesInMinutes % 60}m</Text>
-                  <Text style={styles.detailLine}>📞 {selectedPlace.phone}</Text>
-                  <Text style={styles.detailLine}>🌐 {selectedPlace.website}</Text>
-                  <View style={styles.highlightRow}>{selectedPlace.highlights.map((item) => <View key={item} style={styles.highlightPill}><Text style={styles.highlightText}>{item}</Text></View>)}</View>
-                  <TouchableOpacity style={styles.directionsButton}><Text style={styles.directionsButtonText}>Show directions</Text></TouchableOpacity>
+                  <Text style={styles.detailLine}>Placeholder details — no external lookup performed.</Text>
                 </>
               )}
             </View>
@@ -335,11 +337,12 @@ const styles = StyleSheet.create({
   brand: { fontSize: 26, fontWeight: '800', color: '#171917', letterSpacing: -0.7 },
   tagline: { marginTop: 1, fontSize: 13, color: '#686D68' },
   profileDot: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E1E6E0' },
-  locationCard: { minHeight: 60, borderRadius: 16, backgroundColor: '#FFFFFF', paddingHorizontal: 15, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#E8EAE6' },
+  locationCard: { minHeight: 68, borderRadius: 16, backgroundColor: '#FFFFFF', paddingHorizontal: 15, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#E8EAE6' },
   locationTextWrap: { flex: 1, paddingRight: 12 },
   locationAction: { fontSize: 12, fontWeight: '800', color: '#28684A' },
   eyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1, color: '#8A8F89' },
   locationTitle: { marginTop: 3, fontSize: 16, fontWeight: '700', color: '#212421' },
+  locationDiagnostic: { marginTop: 3, fontSize: 10, color: '#6E756E' },
   sectionBlock: { gap: 8 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   sectionTitle: { fontSize: 17, fontWeight: '800', color: '#1B1D1B' },
@@ -378,10 +381,15 @@ const styles = StyleSheet.create({
   summaryDetail: { marginTop: 2, color: '#DDEBE4', fontSize: 11, lineHeight: 15, fontWeight: '600' },
   seeResultsButton: { borderRadius: 12, backgroundColor: '#FFFFFF', paddingHorizontal: 13, paddingVertical: 9 },
   seeResultsButtonText: { color: '#183C2C', fontSize: 12, fontWeight: '800' },
-  mapShell: { height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: '#E9EEE8', position: 'relative' },
-  map: { top: 0, right: 0, bottom: 0, left: 0, position: 'absolute' },
+  mockWarning: { borderRadius: 14, backgroundColor: '#F2EEE3', borderWidth: 1, borderColor: '#DCCFAE', padding: 12 },
+  mockWarningTitle: { fontSize: 12, fontWeight: '800', color: '#6A592D' },
+  mockWarningText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: '#75663D' },
+  mapShell: { height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: '#DDE5DD', position: 'relative' },
+  map: { ...StyleSheet.absoluteFillObject },
   mapBadge: { position: 'absolute', top: 12, left: 12, borderRadius: 999, backgroundColor: '#183C2C', paddingHorizontal: 10, paddingVertical: 6 },
   mapBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  recenterButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D7DCD6' },
+  recenterText: { fontSize: 25, color: '#48604F' },
   mapTimePin: { borderRadius: 999, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#1D6846', paddingHorizontal: 9, paddingVertical: 6 },
   mapTimePinText: { color: '#1D6846', fontSize: 11, fontWeight: '800' },
   callout: { minWidth: 160, padding: 8 },
@@ -421,9 +429,4 @@ const styles = StyleSheet.create({
   detailSub: { marginTop: 3, fontSize: 12, color: '#6F756F' },
   detailLead: { fontSize: 14, fontWeight: '800', color: '#25704D' },
   detailLine: { fontSize: 13, color: '#424742' },
-  highlightRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  highlightPill: { borderRadius: 999, backgroundColor: '#F0F3EF', paddingHorizontal: 10, paddingVertical: 7 },
-  highlightText: { fontSize: 11, fontWeight: '700', color: '#465047' },
-  directionsButton: { minHeight: 46, borderRadius: 13, backgroundColor: '#183C2C', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  directionsButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
 });
