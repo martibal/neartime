@@ -1,0 +1,20 @@
+{
+  "name": "NearTime Expo",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "npm install --no-audit --no-fund",
+  "forwardPorts": [8081],
+  "portsAttributes": {
+    "8081": {
+      "label": "Expo Metro",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
