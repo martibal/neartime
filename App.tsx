@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
+import Slider from '@react-native-community/slider';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { DEFAULT_ORIGIN, formatDistance, getTravelMinutes, modeLabel, querySummary } from './src/core/neartime';
@@ -110,6 +111,7 @@ export default function App() {
   );
 
   const selectedSortLabel = sortOptions.find((option) => option.key === sortKey)?.label ?? 'Travel time';
+
 
   const requestCurrentLocation = async () => {
     try {
@@ -254,12 +256,27 @@ export default function App() {
 
           <View style={styles.filtersCard}>
             <View style={styles.filterBlock}>
-              <Text style={styles.filterLabel}>Minimum rating</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.compactRow}>
-                {[4.0, 4.3, 4.5, 4.7].map((rating) => (
-                  <Chip key={rating} label={`${rating.toFixed(1)} ★`} active={minimumRating === rating} onPress={() => setMinimumRating(rating)} />
-                ))}
-              </ScrollView>
+              <View style={styles.ratingSliderHeader}>
+                <Text style={styles.filterLabel}>Minimum rating</Text>
+                <Text style={styles.ratingSliderValue}>{minimumRating.toFixed(1)} ★</Text>
+              </View>
+
+              <Slider
+                style={styles.ratingSlider}
+                minimumValue={1}
+                maximumValue={5}
+                step={0.1}
+                value={minimumRating}
+                onValueChange={setMinimumRating}
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.outline}
+                thumbTintColor={colors.primary}
+              />
+
+              <View style={styles.ratingScale}>
+                <Text style={styles.ratingScaleText}>1.0</Text>
+                <Text style={styles.ratingScaleText}>5.0</Text>
+              </View>
             </View>
 
             <View style={styles.filterBlock}>
@@ -494,6 +511,11 @@ const styles = StyleSheet.create({
   filtersCard: { borderRadius: radius.lg, backgroundColor: colors.surface, padding: 14, gap: 14, ...elevation(1) },
   filterBlock: { gap: 6 },
   filterLabel: { fontSize: 14, fontWeight: type.medium, color: colors.onSurface },
+  ratingSliderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  ratingSliderValue: { fontSize: 14, fontWeight: type.semibold, color: colors.primary },
+  ratingSlider: { width: '100%', height: 36 },
+  ratingScale: { marginTop: -3, flexDirection: 'row', justifyContent: 'space-between' },
+  ratingScaleText: { fontSize: 11, color: colors.onSurfaceVariant },
   filterHint: { marginTop: 2, fontSize: 11, color: colors.onSurfaceVariant },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   toggleTextWrap: { flex: 1 },
