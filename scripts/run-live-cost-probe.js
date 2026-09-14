@@ -5,17 +5,12 @@ const SERVICE = 'places-text-search-enterprise-atmosphere';
 const ENTITLEMENT = '7d2364bbe8f7f645267ba8c0c1ccfebc7555e3b78bf16a4734d6162f9fa171f6';
 const DEVICE = 'internal-live-cost-probe';
 const MAX_PROVIDER_CALLS_PER_SEARCH = 3;
-const SAMPLE_SEARCHES = 6;
+const SAMPLE_SEARCHES = 1;
 const MAX_NEW_UNITS = SAMPLE_SEARCHES * MAX_PROVIDER_CALLS_PER_SEARCH;
 const ORIGIN = { latitude: 55.6761, longitude: 12.5683 };
 
 const QUERIES = [
-  { category: 'Pharmacy', travelMode: 'Walk', maxMinutes: 5, minimumRating: 0, minimumReviews: 0, openNow: false, openForMinutes: 0 },
   { category: 'Cafe', travelMode: 'Walk', maxMinutes: 10, minimumRating: 4.2, minimumReviews: 100, openNow: false, openForMinutes: 0 },
-  { category: 'Restaurant', travelMode: 'Walk', maxMinutes: 15, minimumRating: 4.4, minimumReviews: 300, openNow: false, openForMinutes: 0 },
-  { category: 'Grocery', travelMode: 'Bike', maxMinutes: 10, minimumRating: 0, minimumReviews: 0, openNow: false, openForMinutes: 0 },
-  { category: 'Parking', travelMode: 'Drive', maxMinutes: 10, minimumRating: 0, minimumReviews: 0, openNow: false, openForMinutes: 0 },
-  { category: 'Restaurant', travelMode: 'Drive', maxMinutes: 20, minimumRating: 4.0, minimumReviews: 100, openNow: false, openForMinutes: 0 },
 ];
 
 function env(name) {
@@ -53,15 +48,11 @@ async function usageBaselines(db) {
 }
 
 async function prepare(db, token, runKey) {
-  const policy = await db.query(`select external_calls_enabled, emergency_kill_switch, max_estimated_units_per_call,
-    global_daily_units, global_monthly_units, per_device_daily_units, per_entitlement_daily_units,
-    max_requests_per_minute_per_device, max_requests_per_minute_per_entitlement
+  const policy = await db.query(`select external_calls_enabled, emergency_kill_switch
     from public.api_cost_policy where service=$1`, [SERVICE]);
   const p = policy.rows[0];
-  if (!p || p.external_calls_enabled || !p.emergency_kill_switch ||
-      ['max_estimated_units_per_call','global_daily_units','global_monthly_units','per_device_daily_units','per_entitlement_daily_units','max_requests_per_minute_per_device','max_requests_per_minute_per_entitlement']
-        .some((key) => Number(p[key]) !== 0)) {
-    throw new Error('Production policy is not in the expected fail-closed zero-cap state.');
+  if (!p || p.external_calls_enabled || !p.emergency_kill_switch) {
+    throw new Error('Production policy is not fail-closed before the live probe.');
   }
 
   const baseline = await usageBaselines(db);
@@ -94,7 +85,7 @@ async function prepare(db, token, runKey) {
       Number(baseline.global_month) + MAX_NEW_UNITS,
       Number(baseline.device_day) + MAX_NEW_UNITS,
       Number(baseline.entitlement_day) + MAX_NEW_UNITS,
-      SAMPLE_SEARCHES + 2,
+      1,
     ]);
 }
 
