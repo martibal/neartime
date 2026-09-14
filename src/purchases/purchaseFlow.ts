@@ -2,6 +2,7 @@ import { getAnonymousInstallId } from '../device/anonymousInstallId';
 import { setEntitlementSessionToken } from '../device/entitlementSession';
 import type { LaunchProduct } from './catalog';
 import { beginStorePurchase, type VerifiedPurchaseReceipt } from './purchaseBoundary';
+import { finishVerifiedNativePurchase } from './nativeStoreAdapter';
 
 const ENTITLEMENT_ENDPOINT =
   process.env.EXPO_PUBLIC_NEARTIME_ENTITLEMENT_ENDPOINT?.trim() ||
@@ -51,17 +52,19 @@ async function activateSubscription(receipt: Extract<VerifiedPurchaseReceipt, { 
 /**
  * Store purchase orchestration.
  * Native checkout comes first. Access is only activated after NearTime's server
- * verifies the store receipt and issues an opaque entitlement session.
+ * verifies the store receipt and issues an opaque entitlement session. The
+ * native transaction is finished only after that verification succeeds.
  */
 export async function purchaseAndActivate(product: LaunchProduct): Promise<void> {
   const receipt = await beginStorePurchase(product);
 
   if (receipt.kind === 'trip_pass') {
-    // Trip Passes are non-renewing purchases and need their own server receipt
-    // verification/activation endpoint. Never route them through subscription
-    // verification or synthesize access client-side.
+    // Trip Passes are one-time purchases and need their own server receipt
+    // verification/activation endpoint. Never finish the transaction or grant
+    // access until that path is server-authoritative.
     throw new PurchaseActivationError('TRIP_PASS_SERVER_VERIFICATION_NOT_CONFIGURED');
   }
 
   await activateSubscription(receipt);
+  await finishVerifiedNativePurchase(receipt);
 }
