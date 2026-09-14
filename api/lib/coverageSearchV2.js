@@ -1,6 +1,6 @@
 'use strict';
 
-const { runCoverageSearch } = require('./coverageOrchestrator');
+const { runCoverageSearch, RESULT_STATUS, COVERAGE_STATE } = require('./coverageOrchestrator');
 const { createGoogleCoverageProvider } = require('./googleCoverageProvider');
 const { createProviderCogsHooks } = require('./providerCogsHooks');
 const { createRouteMatrixFallback, enrichFallbackPlaceWithRoute } = require('./routeMatrixFallback');
@@ -154,6 +154,7 @@ async function runCoverageSearchV2({
   const provider = createGoogleCoverageProvider({ apiKey, origin, travelMode: query.travelMode, fetchImpl });
   const hooks = createProviderCogsHooks({ entitlementHash, deviceId, supabaseRpc });
   const routeMatrix = createRouteMatrixFallback({ apiKey, origin, travelMode: query.travelMode, fetchImpl });
+  let unresolvedRouteIds = [];
 
   const result = await runCoverageSearch({
     origin,
@@ -174,11 +175,7 @@ async function runCoverageSearchV2({
     },
     applyHardFilters: (candidates) => {
       const filtered = filterCandidates(candidates, origin, query);
-      if (filtered.unresolvedIds.length > 0) {
-        const error = new Error(`route_time_unresolved:${filtered.unresolvedIds.join(',')}`);
-        error.code = 'route_time_unresolved';
-        throw error;
-      }
+      unresolvedRouteIds = filtered.unresolvedIds;
       return filtered.places;
     },
     hooks,
@@ -190,6 +187,15 @@ async function runCoverageSearchV2({
     const error = new Error(gate);
     error.code = gate;
     throw error;
+  }
+
+  if (unresolvedRouteIds.length > 0 && result.coverageState === COVERAGE_STATE.VERIFIED_CURRENT) {
+    return {
+      ...result,
+      resultStatus: RESULT_STATUS.DEGRADED,
+      coverageState: COVERAGE_STATE.UNVERIFIED,
+      coverageReason: `route_time_unresolved:${unresolvedRouteIds.join(',')}`,
+    };
   }
 
   return result;
