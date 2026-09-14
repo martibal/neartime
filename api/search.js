@@ -284,6 +284,9 @@ function buildTextSearchBody(query, origin, pageToken) {
     routingParameters: {
       origin,
       travelMode: TRAVEL_MODE_TO_GOOGLE[query.travelMode],
+      ...(query.travelMode === 'Drive'
+        ? { routingPreference: 'TRAFFIC_AWARE_OPTIMAL' }
+        : {}),
     },
   };
   if (pageToken) body.pageToken = pageToken;
