@@ -1,8 +1,9 @@
 'use strict';
 
-const { runCoverageSearch, RESULT_STATUS, COVERAGE_STATE } = require('./coverageOrchestrator');
+const { runCoverageSearch } = require('./coverageOrchestrator');
 const { createGoogleCoverageProvider } = require('./googleCoverageProvider');
 const { createProviderCogsHooks } = require('./providerCogsHooks');
+const { createRouteMatrixFallback, enrichFallbackPlaceWithRoute } = require('./routeMatrixFallback');
 
 const CATEGORY_TYPES_V1 = Object.freeze({
   Restaurant: ['restaurant'],
@@ -152,7 +153,7 @@ async function runCoverageSearchV2({
 
   const provider = createGoogleCoverageProvider({ apiKey, origin, travelMode: query.travelMode, fetchImpl });
   const hooks = createProviderCogsHooks({ entitlementHash, deviceId, supabaseRpc });
-  const fallbackIds = new Set();
+  const routeMatrix = createRouteMatrixFallback({ apiKey, origin, travelMode: query.travelMode, fetchImpl });
 
   const result = await runCoverageSearch({
     origin,
@@ -162,8 +163,14 @@ async function runCoverageSearchV2({
     aggregateSearch: provider.aggregateSearch,
     nearbySearch: async (args) => attachRoutingSummaries(await provider.nearbySearch(args)),
     placeDetails: async (args) => {
-      fallbackIds.add(args.placeId);
-      return provider.placeDetails(args);
+      const place = await provider.placeDetails(args);
+      return enrichFallbackPlaceWithRoute({
+        place,
+        placeId: args.placeId,
+        searchKey,
+        hooks,
+        routeMatrix,
+      });
     },
     applyHardFilters: (candidates) => filterCandidates(candidates, origin, query).places,
     hooks,
@@ -177,14 +184,13 @@ async function runCoverageSearchV2({
     throw error;
   }
 
-  // Place Details proves the candidate exists, but does not provide the route-time
-  // field required by NearTime's hard time filter. Until Route Matrix fallback is
-  // added, any Details recovery must remain DEGRADED rather than claim completeness.
-  if (fallbackIds.size > 0 && result.coverageState === COVERAGE_STATE.VERIFIED_CURRENT) {
+  const unresolved = filterCandidates(result.places, origin, query).unresolvedIds;
+  if (unresolved.length > 0 && result.coverageState === 'VERIFIED_CURRENT') {
     return {
       ...result,
-      resultStatus: RESULT_STATUS.DEGRADED,
-      coverageReason: `route_time_unresolved_after_details_fallback:${[...fallbackIds].join(',')}`,
+      resultStatus: 'DEGRADED',
+      coverageState: 'UNVERIFIED',
+      coverageReason: `route_time_unresolved:${unresolved.join(',')}`,
     };
   }
 
