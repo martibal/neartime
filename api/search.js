@@ -79,7 +79,8 @@ function validateRequest(body) {
 
 function sanitizeDeviceId(value) {
   const candidate = typeof value === 'string' ? value.trim() : '';
-  return (candidate || 'prototype-device').slice(0, 128);
+  if (!candidate || candidate.length > 128) return null;
+  return candidate;
 }
 
 function sanitizeIdempotencyKey(value) {
@@ -109,7 +110,27 @@ function firstRow(payload) {
   return Array.isArray(payload) ? payload[0] : payload;
 }
 
-async function reserveCost(entitlementHash, deviceId, idempotencyKey, requestHash) {
+async function authorizeLogicalSearch(installHash, entitlementHash, idempotencyKey, requestHash) {
+  return firstRow(await supabaseRpc('authorize_logical_search', {
+    p_install_hash: installHash,
+    p_entitlement_hash: entitlementHash,
+    p_idempotency_key: idempotencyKey,
+    p_request_hash: requestHash,
+  }));
+}
+
+async function finishLogicalSearch(logicalReservationId, outcome, qualifiedResult, responsePayload = null, errorCode = null) {
+  if (!logicalReservationId) return null;
+  return firstRow(await supabaseRpc('finish_logical_search', {
+    p_reservation_id: logicalReservationId,
+    p_outcome: outcome,
+    p_qualified_result: Boolean(qualifiedResult),
+    p_response_payload: responsePayload,
+    p_error_code: errorCode,
+  }));
+}
+
+async function reservePaidCost(entitlementHash, deviceId, idempotencyKey, requestHash) {
   return firstRow(await supabaseRpc('reserve_wallet_api_cost', {
     p_entitlement_hash: entitlementHash,
     p_device_id: deviceId,
@@ -120,7 +141,15 @@ async function reserveCost(entitlementHash, deviceId, idempotencyKey, requestHas
   }));
 }
 
-async function finishReservation(reservationId, outcome, actualUnits, responsePayload = null, errorCode = null) {
+async function reserveTrialCost(deviceId) {
+  return firstRow(await supabaseRpc('reserve_api_cost', {
+    p_device_id: deviceId,
+    p_service: COST_SERVICE,
+    p_estimated_units: RESERVED_COST_UNITS,
+  }));
+}
+
+async function finishPaidCost(reservationId, outcome, actualUnits, responsePayload = null, errorCode = null) {
   if (!reservationId) return false;
   const payload = await supabaseRpc('finish_wallet_api_cost_reservation', {
     p_reservation_id: reservationId,
@@ -131,6 +160,18 @@ async function finishReservation(reservationId, outcome, actualUnits, responsePa
   });
   const value = firstRow(payload);
   return value === true || value?.finish_wallet_api_cost_reservation === true;
+}
+
+async function finishTrialCost(reservationId, outcome, actualUnits) {
+  if (!reservationId) return false;
+  const status = outcome === 'released' ? 'released' : 'committed';
+  const payload = await supabaseRpc('finish_api_cost_reservation_v2', {
+    p_reservation_id: reservationId,
+    p_status: status,
+    p_actual_units: status === 'released' ? 0 : actualUnits,
+  });
+  const value = firstRow(payload);
+  return value === true || value?.finish_api_cost_reservation_v2 === true;
 }
 
 function radiusFor(query) {
@@ -298,11 +339,20 @@ async function collectCandidatePages(query, origin, onSuccessfulCall) {
 }
 
 function blockedStatus(reason) {
-  if (reason === 'wallet_quota_exhausted') return 402;
-  if (reason === 'wallet_not_found' || reason === 'entitlement_inactive') return 403;
+  if (reason === 'wallet_quota_exhausted' || reason === 'paid_search_quota_exhausted' || reason === 'trial_success_limit' || reason === 'trial_attempt_limit') return 402;
+  if (reason === 'wallet_not_found' || reason === 'entitlement_inactive' || reason === 'logical_plan_not_configured' || reason === 'trial_disabled') return 403;
   if (reason === 'request_in_progress' || reason === 'idempotency_conflict' || reason === 'previous_attempt_failed') return 409;
   if (reason === 'external_calls_disabled' || reason === 'kill_switch_active') return 503;
   return 429;
+}
+
+function blockedError(reason) {
+  if (reason === 'paid_search_quota_exhausted') return 'usage_quota_exhausted';
+  if (reason === 'trial_success_limit' || reason === 'trial_attempt_limit') return 'free_trial_exhausted';
+  if (reason === 'trial_disabled') return 'free_trial_unavailable';
+  if (reason === 'logical_plan_not_configured') return 'paid_plan_unavailable';
+  if (reason === 'wallet_quota_exhausted') return 'provider_budget_quota_exhausted';
+  return 'external_search_blocked';
 }
 
 module.exports = async function handler(req, res) {
@@ -317,49 +367,85 @@ module.exports = async function handler(req, res) {
   const idempotencyKey = sanitizeIdempotencyKey(req.headers['x-neartime-idempotency-key']);
   if (!idempotencyKey) return send(res, 400, { error: 'invalid_idempotency_key' });
 
-  const rawSession = typeof req.headers['x-neartime-entitlement-session'] === 'string'
-    ? req.headers['x-neartime-entitlement-session']
-    : '';
-  if (!rawSession) return send(res, 401, { error: 'subscription_verification_required' });
-
   const deviceId = sanitizeDeviceId(req.headers['x-neartime-device-id']);
-  let reservationId = null;
+  if (!deviceId) return send(res, 400, { error: 'invalid_device_id' });
+
+  const rawSession = typeof req.headers['x-neartime-entitlement-session'] === 'string'
+    ? req.headers['x-neartime-entitlement-session'].trim()
+    : '';
+  const requestHash = canonicalRequestHash(req.body);
+  const installHash = sha256Hex(`install:${deviceId}`);
+
+  let logicalReservationId = null;
+  let costReservationId = null;
   let successfulProviderCalls = 0;
-  let reservationFinalized = false;
+  let costReservationFinalized = false;
+  let logicalReservationFinalized = false;
+  let accessMode = 'trial';
 
   try {
-    const session = await resolveEntitlementSession(rawSession);
-    if (!session) return send(res, 401, { error: 'invalid_or_expired_entitlement_session' });
+    const session = rawSession ? await resolveEntitlementSession(rawSession) : null;
+    if (rawSession && !session) return send(res, 401, { error: 'invalid_or_expired_entitlement_session' });
 
-    const decision = await reserveCost(
-      session.entitlementHash,
-      deviceId,
+    const logicalDecision = await authorizeLogicalSearch(
+      installHash,
+      session?.entitlementHash ?? null,
       idempotencyKey,
-      canonicalRequestHash(req.body),
+      requestHash,
     );
-    if (!decision || typeof decision.allowed !== 'boolean') {
-      throw new Error('Cost ledger returned an invalid reservation decision.');
+    if (!logicalDecision || typeof logicalDecision.allowed !== 'boolean') {
+      throw new Error('Logical search gate returned an invalid decision.');
     }
+    accessMode = logicalDecision.access_mode || (session ? 'paid' : 'trial');
 
-    if (!decision.allowed) {
-      if (decision.reason === 'idempotent_replay' && decision.replay_response) {
-        return send(res, 200, decision.replay_response);
+    if (!logicalDecision.allowed) {
+      if (logicalDecision.reason === 'idempotent_replay' && logicalDecision.replay_response) {
+        return send(res, 200, logicalDecision.replay_response);
       }
-      return send(res, blockedStatus(decision.reason), {
-        error: decision.reason === 'wallet_quota_exhausted' ? 'usage_quota_exhausted' : 'external_search_blocked',
-        reason: decision.reason,
+      return send(res, blockedStatus(logicalDecision.reason), {
+        error: blockedError(logicalDecision.reason),
+        reason: logicalDecision.reason,
+        accessMode,
+        remainingSearches: logicalDecision.remaining_searches ?? null,
+        remainingAttempts: logicalDecision.remaining_attempts ?? null,
       });
     }
 
-    reservationId = decision.reservation_id;
-    if (!reservationId) throw new Error('Cost gate allowed a call without a reservation id.');
+    logicalReservationId = logicalDecision.logical_reservation_id;
+    if (!logicalReservationId) throw new Error('Logical search gate allowed a call without a reservation id.');
+
+    const costDecision = session
+      ? await reservePaidCost(session.entitlementHash, deviceId, idempotencyKey, requestHash)
+      : await reserveTrialCost(deviceId);
+    if (!costDecision || typeof costDecision.allowed !== 'boolean') {
+      throw new Error('Cost ledger returned an invalid reservation decision.');
+    }
+
+    if (!costDecision.allowed) {
+      await finishLogicalSearch(logicalReservationId, 'released', false, null, costDecision.reason || 'cost_gate_denied');
+      logicalReservationFinalized = true;
+      if (costDecision.reason === 'idempotent_replay' && costDecision.replay_response) {
+        return send(res, 200, costDecision.replay_response);
+      }
+      return send(res, blockedStatus(costDecision.reason), {
+        error: blockedError(costDecision.reason),
+        reason: costDecision.reason,
+        accessMode,
+        remainingSearches: logicalDecision.remaining_searches ?? null,
+        remainingAttempts: logicalDecision.remaining_attempts ?? null,
+      });
+    }
+
+    costReservationId = costDecision.reservation_id;
+    if (!costReservationId) throw new Error('Cost gate allowed a call without a reservation id.');
 
     const collection = await collectCandidatePages(req.body.query, req.body.origin, () => {
       successfulProviderCalls += 1;
     });
     const qualified = applyHardFilters(collection.candidates, req.body.query);
     const places = sortByTravelTime(qualified, req.body.query).slice(0, RESULT_LIMIT);
-    const payload = {
+    const qualifiedResult = places.length > 0;
+    const basePayload = {
       places,
       provider: 'google-places-text-search-new',
       billingSku: COST_SERVICE,
@@ -367,22 +453,54 @@ module.exports = async function handler(req, res) {
       candidateCount: collection.candidates.length,
       qualifiedCount: qualified.length,
       providerResultLimitReached: collection.providerHasMore,
+      accessMode,
     };
 
-    const committed = await finishReservation(reservationId, 'succeeded', successfulProviderCalls, payload, null);
-    if (!committed) throw new Error('External calls completed but the wallet reservation could not be committed.');
-    reservationFinalized = true;
+    const costCommitted = session
+      ? await finishPaidCost(costReservationId, 'succeeded', successfulProviderCalls, basePayload, null)
+      : await finishTrialCost(costReservationId, 'succeeded', successfulProviderCalls);
+    if (!costCommitted) throw new Error('External calls completed but the provider-cost reservation could not be committed.');
+    costReservationFinalized = true;
+
+    const logicalResult = await finishLogicalSearch(
+      logicalReservationId,
+      'succeeded',
+      qualifiedResult,
+      basePayload,
+      null,
+    );
+    if (!logicalResult?.finalized) throw new Error('Provider cost committed but logical search quota could not be finalized.');
+    logicalReservationFinalized = true;
+
+    const payload = {
+      ...basePayload,
+      remainingSearches: logicalResult.remaining_searches ?? null,
+      remainingAttempts: logicalResult.remaining_attempts ?? null,
+    };
     return send(res, 200, payload);
   } catch (error) {
-    if (reservationId && !reservationFinalized) {
+    if (costReservationId && !costReservationFinalized) {
       try {
         if (successfulProviderCalls > 0) {
-          await finishReservation(reservationId, 'failed', successfulProviderCalls, null, 'live_search_failed');
+          if (accessMode === 'paid') {
+            await finishPaidCost(costReservationId, 'failed', successfulProviderCalls, null, 'live_search_failed');
+          } else {
+            await finishTrialCost(costReservationId, 'failed', successfulProviderCalls);
+          }
+        } else if (accessMode === 'paid') {
+          await finishPaidCost(costReservationId, 'released', 0, null, 'live_search_failed');
         } else {
-          await finishReservation(reservationId, 'released', 0, null, 'live_search_failed');
+          await finishTrialCost(costReservationId, 'released', 0);
         }
       } catch {
-        // A stale reservation remains conservatively counted until expiry if reconciliation fails.
+        // A stale provider-cost reservation remains conservatively counted until expiry if reconciliation fails.
+      }
+    }
+    if (logicalReservationId && !logicalReservationFinalized) {
+      try {
+        await finishLogicalSearch(logicalReservationId, 'released', false, null, 'live_search_failed');
+      } catch {
+        // Logical reservations expire fail-closed and do not consume quota unless finalized as succeeded.
       }
     }
     console.error('NearTime live search failed', error instanceof Error ? error.message : error);
