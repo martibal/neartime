@@ -15,7 +15,7 @@ export const mockSearchProvider: SearchProvider = {
   kind: 'external',
   estimateCostUnits: () => 1,
   async search(query, sortKey, context) {
-    let origin = context.origin;
+    let origin = context?.origin;
 
     if (!origin) {
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -26,7 +26,7 @@ export const mockSearchProvider: SearchProvider = {
     }
 
     return googlePlacesSearchProvider.search(query, sortKey, {
-      ...context,
+      ...(context ?? {}),
       origin,
     });
   },
