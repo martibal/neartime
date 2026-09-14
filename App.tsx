@@ -1,7 +1,7 @@
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,6 +12,8 @@ import { executeSearch, googlePlacesSearchProvider } from './src/providers';
 
 const REGION_DELTA = 0.022;
 const DEVICE_ID = 'prototype-device';
+
+type SortDirection = 'asc' | 'desc';
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
@@ -25,21 +27,33 @@ function toRegion(coordinate: Coordinate): Region {
   return { ...coordinate, latitudeDelta: REGION_DELTA, longitudeDelta: REGION_DELTA };
 }
 
-function sortPlaces(places: Place[], sortKey: SortKey, travelMode: TravelMode): Place[] {
+function sortPlaces(places: Place[], sortKey: SortKey, direction: SortDirection, travelMode: TravelMode): Place[] {
   const copy = [...places];
   const time = (place: Place) => getTravelMinutes(place, travelMode);
+
   copy.sort((a, b) => {
+    let primary = 0;
     switch (sortKey) {
-      case 'rating': return b.rating - a.rating || time(a) - time(b);
-      case 'distance': return a.distanceMeters - b.distanceMeters;
-      case 'price': return a.priceLevel - b.priceLevel || time(a) - time(b);
-      case 'reviews': return b.reviewCount - a.reviewCount || time(a) - time(b);
-      case 'open': return b.closesInMinutes - a.closesInMinutes || time(a) - time(b);
+      case 'rating': primary = a.rating - b.rating; break;
+      case 'distance': primary = a.distanceMeters - b.distanceMeters; break;
+      case 'price': primary = a.priceLevel - b.priceLevel; break;
+      case 'reviews': primary = a.reviewCount - b.reviewCount; break;
+      case 'open': primary = a.closesInMinutes - b.closesInMinutes; break;
       case 'time':
-      default: return time(a) - time(b);
+      default: primary = time(a) - time(b); break;
     }
+
+    if (primary !== 0) return direction === 'asc' ? primary : -primary;
+    return time(a) - time(b);
   });
+
   return copy;
+}
+
+function googleTravelMode(mode: TravelMode): 'walking' | 'driving' | 'bicycling' {
+  if (mode === 'Drive') return 'driving';
+  if (mode === 'Bike') return 'bicycling';
+  return 'walking';
 }
 
 export default function App() {
@@ -60,6 +74,9 @@ export default function App() {
   const [resultsVisible, setResultsVisible] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('time');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [directionMenuOpen, setDirectionMenuOpen] = useState(false);
   const [providerResults, setProviderResults] = useState<Place[]>([]);
   const [providerStatus, setProviderStatus] = useState('Live search ready · protected by server cost gate');
   const [hasSearched, setHasSearched] = useState(false);
@@ -75,7 +92,12 @@ export default function App() {
     openForMinutes,
   }), [category, travelMode, maxMinutes, minimumRating, minimumReviews, openNow, openForMinutes]);
 
-  const sortedResults = useMemo(() => sortPlaces(providerResults, sortKey, travelMode), [providerResults, sortKey, travelMode]);
+  const sortedResults = useMemo(
+    () => sortPlaces(providerResults, sortKey, sortDirection, travelMode),
+    [providerResults, sortKey, sortDirection, travelMode],
+  );
+
+  const selectedSortLabel = sortOptions.find((option) => option.key === sortKey)?.label ?? 'Travel time';
 
   const requestCurrentLocation = async () => {
     try {
@@ -124,6 +146,8 @@ export default function App() {
       const result = await executeSearch(googlePlacesSearchProvider, query, 'time', DEVICE_ID, origin);
       setProviderResults(result.places);
       setHasSearched(true);
+      setSortKey('time');
+      setSortDirection('asc');
       setProviderStatus(`${result.places.length} live ${result.places.length === 1 ? 'match' : 'matches'} · ${result.costUnits} cost unit · protected backend call`);
       setResultsVisible(true);
     } catch (error) {
@@ -134,6 +158,13 @@ export default function App() {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const openDirections = async (place: Place) => {
+    const destinationLatitude = origin.latitude + place.latitudeOffset;
+    const destinationLongitude = origin.longitude + place.longitudeOffset;
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin.latitude},${origin.longitude}&destination=${destinationLatitude},${destinationLongitude}&travelmode=${googleTravelMode(travelMode)}`;
+    await Linking.openURL(url);
   };
 
   useEffect(() => {
@@ -252,7 +283,7 @@ export default function App() {
 
           <View style={styles.liveNotice}>
             <Text style={styles.liveNoticeTitle}>Live Places test mode</Text>
-            <Text style={styles.liveNoticeText}>Results below come from Google Places through the NearTime backend. Every external request must first pass the server-side cost gate.</Text>
+            <Text style={styles.liveNoticeText}>Every result must satisfy your active hard filters. Search results default to shortest travel time first.</Text>
           </View>
 
           <View style={styles.mapShell}>
@@ -297,7 +328,7 @@ export default function App() {
 
           <View style={styles.devNotice}>
             <Text style={styles.devNoticeTitle}>Protected live prototype</Text>
-            <Text style={styles.devNoticeText}>GPS, Google Places data, routing summaries and hard filters are live. Sorting existing results is local and does not spend another Places request.</Text>
+            <Text style={styles.devNoticeText}>Walk, bike and drive use direct travel-time routing. Sorting the returned matches and opening Google Maps directions do not trigger another NearTime Places search.</Text>
             <Text style={styles.devNoticeStatus}>{providerStatus}</Text>
           </View>
         </ScrollView>
@@ -307,32 +338,65 @@ export default function App() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>{category} results</Text>
-                <Text style={styles.modalSubtitle}>{providerResults.length} live nearby {providerResults.length === 1 ? 'place' : 'places'}</Text>
+                <Text style={styles.modalSubtitle}>{providerResults.length} matching nearby {providerResults.length === 1 ? 'place' : 'places'}</Text>
               </View>
               <TouchableOpacity onPress={() => setResultsVisible(false)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
             </View>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
-              {sortOptions.map((option) => (
-                <Chip key={option.key} label={option.label} active={sortKey === option.key} onPress={() => setSortKey(option.key)} />
-              ))}
-            </ScrollView>
+            <View style={styles.sortControls}>
+              <View style={styles.dropdownColumn}>
+                <Text style={styles.dropdownLabel}>Sort by</Text>
+                <TouchableOpacity style={styles.dropdownButton} onPress={() => { setSortMenuOpen((value) => !value); setDirectionMenuOpen(false); }}>
+                  <Text style={styles.dropdownButtonText}>{selectedSortLabel}</Text><Text style={styles.dropdownChevron}>⌄</Text>
+                </TouchableOpacity>
+                {sortMenuOpen && (
+                  <View style={styles.dropdownMenu}>
+                    {sortOptions.map((option) => (
+                      <TouchableOpacity key={option.key} style={[styles.dropdownOption, sortKey === option.key && styles.dropdownOptionActive]} onPress={() => { setSortKey(option.key); setSortMenuOpen(false); }}>
+                        <Text style={[styles.dropdownOptionText, sortKey === option.key && styles.dropdownOptionTextActive]}>{option.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.dropdownColumn}>
+                <Text style={styles.dropdownLabel}>Order</Text>
+                <TouchableOpacity style={styles.dropdownButton} onPress={() => { setDirectionMenuOpen((value) => !value); setSortMenuOpen(false); }}>
+                  <Text style={styles.dropdownButtonText}>{sortDirection === 'asc' ? 'Ascending' : 'Descending'}</Text><Text style={styles.dropdownChevron}>⌄</Text>
+                </TouchableOpacity>
+                {directionMenuOpen && (
+                  <View style={styles.dropdownMenu}>
+                    {(['asc', 'desc'] as SortDirection[]).map((direction) => (
+                      <TouchableOpacity key={direction} style={[styles.dropdownOption, sortDirection === direction && styles.dropdownOptionActive]} onPress={() => { setSortDirection(direction); setDirectionMenuOpen(false); }}>
+                        <Text style={[styles.dropdownOptionText, sortDirection === direction && styles.dropdownOptionTextActive]}>{direction === 'asc' ? 'Ascending' : 'Descending'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
 
             <ScrollView contentContainerStyle={styles.resultsList}>
               {sortedResults.length === 0 ? (
                 <View style={styles.emptyState}><Text style={styles.emptyTitle}>No live matches</Text><Text style={styles.emptyText}>Increase travel time or relax one of the filters, then run a new search.</Text></View>
               ) : sortedResults.map((place) => (
-                <TouchableOpacity key={place.id} style={styles.resultCard} onPress={() => setSelectedPlace(place)}>
-                  <View style={styles.resultTopRow}>
-                    <View style={styles.resultTitleWrap}>
-                      <Text style={styles.travelTime}>{getTravelMinutes(place, travelMode)} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)} · LIVE</Text>
-                      <Text style={styles.placeName}>{place.name}</Text>
+                <View key={place.id} style={styles.resultCard}>
+                  <TouchableOpacity onPress={() => setSelectedPlace(place)}>
+                    <View style={styles.resultTopRow}>
+                      <View style={styles.resultTitleWrap}>
+                        <Text style={styles.travelTime}>{getTravelMinutes(place, travelMode)} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)} · LIVE</Text>
+                        <Text style={styles.placeName}>{place.name}</Text>
+                      </View>
+                      <View style={styles.ratingBadge}><Text style={styles.ratingBadgeText}>{place.rating.toFixed(1)} ★</Text></View>
                     </View>
-                    <View style={styles.ratingBadge}><Text style={styles.ratingBadgeText}>{place.rating.toFixed(1)} ★</Text></View>
-                  </View>
-                  <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · {place.open ? `Open for ${Math.floor(place.closesInMinutes / 60)}h ${place.closesInMinutes % 60}m` : 'Closed'}</Text>
-                  <Text style={styles.placeAddress}>{place.address}</Text>
-                </TouchableOpacity>
+                    <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · {place.open ? `Open for ${Math.floor(place.closesInMinutes / 60)}h ${place.closesInMinutes % 60}m` : 'Closed'}</Text>
+                    <Text style={styles.placeAddress}>{place.address}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.directionsButton} onPress={() => void openDirections(place)}>
+                    <Text style={styles.directionsButtonText}>Directions in Google Maps</Text>
+                  </TouchableOpacity>
+                </View>
               ))}
             </ScrollView>
           </SafeAreaView>
@@ -351,7 +415,9 @@ export default function App() {
                   <Text style={styles.detailLead}>{getTravelMinutes(selectedPlace, travelMode)} min {modeLabel(travelMode)} · {formatDistance(selectedPlace.distanceMeters)}</Text>
                   <Text style={styles.detailLine}>📍 {selectedPlace.address}</Text>
                   <Text style={styles.detailLine}>{selectedPlace.open ? `🕒 Open for ${Math.floor(selectedPlace.closesInMinutes / 60)}h ${selectedPlace.closesInMinutes % 60}m` : '🕒 Closed'}</Text>
-                  <Text style={styles.detailLine}>Google Places data via NearTime protected backend.</Text>
+                  <TouchableOpacity style={styles.directionsButton} onPress={() => void openDirections(selectedPlace)}>
+                    <Text style={styles.directionsButtonText}>Directions in Google Maps</Text>
+                  </TouchableOpacity>
                 </>
               )}
             </View>
@@ -439,20 +505,32 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 26, fontWeight: '800', color: '#171917' },
   modalSubtitle: { marginTop: 2, fontSize: 12, color: '#737873' },
   closeButton: { color: '#28684A', fontSize: 13, fontWeight: '800' },
-  sortRow: { paddingHorizontal: 18, paddingVertical: 8, gap: 7 },
+  sortControls: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingTop: 4, paddingBottom: 8, alignItems: 'flex-start' },
+  dropdownColumn: { flex: 1 },
+  dropdownLabel: { marginBottom: 5, fontSize: 11, fontWeight: '800', color: '#697069', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dropdownButton: { minHeight: 42, borderRadius: 12, borderWidth: 1, borderColor: '#D9DDD8', backgroundColor: '#FFFFFF', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dropdownButtonText: { fontSize: 13, fontWeight: '700', color: '#2A2E2A' },
+  dropdownChevron: { fontSize: 18, color: '#697069' },
+  dropdownMenu: { marginTop: 5, borderRadius: 12, borderWidth: 1, borderColor: '#D9DDD8', backgroundColor: '#FFFFFF', overflow: 'hidden' },
+  dropdownOption: { minHeight: 39, paddingHorizontal: 12, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E8EAE7' },
+  dropdownOptionActive: { backgroundColor: '#EAF4ED' },
+  dropdownOptionText: { fontSize: 13, color: '#3D433D' },
+  dropdownOptionTextActive: { fontWeight: '800', color: '#1D6846' },
   resultsList: { padding: 18, gap: 10, paddingBottom: 40 },
   emptyState: { borderRadius: 16, backgroundColor: '#FFFFFF', padding: 16, borderWidth: 1, borderColor: '#E4E7E2' },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: '#262926' },
   emptyText: { marginTop: 3, fontSize: 12, color: '#767C76' },
-  resultCard: { borderRadius: 18, backgroundColor: '#FFFFFF', padding: 14, borderWidth: 1, borderColor: '#E4E7E2', gap: 8 },
+  resultCard: { borderRadius: 18, backgroundColor: '#FFFFFF', padding: 14, borderWidth: 1, borderColor: '#E4E7E2', gap: 10 },
   resultTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   resultTitleWrap: { flex: 1 },
   travelTime: { fontSize: 12, fontWeight: '800', color: '#25704D' },
   placeName: { marginTop: 2, fontSize: 18, fontWeight: '800', color: '#1C1F1C' },
   ratingBadge: { borderRadius: 999, backgroundColor: '#EEF4EF', paddingHorizontal: 10, paddingVertical: 6 },
   ratingBadgeText: { fontSize: 12, fontWeight: '800', color: '#234C37' },
-  placeMeta: { fontSize: 12, lineHeight: 17, color: '#737873' },
-  placeAddress: { fontSize: 12, color: '#515751' },
+  placeMeta: { marginTop: 8, fontSize: 12, lineHeight: 17, color: '#737873' },
+  placeAddress: { marginTop: 2, fontSize: 12, color: '#515751' },
+  directionsButton: { minHeight: 42, borderRadius: 12, backgroundColor: '#183C2C', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  directionsButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
   detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', justifyContent: 'flex-end' },
   detailSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 28, gap: 12 },
   detailHandle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 2, backgroundColor: '#D5D8D4', marginBottom: 2 },
