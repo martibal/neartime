@@ -67,7 +67,8 @@ export const googlePlacesSearchProvider: SearchProvider = {
     let lastStatus = 0;
 
     for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
-      if (RETRY_DELAYS_MS[attempt] > 0) await sleep(RETRY_DELAYS_MS[attempt]);
+      const retryDelay = RETRY_DELAYS_MS[attempt] ?? 0;
+      if (retryDelay > 0) await sleep(retryDelay);
 
       try {
         const response = await fetch(SEARCH_ENDPOINT, {
