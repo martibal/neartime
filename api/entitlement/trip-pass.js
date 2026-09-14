@@ -3,6 +3,9 @@ const {
   issueEntitlementSession,
 } = require('../lib/entitlements');
 const {
+  recordVerifiedPurchaseAnalyticsBestEffort,
+} = require('../lib/purchaseAnalytics');
+const {
   tripPassDurationDays,
   verifyAppleTripPass,
   verifyGoogleTripPass,
@@ -53,6 +56,10 @@ module.exports = async function handler(req, res) {
         productId: verified.productId,
       });
     }
+
+    // Record only after the store receipt has been verified and the wallet has
+    // been synchronized. Telemetry failure cannot revoke valid paid access.
+    await recordVerifiedPurchaseAnalyticsBestEffort(deviceId, verified);
 
     const sessionToken = await issueEntitlementSession(wallet.entitlementHash, deviceId);
     return send(res, 200, {
