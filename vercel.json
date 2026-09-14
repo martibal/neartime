@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "builds": [
+    { "src": "api/search.js", "use": "@vercel/node" },
+    { "src": "api/entitlement/verify.js", "use": "@vercel/node" },
+    { "src": "api/entitlement/apple-notifications.js", "use": "@vercel/node" },
+    { "src": "api/entitlement/google-notifications.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/search", "dest": "/api/search.js" },
+    { "src": "/api/entitlement/verify", "dest": "/api/entitlement/verify.js" },
+    { "src": "/api/entitlement/apple-notifications", "dest": "/api/entitlement/apple-notifications.js" },
+    { "src": "/api/entitlement/google-notifications", "dest": "/api/entitlement/google-notifications.js" }
+  ]
+}
