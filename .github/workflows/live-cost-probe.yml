@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
 
+# This workflow is intentionally bounded by scripts/run-live-cost-probe.js to one NearTime search / max 3 provider calls.
 jobs:
   probe:
     runs-on: ubuntu-latest
