@@ -75,9 +75,9 @@ test('validateRequest accepts the supported query contract and rejects invalid i
   assert.equal(api.validateRequest({ ...valid, origin: { latitude: 91, longitude: 10.75 } }), 'invalid_latitude');
 });
 
-test('sanitizeDeviceId fails safely to the prototype id and caps length', () => {
-  assert.equal(api.sanitizeDeviceId(undefined), 'prototype-device');
-  assert.equal(api.sanitizeDeviceId('   '), 'prototype-device');
+test('sanitizeDeviceId fails closed on missing IDs and caps valid IDs', () => {
+  assert.equal(api.sanitizeDeviceId(undefined), null);
+  assert.equal(api.sanitizeDeviceId('   '), null);
   assert.equal(api.sanitizeDeviceId(' device-1 '), 'device-1');
   assert.equal(api.sanitizeDeviceId('x'.repeat(200)).length, 128);
 });
