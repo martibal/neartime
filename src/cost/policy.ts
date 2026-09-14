@@ -1,15 +1,16 @@
 import type { CostPolicy } from './types';
 
-// Development default: all billable external calls are hard-disabled.
-// Cost units are deliberately provider-agnostic until live provider pricing is frozen.
+// Prototype live-search policy. This is only a secondary client-side guard.
+// The NearTime backend remains authoritative and performs the atomic reservation
+// before any billable Google Places request is allowed.
 export const EXTERNAL_API_POLICY: CostPolicy = {
-  externalCallsEnabled: false,
-  emergencyKillSwitch: true,
-  maxEstimatedCostUnitsPerCall: 0,
-  globalDailyCostUnits: 0,
-  globalMonthlyCostUnits: 0,
-  perDeviceDailyCostUnits: 0,
-  maxRequestsPerMinutePerDevice: 0,
+  externalCallsEnabled: true,
+  emergencyKillSwitch: false,
+  maxEstimatedCostUnitsPerCall: 1,
+  globalDailyCostUnits: 5,
+  globalMonthlyCostUnits: 5,
+  perDeviceDailyCostUnits: 5,
+  maxRequestsPerMinutePerDevice: 2,
 };
 
 export const EXTERNAL_APIS_LOCKED =
