@@ -9,6 +9,8 @@ const SEARCH_ENDPOINT =
 
 const RETRY_DELAYS_MS = [0, 700, 1400];
 
+export const PAYWALL_REQUIRED_ERROR = 'NEARTIME_PAYWALL_REQUIRED';
+
 type LiveSearchResponse = {
   places: Place[];
   provider?: string;
@@ -42,8 +44,11 @@ function sleep(milliseconds: number): Promise<void> {
  * Live Places boundary.
  *
  * The mobile app never receives a Google Places server key and never calls
- * Google Places directly. A verified entitlement session and a logical-search
- * idempotency key are required before the backend can reserve provider spend.
+ * Google Places directly. Before purchase, the request is intentionally sent
+ * without an entitlement session and can only pass the backend's bounded free
+ * trial gate. After purchase, the opaque entitlement session selects the paid
+ * logical-search quota. Both paths remain behind the authoritative provider
+ * cost gate before any Google call is permitted.
  */
 export const googlePlacesSearchProvider: SearchProvider = {
   id: 'google-places-via-neartime-backend',
@@ -58,9 +63,6 @@ export const googlePlacesSearchProvider: SearchProvider = {
       getAnonymousInstallId(),
       getEntitlementSessionToken(),
     ]);
-    if (!entitlementSession) {
-      throw new Error('Subscription verification is required before live search.');
-    }
 
     const idempotencyKey = createSearchIdempotencyKey();
     let lastDetail = '';
@@ -71,19 +73,17 @@ export const googlePlacesSearchProvider: SearchProvider = {
       if (retryDelay > 0) await sleep(retryDelay);
 
       try {
+        const headers: Record<string, string> = {
+          'content-type': 'application/json',
+          'x-neartime-device-id': anonymousInstallId,
+          'x-neartime-idempotency-key': idempotencyKey,
+        };
+        if (entitlementSession) headers['x-neartime-entitlement-session'] = entitlementSession;
+
         const response = await fetch(SEARCH_ENDPOINT, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-neartime-device-id': anonymousInstallId,
-            'x-neartime-entitlement-session': entitlementSession,
-            'x-neartime-idempotency-key': idempotencyKey,
-          },
-          body: JSON.stringify({
-            query,
-            sortKey,
-            origin: context.origin,
-          }),
+          headers,
+          body: JSON.stringify({ query, sortKey, origin: context.origin }),
         });
 
         lastStatus = response.status;
@@ -97,20 +97,20 @@ export const googlePlacesSearchProvider: SearchProvider = {
 
         lastDetail = await response.text().catch(() => '');
         if (response.status === 402) {
-          throw new Error('Monthly NearTime usage is exhausted. Add a usage pack to continue.');
+          throw new Error(PAYWALL_REQUIRED_ERROR);
         }
         if (response.status === 401 || response.status === 403) {
-          await clearInvalidSession(response.status);
-          throw new Error('Subscription verification is required before live search.');
+          if (entitlementSession) {
+            await clearInvalidSession(response.status);
+            throw new Error('Subscription verification is required before live search.');
+          }
+          throw new Error(PAYWALL_REQUIRED_ERROR);
         }
 
-        // 409 means the first copy of the same logical request may still be running.
-        // 5xx/network errors are retried with the same idempotency key so the
-        // backend can replay the already-committed result rather than spend twice.
         if (response.status !== 409 && response.status < 500) break;
       } catch (error) {
         if (error instanceof Error && (
-          error.message.includes('Monthly NearTime usage') ||
+          error.message === PAYWALL_REQUIRED_ERROR ||
           error.message.includes('Subscription verification') ||
           error.message.includes('invalid payload')
         )) {
