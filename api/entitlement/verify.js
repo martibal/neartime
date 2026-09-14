@@ -4,6 +4,9 @@ const {
   syncVerifiedEntitlement,
   issueEntitlementSession,
 } = require('../lib/entitlements');
+const {
+  recordVerifiedPurchaseAnalyticsBestEffort,
+} = require('../lib/purchaseAnalytics');
 
 function send(res, status, payload) {
   res.status(status).json(payload);
@@ -44,6 +47,10 @@ module.exports = async function handler(req, res) {
         status: verified.status,
       });
     }
+
+    // Analytics is server-authoritative but non-blocking: a valid paid purchase
+    // must never be denied merely because telemetry storage is unavailable.
+    await recordVerifiedPurchaseAnalyticsBestEffort(deviceId, verified);
 
     const sessionToken = await issueEntitlementSession(wallet.entitlementHash, deviceId);
     return send(res, 200, {
