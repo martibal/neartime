@@ -3,7 +3,7 @@
 const DEFAULTS = Object.freeze({
   leafTarget: 20,
   maxDepth: 5,
-  maxAggregateCalls: 32,
+  maxAggregateCalls: 48,
   maxNearbyCalls: 32,
   maxFallbackCalls: 64,
 });
@@ -18,6 +18,12 @@ const COVERAGE_STATE = Object.freeze({
   VERIFIED_CURRENT: 'VERIFIED_CURRENT',
   CACHED_CANDIDATES: 'CACHED_CANDIDATES',
   UNVERIFIED: 'UNVERIFIED',
+});
+
+const SKU = Object.freeze({
+  AGGREGATE: '546C-66B2-E5A6',
+  NEARBY_ENTERPRISE_ATMOSPHERE: 'F20E-7034-0EF7',
+  PLACE_DETAILS_ENTERPRISE: '2D9A-3DE0-3766',
 });
 
 function assertFiniteCoordinate(value, name) {
@@ -51,16 +57,12 @@ function metersToLongitudeDegrees(meters, latitude) {
   return meters / (111320 * cosLatitude);
 }
 
-// Four child circles collectively cover the parent circle. They deliberately
-// overlap and extend slightly outside it. Over-coverage is acceptable because
-// final eligibility is decided by hard route-time filters; under-coverage is not.
 function splitCircle(circle) {
   const radius = Number(circle.radius);
   const childRadius = radius / Math.SQRT2;
   const offset = radius / 2;
   const latDelta = metersToLatitudeDegrees(offset);
   const lonDelta = metersToLongitudeDegrees(offset, circle.center.latitude);
-
   return [
     [-latDelta, -lonDelta],
     [-latDelta, lonDelta],
@@ -79,7 +81,7 @@ function makeRootCircle(origin, radiusMeters) {
   const latitude = assertFiniteCoordinate(origin?.latitude, 'latitude');
   const longitude = assertFiniteCoordinate(origin?.longitude, 'longitude');
   const radius = Number(radiusMeters);
-  if (!Number.isFinite(radius) || radius <= 0) throw new Error('invalid_radius');
+  if (!Number.isFinite(radius) || radius <= 0 || radius > 50000) throw new Error('invalid_radius');
   return { center: { latitude, longitude }, radius };
 }
 
@@ -108,71 +110,74 @@ function requireBudget(counter, max, reason) {
 }
 
 async function callStep(hooks, descriptor, fn) {
-  const reservation = hooks?.beforeProviderCall
-    ? await hooks.beforeProviderCall(descriptor)
-    : null;
-
+  const reservation = hooks?.beforeProviderCall ? await hooks.beforeProviderCall(descriptor) : null;
   try {
     const value = await fn();
-    if (hooks?.afterProviderCall) {
-      await hooks.afterProviderCall({ ...descriptor, reservation, outcome: 'succeeded' });
-    }
+    if (hooks?.afterProviderCall) await hooks.afterProviderCall({ ...descriptor, reservation, outcome: 'succeeded' });
     return value;
   } catch (error) {
-    if (hooks?.afterProviderCall) {
-      await hooks.afterProviderCall({ ...descriptor, reservation, outcome: 'failed', error });
-    }
+    if (hooks?.afterProviderCall) await hooks.afterProviderCall({ ...descriptor, reservation, outcome: 'failed', error });
     throw error;
   }
 }
 
-async function enumerateLeafCells({
-  rootCircle,
-  categoryTypes,
-  aggregateSearch,
-  hooks,
-  options,
-  budget,
-  searchKey,
-}) {
+async function aggregateCall({ aggregateSearch, hooks, budget, descriptor, args }) {
+  requireBudget(budget.aggregateCalls, budget.maxAggregateCalls, 'aggregate_call_budget_exhausted');
+  const value = await callStep(hooks, descriptor, () => aggregateSearch(args));
+  budget.aggregateCalls += 1;
+  return value;
+}
+
+async function enumerateLeafCells({ rootCircle, categoryTypes, aggregateSearch, hooks, options, budget, searchKey }) {
   const leaves = [];
   const queue = [{ circle: rootCircle, depth: 0, ordinal: 0 }];
   let nextOrdinal = 1;
 
   while (queue.length > 0) {
     const node = queue.shift();
-    requireBudget(budget.aggregateCalls, budget.maxAggregateCalls, 'aggregate_call_budget_exhausted');
     const cellKey = stableCellKey(node.circle, node.depth, node.ordinal);
-    const stepKey = `${searchKey}:aggregate:${cellKey}`;
-
-    const aggregate = await callStep(
+    const countStepKey = `${searchKey}:aggregate-count:${cellKey}`;
+    const countPayload = await aggregateCall({
+      aggregateSearch,
       hooks,
-      { kind: 'aggregate', skuId: '546C-66B2-E5A6', quantity: 1, idempotencyKey: stepKey, cellKey },
-      () => aggregateSearch({ circle: node.circle, includedTypes: categoryTypes, includePlaceIds: true, stepKey }),
-    );
-    budget.aggregateCalls += 1;
+      budget,
+      descriptor: { kind: 'aggregate_count', skuId: SKU.AGGREGATE, quantity: 1, idempotencyKey: countStepKey, cellKey },
+      args: { circle: node.circle, includedTypes: categoryTypes, includePlaceIds: false, stepKey: countStepKey },
+    });
 
-    const count = Number(aggregate?.count);
+    const count = Number(countPayload?.count);
     if (!Number.isInteger(count) || count < 0) {
       const error = new Error('invalid_aggregate_count');
       error.code = 'invalid_aggregate_count';
       throw error;
     }
 
+    if (count === 0) {
+      leaves.push({ cellKey, circle: node.circle, depth: node.depth, count: 0, expectedIds: [] });
+      continue;
+    }
+
     if (count <= options.leafTarget) {
-      const expectedIds = uniqueIds(aggregate?.placeIds ?? aggregate?.places ?? aggregate?.placeInsights);
-      if (expectedIds.length !== count) {
-        leaves.push({
-          cellKey,
-          circle: node.circle,
-          depth: node.depth,
-          count,
-          expectedIds,
-          unverifiableReason: 'aggregate_place_ids_incomplete',
-        });
-      } else {
-        leaves.push({ cellKey, circle: node.circle, depth: node.depth, count, expectedIds });
-      }
+      const placesStepKey = `${searchKey}:aggregate-places:${cellKey}`;
+      const placesPayload = await aggregateCall({
+        aggregateSearch,
+        hooks,
+        budget,
+        descriptor: { kind: 'aggregate_places', skuId: SKU.AGGREGATE, quantity: 1, idempotencyKey: placesStepKey, cellKey },
+        args: { circle: node.circle, includedTypes: categoryTypes, includePlaceIds: true, stepKey: placesStepKey },
+      });
+      const returnedCount = Number(placesPayload?.count ?? count);
+      const expectedIds = uniqueIds(placesPayload?.placeIds ?? placesPayload?.places ?? placesPayload?.placeInsights);
+      leaves.push({
+        cellKey,
+        circle: node.circle,
+        depth: node.depth,
+        count,
+        expectedIds,
+        unverifiableReason: returnedCount !== count || expectedIds.length !== count
+          ? 'aggregate_place_ids_incomplete'
+          : null,
+      });
       continue;
     }
 
@@ -182,35 +187,29 @@ async function enumerateLeafCells({
         circle: node.circle,
         depth: node.depth,
         count,
-        expectedIds: uniqueIds(aggregate?.placeIds ?? aggregate?.places ?? aggregate?.placeInsights),
+        expectedIds: [],
         unverifiableReason: 'partition_depth_exhausted',
       });
       continue;
     }
 
     for (const child of splitCircle(node.circle)) {
-      queue.push({ circle: child, depth: node.depth + 1, ordinal: nextOrdinal });
-      nextOrdinal += 1;
+      queue.push({ circle: child, depth: node.depth + 1, ordinal: nextOrdinal++ });
     }
   }
-
   return leaves;
 }
 
-async function retrieveLeaf({
-  leaf,
-  categoryTypes,
-  nearbySearch,
-  placeDetails,
-  hooks,
-  budget,
-  searchKey,
-}) {
+async function retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, hooks, budget, searchKey }) {
+  if (leaf.count === 0) {
+    return { verified: !leaf.unverifiableReason, reason: leaf.unverifiableReason || null, expectedIds: [], retrievedIds: [], places: [] };
+  }
+
   requireBudget(budget.nearbyCalls, budget.maxNearbyCalls, 'nearby_call_budget_exhausted');
   const nearbyStepKey = `${searchKey}:nearby:${leaf.cellKey}`;
   const nearby = await callStep(
     hooks,
-    { kind: 'nearby', skuId: 'F20E-7034-0EF7', quantity: 1, idempotencyKey: nearbyStepKey, cellKey: leaf.cellKey },
+    { kind: 'nearby', skuId: SKU.NEARBY_ENTERPRISE_ATMOSPHERE, quantity: 1, idempotencyKey: nearbyStepKey, cellKey: leaf.cellKey },
     () => nearbySearch({ circle: leaf.circle, includedTypes: categoryTypes, maxResultCount: 20, stepKey: nearbyStepKey }),
   );
   budget.nearbyCalls += 1;
@@ -238,21 +237,20 @@ async function retrieveLeaf({
     const stepKey = `${searchKey}:details:${placeId}`;
     const place = await callStep(
       hooks,
-      { kind: 'details', quantity: 1, idempotencyKey: stepKey, placeId },
+      { kind: 'details', skuId: SKU.PLACE_DETAILS_ENTERPRISE, quantity: 1, idempotencyKey: stepKey, placeId },
       () => placeDetails({ placeId, stepKey }),
     );
     budget.fallbackCalls += 1;
     const resolvedId = normalizePlaceId(place?.id ?? place?.name ?? placeId);
-    if (resolvedId) byId.set(resolvedId, place);
+    if (place && resolvedId) byId.set(resolvedId, place);
   }
 
-  const retrievedIds = [...byId.keys()];
   const stillMissing = leaf.expectedIds.filter((id) => !byId.has(id));
   return {
     verified: stillMissing.length === 0,
     reason: stillMissing.length === 0 ? null : 'missing_place_ids_after_fallback',
     expectedIds: leaf.expectedIds,
-    retrievedIds,
+    retrievedIds: [...byId.keys()],
     places: [...byId.values()],
   };
 }
@@ -282,15 +280,7 @@ async function runCoverageSearch({
   let leaves;
 
   try {
-    leaves = await enumerateLeafCells({
-      rootCircle,
-      categoryTypes,
-      aggregateSearch,
-      hooks,
-      options,
-      budget,
-      searchKey,
-    });
+    leaves = await enumerateLeafCells({ rootCircle, categoryTypes, aggregateSearch, hooks, options, budget, searchKey });
   } catch (error) {
     return {
       resultStatus: RESULT_STATUS.DEGRADED,
@@ -311,15 +301,7 @@ async function runCoverageSearch({
   for (const leaf of leaves) {
     for (const id of leaf.expectedIds || []) expectedIds.add(id);
     try {
-      const retrieval = await retrieveLeaf({
-        leaf,
-        categoryTypes,
-        nearbySearch,
-        placeDetails,
-        hooks,
-        budget,
-        searchKey,
-      });
+      const retrieval = await retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, hooks, budget, searchKey });
       for (const place of retrieval.places) {
         const id = normalizePlaceId(place?.id ?? place?.name);
         if (id) globalPlaces.set(id, place);
@@ -332,8 +314,7 @@ async function runCoverageSearch({
 
   const candidates = [...globalPlaces.values()];
   const filtered = applyHardFilters(candidates);
-  const fullyVerified = coverageFailures.length === 0
-    && [...expectedIds].every((id) => globalPlaces.has(id));
+  const fullyVerified = coverageFailures.length === 0 && [...expectedIds].every((id) => globalPlaces.has(id));
 
   if (!fullyVerified) {
     return {
@@ -364,6 +345,7 @@ module.exports = {
   COVERAGE_STATE,
   DEFAULTS,
   RESULT_STATUS,
+  SKU,
   makeRootCircle,
   normalizePlaceId,
   runCoverageSearch,
