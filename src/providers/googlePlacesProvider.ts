@@ -1,7 +1,9 @@
 import type { Place } from '../domain/types';
 import type { SearchProvider } from './types';
 
-const SEARCH_ENDPOINT = process.env.EXPO_PUBLIC_NEARTIME_SEARCH_ENDPOINT?.trim();
+const SEARCH_ENDPOINT =
+  process.env.EXPO_PUBLIC_NEARTIME_SEARCH_ENDPOINT?.trim() ||
+  'https://neartime.vercel.app/api/search';
 
 type LiveSearchResponse = {
   places: Place[];
@@ -20,22 +22,14 @@ function isPlaceArray(value: unknown): value is Place[] {
  * Live Places boundary.
  *
  * The mobile app never receives a Google Places server key and never calls
- * Google Places directly. It calls the NearTime backend only after executeSearch()
- * has approved the request locally. The backend must independently perform the
- * authoritative atomic reservation before it is allowed to call Google.
- *
- * EXTERNAL_API_POLICY remains fail-closed by default, so this provider cannot
- * make a network request until the live rollout is deliberately enabled.
+ * Google Places directly. It calls the NearTime backend, which performs the
+ * authoritative atomic cost reservation before any Google request.
  */
 export const googlePlacesSearchProvider: SearchProvider = {
   id: 'google-places-via-neartime-backend',
   kind: 'external',
   estimateCostUnits: () => 1,
   async search(query, sortKey, context) {
-    if (!SEARCH_ENDPOINT) {
-      throw new Error('Live Places search blocked: EXPO_PUBLIC_NEARTIME_SEARCH_ENDPOINT is not configured.');
-    }
-
     if (!context?.origin) {
       throw new Error('Live Places search blocked: current origin is required.');
     }
