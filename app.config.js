@@ -12,6 +12,9 @@ module.exports = ({ config }) => {
   }
 
   const plugins = [...(config.plugins ?? [])];
+  if (!plugins.some((plugin) => plugin === 'expo-iap' || (Array.isArray(plugin) && plugin[0] === 'expo-iap'))) {
+    plugins.push('expo-iap');
+  }
 
   if (googleMapsApiKey) {
     // Current react-native-maps Expo config plugin path.
