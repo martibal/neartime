@@ -1,4 +1,4 @@
 import { registerRootComponent } from 'expo';
-import App from './App';
+import AppRoot from './src/paywall/AppRoot';
 
-registerRootComponent(App);
+registerRootComponent(AppRoot);

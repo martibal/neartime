@@ -1,6 +1,7 @@
 import { getAnonymousInstallId } from '../device/anonymousInstallId';
 import { getEntitlementSessionToken } from '../device/entitlementSession';
 import type { Place } from '../domain/types';
+import { requestPaywall } from '../paywall/paywallSignal';
 import type { SearchProvider } from './types';
 
 const SEARCH_ENDPOINT =
@@ -97,13 +98,16 @@ export const googlePlacesSearchProvider: SearchProvider = {
 
         lastDetail = await response.text().catch(() => '');
         if (response.status === 402) {
+          requestPaywall(entitlementSession ? 'paid_quota_exhausted' : 'trial_exhausted');
           throw new Error(PAYWALL_REQUIRED_ERROR);
         }
         if (response.status === 401 || response.status === 403) {
           if (entitlementSession) {
             await clearInvalidSession(response.status);
+            requestPaywall('entitlement_required');
             throw new Error('Subscription verification is required before live search.');
           }
+          requestPaywall('trial_exhausted');
           throw new Error(PAYWALL_REQUIRED_ERROR);
         }
 
