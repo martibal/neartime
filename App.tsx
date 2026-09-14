@@ -1,4 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
+﻿import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -79,7 +79,6 @@ export default function App() {
   const [openNow, setOpenNow] = useState(true);
   const [openForMinutes, setOpenForMinutes] = useState<OpenForMinutes>(0);
   const [origin, setOrigin] = useState<Coordinate>(DEFAULT_ORIGIN);
-  const [mapRegion, setMapRegion] = useState<Region>(toRegion(DEFAULT_ORIGIN));
   const [locationReady, setLocationReady] = useState(false);
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
   const [locationLabel, setLocationLabel] = useState('Finding your location…');
@@ -126,7 +125,6 @@ export default function App() {
       const nextOrigin = { latitude: current.coords.latitude, longitude: current.coords.longitude };
       const nextRegion = toRegion(nextOrigin);
       setOrigin(nextOrigin);
-      setMapRegion(nextRegion);
       setLocationAccuracy(current.coords.accuracy ?? null);
       setLocationReady(true);
       setLocationLabel('My current location');
@@ -142,7 +140,6 @@ export default function App() {
 
   const recenterMap = () => {
     const nextRegion = toRegion(origin);
-    setMapRegion(nextRegion);
     mapRef.current?.animateToRegion(nextRegion, 300);
   };
 
@@ -311,13 +308,13 @@ export default function App() {
           </View>
 
           <View style={styles.mapShell}>
+            {locationReady && (
             <MapView
               ref={mapRef}
               provider={PROVIDER_GOOGLE}
               style={styles.map}
               mapType="standard"
-              region={mapRegion}
-              onRegionChangeComplete={setMapRegion}
+              initialRegion={toRegion(origin)}
               onMapReady={() => setMapReady(true)}
               showsUserLocation={locationReady}
               showsMyLocationButton={false}
@@ -342,6 +339,7 @@ export default function App() {
                 );
               })}
             </MapView>
+            )}
             <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>{mapReady ? 'MAP READY' : 'LOADING MAP'} · {hasSearched ? `${providerResults.length} LIVE PLACES` : 'NO SEARCH YET'}</Text></View>
             <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
               <MaterialIcons name="my-location" size={20} color={colors.primary} />
@@ -443,7 +441,7 @@ export default function App() {
                     <MaterialIcons name="place" size={14} color={colors.onSurfaceVariant} />
                     <Text style={styles.detailLine}>{selectedPlace.address}</Text>
                   </View>
-                  <Text style={styles.detailLine}>{selectedPlace.open ? `🕒 Open for ${Math.floor(selectedPlace.closesInMinutes / 60)}h ${selectedPlace.closesInMinutes % 60}m` : '🕒 Closed'}</Text>
+                  <Text style={styles.detailLine}>{selectedPlace.open ? `ðŸ•’ Open for ${Math.floor(selectedPlace.closesInMinutes / 60)}h ${selectedPlace.closesInMinutes % 60}m` : 'ðŸ•’ Closed'}</Text>
                   <TouchableOpacity style={styles.directionsButton} onPress={() => void openDirections(selectedPlace)}>
                     <Text style={styles.directionsButtonText}>Directions in Google Maps</Text>
                   </TouchableOpacity>
@@ -568,3 +566,8 @@ const styles = StyleSheet.create({
   detailLead: { fontSize: 14, fontWeight: type.medium, color: colors.primary },
   detailLine: { fontSize: 13, color: colors.onSurface },
 });
+
+
+
+
+
