@@ -172,7 +172,15 @@ async function runCoverageSearchV2({
         routeMatrix,
       });
     },
-    applyHardFilters: (candidates) => filterCandidates(candidates, origin, query).places,
+    applyHardFilters: (candidates) => {
+      const filtered = filterCandidates(candidates, origin, query);
+      if (filtered.unresolvedIds.length > 0) {
+        const error = new Error(`route_time_unresolved:${filtered.unresolvedIds.join(',')}`);
+        error.code = 'route_time_unresolved';
+        throw error;
+      }
+      return filtered.places;
+    },
     hooks,
     options,
   });
@@ -182,16 +190,6 @@ async function runCoverageSearchV2({
     const error = new Error(gate);
     error.code = gate;
     throw error;
-  }
-
-  const unresolved = filterCandidates(result.places, origin, query).unresolvedIds;
-  if (unresolved.length > 0 && result.coverageState === 'VERIFIED_CURRENT') {
-    return {
-      ...result,
-      resultStatus: 'DEGRADED',
-      coverageState: 'UNVERIFIED',
-      coverageReason: `route_time_unresolved:${unresolved.join(',')}`,
-    };
   }
 
   return result;
