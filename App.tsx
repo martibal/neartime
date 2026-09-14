@@ -1,12 +1,14 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { DEFAULT_ORIGIN, formatDistance, getTravelMinutes, modeLabel, querySummary } from './src/core/neartime';
 import { categories, openForOptions, reviewOptions, sortOptions, travelModes, travelOptions } from './src/domain/options';
+import { colors, elevation, radius, type } from './src/theme/tokens';
 import type { Coordinate, OpenForMinutes, Place, ReviewMinimum, SearchQuery, SortKey, TravelMinutes, TravelMode } from './src/domain/types';
 import { executeSearch, googlePlacesSearchProvider } from './src/providers';
 
@@ -15,9 +17,20 @@ const DEVICE_ID = 'prototype-device';
 
 type SortDirection = 'asc' | 'desc';
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function Chip({
+  label,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon?: keyof typeof MaterialIcons.glyphMap;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
+      {icon ? <MaterialIcons name={icon} size={16} color={active ? colors.onPrimary : colors.onSurfaceVariant} /> : null}
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -186,8 +199,10 @@ export default function App() {
 
           <TouchableOpacity style={styles.locationCard} onPress={() => void requestCurrentLocation()}>
             <View style={styles.locationTextWrap}>
-              <Text style={styles.eyebrow}>STARTING FROM</Text>
-              <Text style={styles.locationTitle}>📍 {locationLabel}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="my-location" size={16} color={colors.primary} />
+                <Text style={styles.locationTitle}>{locationLabel}</Text>
+              </View>
               {locationReady && (
                 <Text style={styles.locationDiagnostic}>
                   GPS {origin.latitude.toFixed(5)}, {origin.longitude.toFixed(5)}{locationAccuracy !== null ? ` · ±${Math.round(locationAccuracy)} m` : ''}
@@ -201,7 +216,7 @@ export default function App() {
             <Text style={styles.sectionTitle}>What do you need?</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
               {categories.map((item) => (
-                <Chip key={item.label} label={`${item.emoji} ${item.label}`} active={category === item.label} onPress={() => setCategory(item.label)} />
+                <Chip key={item.label} label={item.label} icon={item.icon as keyof typeof MaterialIcons.glyphMap} active={category === item.label} onPress={() => setCategory(item.label)} />
               ))}
             </ScrollView>
           </View>
@@ -214,7 +229,11 @@ export default function App() {
             <View style={styles.modeRow}>
               {travelModes.map((item) => (
                 <TouchableOpacity key={item.label} onPress={() => setTravelMode(item.label)} style={[styles.modeButton, travelMode === item.label && styles.modeButtonActive]}>
-                  <Text style={styles.modeEmoji}>{item.emoji}</Text>
+                  <MaterialIcons
+                    name={item.icon as keyof typeof MaterialIcons.glyphMap}
+                    size={18}
+                    color={travelMode === item.label ? colors.primary : colors.onSurfaceVariant}
+                  />
                   <Text style={[styles.modeText, travelMode === item.label && styles.modeTextActive]}>{item.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -255,13 +274,18 @@ export default function App() {
               </ScrollView>
             </View>
 
-            <TouchableOpacity accessibilityRole="switch" accessibilityState={{ checked: openNow }} onPress={() => setOpenNow((value) => !value)} style={styles.toggleRow}>
+            <View style={styles.toggleRow}>
               <View style={styles.toggleTextWrap}>
                 <Text style={styles.filterLabel}>Open now</Text>
                 <Text style={styles.filterHint}>Hide places that are currently closed</Text>
               </View>
-              <View style={[styles.toggle, openNow && styles.toggleActive]}><View style={[styles.toggleKnob, openNow && styles.toggleKnobActive]} /></View>
-            </TouchableOpacity>
+              <Switch
+                value={openNow}
+                onValueChange={(value) => setOpenNow(value)}
+                trackColor={{ false: colors.outline, true: colors.primary }}
+                thumbColor={colors.surface}
+              />
+            </View>
 
             <View style={styles.filterBlock}>
               <Text style={styles.filterLabel}>Must stay open for</Text>
@@ -319,7 +343,9 @@ export default function App() {
               })}
             </MapView>
             <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>{mapReady ? 'MAP READY' : 'LOADING MAP'} · {hasSearched ? `${providerResults.length} LIVE PLACES` : 'NO SEARCH YET'}</Text></View>
-            <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}><Text style={styles.recenterText}>◎</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}>
+              <MaterialIcons name="my-location" size={20} color={colors.primary} />
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity disabled={isSearching} style={styles.largeResultsButton} onPress={() => void runProviderSearch()}>
@@ -413,7 +439,10 @@ export default function App() {
                     <TouchableOpacity onPress={() => setSelectedPlace(null)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
                   </View>
                   <Text style={styles.detailLead}>{getTravelMinutes(selectedPlace, travelMode)} min {modeLabel(travelMode)} · {formatDistance(selectedPlace.distanceMeters)}</Text>
-                  <Text style={styles.detailLine}>📍 {selectedPlace.address}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <MaterialIcons name="place" size={14} color={colors.onSurfaceVariant} />
+                    <Text style={styles.detailLine}>{selectedPlace.address}</Text>
+                  </View>
                   <Text style={styles.detailLine}>{selectedPlace.open ? `🕒 Open for ${Math.floor(selectedPlace.closesInMinutes / 60)}h ${selectedPlace.closesInMinutes % 60}m` : '🕒 Closed'}</Text>
                   <TouchableOpacity style={styles.directionsButton} onPress={() => void openDirections(selectedPlace)}>
                     <Text style={styles.directionsButtonText}>Directions in Google Maps</Text>
@@ -429,115 +458,113 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F7F7F5' },
-  container: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 40, gap: 12 },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  container: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 24, gap: 10 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerTextWrap: { flex: 1, paddingRight: 12 },
-  brand: { fontSize: 26, fontWeight: '800', color: '#171917', letterSpacing: -0.7 },
-  tagline: { marginTop: 1, fontSize: 13, color: '#686D68' },
-  profileDot: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E1E6E0' },
-  locationCard: { minHeight: 68, borderRadius: 16, backgroundColor: '#FFFFFF', paddingHorizontal: 15, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#E8EAE6' },
+  brand: { fontSize: 22, fontWeight: type.semibold, color: colors.onSurface, letterSpacing: -0.4 },
+  tagline: { marginTop: 1, fontSize: 13, color: colors.onSurfaceVariant },
+  profileDot: { width: 34, height: 34, borderRadius: radius.full, backgroundColor: colors.surfaceVariant },
+  // Shadow, not border — this is the single biggest "native app" cue.
+  locationCard: { minHeight: 60, borderRadius: radius.lg, backgroundColor: colors.surface, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...elevation(1) },
   locationTextWrap: { flex: 1, paddingRight: 12 },
-  locationAction: { fontSize: 12, fontWeight: '800', color: '#28684A' },
-  eyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1, color: '#8A8F89' },
-  locationTitle: { marginTop: 3, fontSize: 16, fontWeight: '700', color: '#212421' },
-  locationDiagnostic: { marginTop: 3, fontSize: 10, color: '#6E756E' },
+  locationAction: { fontSize: 13, fontWeight: type.medium, color: colors.primary },
+  locationTitle: { fontSize: 15, fontWeight: type.medium, color: colors.onSurface },
+  locationDiagnostic: { marginTop: 2, fontSize: 11, color: colors.onSurfaceVariant },
   sectionBlock: { gap: 8 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  sectionTitle: { fontSize: 17, fontWeight: '800', color: '#1B1D1B' },
-  sectionValue: { fontSize: 13, fontWeight: '700', color: '#28684A' },
-  horizontalRow: { gap: 7, paddingRight: 12 },
-  compactRow: { gap: 7, paddingRight: 4 },
-  chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#DADDD8', backgroundColor: '#FFFFFF' },
-  chipActive: { backgroundColor: '#183C2C', borderColor: '#183C2C' },
-  chipText: { fontSize: 13, fontWeight: '600', color: '#3E433E' },
-  chipTextActive: { color: '#FFFFFF' },
+  sectionTitle: { fontSize: 15, fontWeight: type.medium, color: colors.onSurface },
+  sectionValue: { fontSize: 13, fontWeight: type.medium, color: colors.primary },
+  horizontalRow: { gap: 6, paddingRight: 12 },
+  compactRow: { gap: 6, paddingRight: 4 },
+  // Filled grey by default, Maps-blue only when selected. No border.
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.full, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: colors.surfaceVariant },
+  chipActive: { backgroundColor: colors.primary },
+  chipText: { fontSize: 13, fontWeight: type.medium, color: colors.onSurfaceVariant },
+  chipTextActive: { color: colors.onPrimary, fontWeight: type.semibold },
   modeRow: { flexDirection: 'row', gap: 8 },
-  modeButton: { flex: 1, minHeight: 46, borderRadius: 14, borderWidth: 1, borderColor: '#DDE0DB', backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  modeButtonActive: { backgroundColor: '#E4F3EA', borderColor: '#2A7651' },
-  modeEmoji: { fontSize: 16 },
-  modeText: { fontSize: 13, fontWeight: '700', color: '#454A45' },
-  modeTextActive: { color: '#1D6846' },
-  timeRow: { flexDirection: 'row', gap: 7 },
-  timeButton: { flex: 1, minHeight: 52, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDE0DB', alignItems: 'center', justifyContent: 'center' },
-  timeButtonActive: { backgroundColor: '#DDF2E6', borderColor: '#2A7651' },
-  timeButtonText: { fontSize: 19, fontWeight: '800', color: '#343834' },
-  timeButtonUnit: { fontSize: 10, fontWeight: '700', color: '#777D77' },
-  timeButtonTextActive: { color: '#1D6846' },
-  filtersCard: { borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7E2', padding: 14, gap: 14 },
-  filterBlock: { gap: 7 },
-  filterLabel: { fontSize: 14, fontWeight: '800', color: '#272A27' },
-  filterHint: { marginTop: 2, fontSize: 11, color: '#7A8079' },
+  modeButton: { flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: colors.surfaceVariant, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  modeButtonActive: { backgroundColor: '#E8F0FE' }, // Google's standard light-blue selected fill
+  modeText: { fontSize: 13, fontWeight: type.medium, color: colors.onSurfaceVariant },
+  modeTextActive: { color: colors.primary, fontWeight: type.semibold },
+  timeRow: { flexDirection: 'row', gap: 6 },
+  timeButton: { flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: colors.surfaceVariant, alignItems: 'center', justifyContent: 'center' },
+  timeButtonActive: { backgroundColor: '#E8F0FE' },
+  timeButtonText: { fontSize: 17, fontWeight: type.medium, color: colors.onSurface },
+  timeButtonUnit: { fontSize: 10, fontWeight: type.regular, color: colors.onSurfaceVariant },
+  timeButtonTextActive: { color: colors.primary, fontWeight: type.semibold },
+  filtersCard: { borderRadius: radius.lg, backgroundColor: colors.surface, padding: 14, gap: 14, ...elevation(1) },
+  filterBlock: { gap: 6 },
+  filterLabel: { fontSize: 14, fontWeight: type.medium, color: colors.onSurface },
+  filterHint: { marginTop: 2, fontSize: 11, color: colors.onSurfaceVariant },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   toggleTextWrap: { flex: 1 },
-  toggle: { width: 46, height: 27, borderRadius: 14, padding: 3, backgroundColor: '#D4D7D3' },
-  toggleActive: { backgroundColor: '#2D7A55' },
-  toggleKnob: { width: 21, height: 21, borderRadius: 11, backgroundColor: '#FFFFFF' },
-  toggleKnobActive: { transform: [{ translateX: 19 }] },
-  summaryBar: { borderRadius: 16, backgroundColor: '#183C2C', paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  summaryBar: { borderRadius: radius.lg, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   summaryTextWrap: { flex: 1 },
-  summaryMain: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  summaryDetail: { marginTop: 2, color: '#DDEBE4', fontSize: 11, lineHeight: 15, fontWeight: '600' },
-  seeResultsButton: { borderRadius: 12, backgroundColor: '#FFFFFF', paddingHorizontal: 13, paddingVertical: 9 },
-  seeResultsButtonText: { color: '#183C2C', fontSize: 12, fontWeight: '800' },
-  liveNotice: { borderRadius: 14, backgroundColor: '#EAF4ED', borderWidth: 1, borderColor: '#BDD8C6', padding: 12 },
-  liveNoticeTitle: { fontSize: 12, fontWeight: '800', color: '#28583D' },
-  liveNoticeText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: '#496B58' },
-  mapShell: { height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: '#DDE5DD', position: 'relative' },
+  summaryMain: { color: colors.onPrimary, fontSize: 15, fontWeight: type.semibold },
+  summaryDetail: { marginTop: 2, color: '#D2E3FC', fontSize: 11, lineHeight: 15, fontWeight: type.regular },
+  seeResultsButton: { borderRadius: radius.md, backgroundColor: colors.surface, paddingHorizontal: 13, paddingVertical: 9 },
+  seeResultsButtonText: { color: colors.primary, fontSize: 12, fontWeight: type.semibold },
+  liveNotice: { borderRadius: radius.md, backgroundColor: colors.surfaceVariant, padding: 12 },
+  liveNoticeTitle: { fontSize: 12, fontWeight: type.semibold, color: colors.onSurface },
+  liveNoticeText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: colors.onSurfaceVariant },
+  mapShell: { height: 260, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceVariant, position: 'relative' },
   map: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  mapBadge: { position: 'absolute', top: 12, left: 12, borderRadius: 999, backgroundColor: '#183C2C', paddingHorizontal: 10, paddingVertical: 6 },
-  mapBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
-  recenterButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, borderRadius: 12, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D7DCD6' },
-  recenterText: { fontSize: 25, color: '#48604F' },
-  mapTimePin: { borderRadius: 999, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#1D6846', paddingHorizontal: 9, paddingVertical: 6 },
-  mapTimePinText: { color: '#1D6846', fontSize: 11, fontWeight: '800' },
+  mapBadge: { position: 'absolute', top: 12, left: 12, borderRadius: radius.full, backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 6, ...elevation(2) },
+  mapBadgeText: { color: colors.onSurface, fontSize: 11, fontWeight: type.medium },
+  // Round floating action button — shadow, no border, like Maps' recenter control.
+  recenterButton: { position: 'absolute', top: 12, right: 12, width: 40, height: 40, borderRadius: radius.full, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', ...elevation(2) },
+  mapTimePin: { borderRadius: radius.full, backgroundColor: colors.surface, paddingHorizontal: 9, paddingVertical: 6, ...elevation(2) },
+  mapTimePinText: { color: colors.primary, fontSize: 11, fontWeight: type.semibold },
   callout: { minWidth: 160, padding: 8 },
-  calloutTitle: { fontSize: 14, fontWeight: '800', color: '#1C1F1C' },
-  calloutText: { marginTop: 3, fontSize: 11, color: '#6F756F' },
-  largeResultsButton: { minHeight: 48, borderRadius: 14, backgroundColor: '#183C2C', alignItems: 'center', justifyContent: 'center' },
-  largeResultsButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  devNotice: { borderRadius: 16, backgroundColor: '#FFF6E3', padding: 13, borderWidth: 1, borderColor: '#E9D4A5' },
-  devNoticeTitle: { fontSize: 12, fontWeight: '800', color: '#765F2E' },
-  devNoticeText: { marginTop: 2, fontSize: 11, lineHeight: 16, color: '#765F2E' },
-  devNoticeStatus: { marginTop: 7, fontSize: 10, fontWeight: '800', color: '#765F2E' },
-  modalSafeArea: { flex: 1, backgroundColor: '#F7F7F5' },
-  modalHeader: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  modalTitle: { fontSize: 26, fontWeight: '800', color: '#171917' },
-  modalSubtitle: { marginTop: 2, fontSize: 12, color: '#737873' },
-  closeButton: { color: '#28684A', fontSize: 13, fontWeight: '800' },
-  sortControls: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingTop: 4, paddingBottom: 8, alignItems: 'flex-start' },
+  calloutTitle: { fontSize: 14, fontWeight: type.semibold, color: colors.onSurface },
+  calloutText: { marginTop: 3, fontSize: 11, color: colors.onSurfaceVariant },
+  largeResultsButton: { minHeight: 46, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  largeResultsButtonText: { color: colors.onPrimary, fontSize: 15, fontWeight: type.semibold },
+  devNotice: { borderRadius: radius.lg, backgroundColor: '#FEF7E0', padding: 13 },
+  devNoticeTitle: { fontSize: 12, fontWeight: type.semibold, color: colors.warning },
+  devNoticeText: { marginTop: 2, fontSize: 11, lineHeight: 16, color: colors.warning },
+  devNoticeStatus: { marginTop: 7, fontSize: 10, fontWeight: type.semibold, color: colors.warning },
+  modalSafeArea: { flex: 1, backgroundColor: colors.background },
+  modalHeader: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalTitle: { fontSize: 20, fontWeight: type.semibold, color: colors.onSurface },
+  modalSubtitle: { marginTop: 2, fontSize: 12, color: colors.onSurfaceVariant },
+  closeButton: { color: colors.primary, fontSize: 13, fontWeight: type.medium },
+  sortControls: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8, alignItems: 'flex-start' },
   dropdownColumn: { flex: 1 },
-  dropdownLabel: { marginBottom: 5, fontSize: 11, fontWeight: '800', color: '#697069', textTransform: 'uppercase', letterSpacing: 0.5 },
-  dropdownButton: { minHeight: 42, borderRadius: 12, borderWidth: 1, borderColor: '#D9DDD8', backgroundColor: '#FFFFFF', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dropdownButtonText: { fontSize: 13, fontWeight: '700', color: '#2A2E2A' },
-  dropdownChevron: { fontSize: 18, color: '#697069' },
-  dropdownMenu: { marginTop: 5, borderRadius: 12, borderWidth: 1, borderColor: '#D9DDD8', backgroundColor: '#FFFFFF', overflow: 'hidden' },
-  dropdownOption: { minHeight: 39, paddingHorizontal: 12, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E8EAE7' },
-  dropdownOptionActive: { backgroundColor: '#EAF4ED' },
-  dropdownOptionText: { fontSize: 13, color: '#3D433D' },
-  dropdownOptionTextActive: { fontWeight: '800', color: '#1D6846' },
-  resultsList: { padding: 18, gap: 10, paddingBottom: 40 },
-  emptyState: { borderRadius: 16, backgroundColor: '#FFFFFF', padding: 16, borderWidth: 1, borderColor: '#E4E7E2' },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#262926' },
-  emptyText: { marginTop: 3, fontSize: 12, color: '#767C76' },
-  resultCard: { borderRadius: 18, backgroundColor: '#FFFFFF', padding: 14, borderWidth: 1, borderColor: '#E4E7E2', gap: 10 },
+  dropdownLabel: { marginBottom: 5, fontSize: 11, fontWeight: type.medium, color: colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 0.5 },
+  dropdownButton: { minHeight: 40, borderRadius: radius.md, backgroundColor: colors.surfaceVariant, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dropdownButtonText: { fontSize: 13, fontWeight: type.medium, color: colors.onSurface },
+  dropdownChevron: { fontSize: 18, color: colors.onSurfaceVariant },
+  dropdownMenu: { marginTop: 5, borderRadius: radius.md, backgroundColor: colors.surface, overflow: 'hidden', ...elevation(2) },
+  dropdownOption: { minHeight: 38, paddingHorizontal: 12, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.outline },
+  dropdownOptionActive: { backgroundColor: colors.surfaceVariant },
+  dropdownOptionText: { fontSize: 13, color: colors.onSurface },
+  dropdownOptionTextActive: { fontWeight: type.semibold, color: colors.primary },
+  resultsList: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 32 },
+  emptyState: { borderRadius: radius.lg, backgroundColor: colors.surface, padding: 16, ...elevation(1) },
+  emptyTitle: { fontSize: 15, fontWeight: type.medium, color: colors.onSurface },
+  emptyText: { marginTop: 3, fontSize: 12, color: colors.onSurfaceVariant },
+  // Flat list row with a hairline divider — not a stacked card. This is the
+  // single change that most reads as "Maps list", not "component library".
+  resultCard: { flexDirection: 'row', paddingVertical: 12, gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.outline },
   resultTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   resultTitleWrap: { flex: 1 },
-  travelTime: { fontSize: 12, fontWeight: '800', color: '#25704D' },
-  placeName: { marginTop: 2, fontSize: 18, fontWeight: '800', color: '#1C1F1C' },
-  ratingBadge: { borderRadius: 999, backgroundColor: '#EEF4EF', paddingHorizontal: 10, paddingVertical: 6 },
-  ratingBadgeText: { fontSize: 12, fontWeight: '800', color: '#234C37' },
-  placeMeta: { marginTop: 8, fontSize: 12, lineHeight: 17, color: '#737873' },
-  placeAddress: { marginTop: 2, fontSize: 12, color: '#515751' },
-  directionsButton: { minHeight: 42, borderRadius: 12, backgroundColor: '#183C2C', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  directionsButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
-  detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', justifyContent: 'flex-end' },
-  detailSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 28, gap: 12 },
-  detailHandle: { alignSelf: 'center', width: 42, height: 4, borderRadius: 2, backgroundColor: '#D5D8D4', marginBottom: 2 },
+  travelTime: { fontSize: 12, fontWeight: type.medium, color: colors.primary },
+  placeName: { marginTop: 2, fontSize: 16, fontWeight: type.medium, color: colors.onSurface },
+  ratingBadge: { borderRadius: radius.full, backgroundColor: colors.surfaceVariant, paddingHorizontal: 10, paddingVertical: 6 },
+  ratingBadgeText: { fontSize: 12, fontWeight: type.medium, color: colors.onSurface },
+  placeMeta: { marginTop: 6, fontSize: 12, lineHeight: 17, color: colors.onSurfaceVariant },
+  placeAddress: { marginTop: 2, fontSize: 12, color: colors.onSurfaceVariant },
+  directionsButton: { minHeight: 40, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  directionsButtonText: { color: colors.onPrimary, fontSize: 13, fontWeight: type.medium },
+  detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.32)', justifyContent: 'flex-end' },
+  detailSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 28, gap: 10, ...elevation(3) },
+  detailHandle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.sm, backgroundColor: colors.outline, marginBottom: 2 },
   detailHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   detailTitleWrap: { flex: 1 },
-  detailTitle: { fontSize: 24, fontWeight: '800', color: '#171917' },
-  detailSub: { marginTop: 3, fontSize: 12, color: '#6F756F' },
-  detailLead: { fontSize: 14, fontWeight: '800', color: '#25704D' },
-  detailLine: { fontSize: 13, color: '#424742' },
+  detailTitle: { fontSize: 19, fontWeight: type.semibold, color: colors.onSurface },
+  detailSub: { marginTop: 3, fontSize: 12, color: colors.onSurfaceVariant },
+  detailLead: { fontSize: 14, fontWeight: type.medium, color: colors.primary },
+  detailLine: { fontSize: 13, color: colors.onSurface },
 });
