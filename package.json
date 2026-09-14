@@ -10,6 +10,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "node --test api/*.test.js",
+    "test:cost-gate-concurrency": "node scripts/test-cost-gate-concurrency.js",
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor@latest"
   },
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.4",
+    "pg": "^8.16.3",
     "typescript": "~6.0.3"
   }
 }
