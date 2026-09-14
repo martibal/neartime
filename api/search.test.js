@@ -75,11 +75,13 @@ test('validateRequest accepts the supported query contract and rejects invalid i
   assert.equal(api.validateRequest({ ...valid, origin: { latitude: 91, longitude: 10.75 } }), 'invalid_latitude');
 });
 
-test('sanitizeDeviceId fails closed on missing IDs and caps valid IDs', () => {
+test('sanitizeDeviceId fails closed on missing or oversized IDs', () => {
   assert.equal(api.sanitizeDeviceId(undefined), null);
   assert.equal(api.sanitizeDeviceId('   '), null);
   assert.equal(api.sanitizeDeviceId(' device-1 '), 'device-1');
-  assert.equal(api.sanitizeDeviceId('x'.repeat(200)).length, 128);
+  assert.equal(api.sanitizeDeviceId('x'.repeat(128)).length, 128);
+  assert.equal(api.sanitizeDeviceId('x'.repeat(129)), null);
+  assert.equal(api.sanitizeDeviceId('x'.repeat(200)), null);
 });
 
 test('parseDurationSeconds handles Google duration strings defensively', () => {
