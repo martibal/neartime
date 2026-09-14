@@ -1,3 +1,4 @@
+import { getAnonymousInstallId } from '../device/anonymousInstallId';
 import type { Place } from '../domain/types';
 import type { SearchProvider } from './types';
 
@@ -34,11 +35,13 @@ export const googlePlacesSearchProvider: SearchProvider = {
       throw new Error('Live Places search blocked: current origin is required.');
     }
 
+    const anonymousInstallId = await getAnonymousInstallId();
+
     const response = await fetch(SEARCH_ENDPOINT, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-neartime-device-id': context.deviceId ?? 'prototype-device',
+        'x-neartime-device-id': anonymousInstallId,
       },
       body: JSON.stringify({
         query,
