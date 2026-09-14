@@ -11,10 +11,10 @@ function purchaseErrorMessage(error: unknown): string {
   if (error instanceof StorePurchaseUnavailableError) {
     return 'Store checkout is not enabled in this development build yet.';
   }
-  if (error instanceof Error && error.message === 'TRIP_PASS_SERVER_VERIFICATION_NOT_CONFIGURED') {
-    return 'Trip Pass verification is not enabled yet. No access was activated.';
-  }
-  if (error instanceof Error && error.message.startsWith('ENTITLEMENT_VERIFICATION_FAILED_')) {
+  if (error instanceof Error && (
+    error.message.startsWith('ENTITLEMENT_VERIFICATION_FAILED_') ||
+    error.message.startsWith('TRIP_PASS_VERIFICATION_FAILED_')
+  )) {
     return 'The store purchase could not be verified by NearTime. No access was activated.';
   }
   return 'Purchase could not be completed. No access was activated.';
