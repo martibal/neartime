@@ -25,6 +25,11 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Cost gate concurrency test
+        env:
+          NEARTIME_TEST_DATABASE_URL: ${{ secrets.NEARTIME_TEST_DATABASE_URL }}
+        run: npm run test:cost-gate-concurrency
+
       - name: Typecheck
         run: npm run typecheck
 
