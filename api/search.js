@@ -1,3 +1,10 @@
+const {
+  requiredEnv,
+  sha256Hex,
+  supabaseRpc,
+  resolveEntitlementSession,
+} = require('./lib/entitlements');
+
 const PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 const COST_SERVICE = 'places-text-search-enterprise-atmosphere';
 const COST_UNITS_PER_PROVIDER_CALL = 1;
@@ -27,8 +34,6 @@ const TRAVEL_MODE_TO_GOOGLE = {
   Bike: 'BICYCLE',
 };
 
-// Deliberately conservative candidate envelopes. Actual eligibility is always
-// decided from Google's routing duration, never from this geometric envelope.
 const RADIUS_METERS_PER_MINUTE = {
   Walk: 150,
   Bike: 600,
@@ -42,12 +47,6 @@ const PRICE_LEVELS = {
   PRICE_LEVEL_EXPENSIVE: { level: 3, label: '$$$' },
   PRICE_LEVEL_VERY_EXPENSIVE: { level: 4, label: '$$$$' },
 };
-
-function requiredEnv(name) {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`Missing server environment variable: ${name}`);
-  return value;
-}
 
 function send(res, status, payload) {
   res.status(status).json(payload);
@@ -63,7 +62,6 @@ function validateRequest(body) {
   const { query, origin } = body;
   if (!query || typeof query !== 'object') return 'invalid_query';
   if (!origin || typeof origin !== 'object') return 'invalid_origin';
-
   if (!CATEGORY_TO_GOOGLE_TYPE[query.category]) return 'invalid_category';
   if (!TRAVEL_MODE_TO_GOOGLE[query.travelMode]) return 'invalid_travel_mode';
   if (![5, 10, 15, 20].includes(Number(query.maxMinutes))) return 'invalid_max_minutes';
@@ -72,12 +70,10 @@ function validateRequest(body) {
 
   const rating = asFiniteNumber(query.minimumRating);
   if (rating === null || rating < 0 || rating > 5) return 'invalid_minimum_rating';
-
   const latitude = asFiniteNumber(origin.latitude);
   const longitude = asFiniteNumber(origin.longitude);
   if (latitude === null || latitude < -90 || latitude > 90) return 'invalid_latitude';
   if (longitude === null || longitude < -180 || longitude > 180) return 'invalid_longitude';
-
   return null;
 }
 
@@ -86,50 +82,55 @@ function sanitizeDeviceId(value) {
   return (candidate || 'prototype-device').slice(0, 128);
 }
 
-async function supabaseRpc(functionName, body) {
-  const url = requiredEnv('SUPABASE_URL').replace(/\/$/, '');
-  const serviceKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const response = await fetch(`${url}/rest/v1/rpc/${functionName}`, {
-    method: 'POST',
-    headers: {
-      apikey: serviceKey,
-      authorization: `Bearer ${serviceKey}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Cost ledger RPC ${functionName} failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
-  }
-
-  if (response.status === 204) return null;
-  return response.json();
+function sanitizeIdempotencyKey(value) {
+  const candidate = typeof value === 'string' ? value.trim() : '';
+  if (candidate.length < 8 || candidate.length > 160) return null;
+  if (!/^[A-Za-z0-9._:-]+$/.test(candidate)) return null;
+  return candidate;
 }
 
-async function reserveCost(deviceId) {
-  const payload = await supabaseRpc('reserve_api_cost', {
+function canonicalRequestHash(body) {
+  const query = body.query;
+  const origin = body.origin;
+  return sha256Hex(JSON.stringify({
+    category: query.category,
+    travelMode: query.travelMode,
+    maxMinutes: Number(query.maxMinutes),
+    minimumRating: Number(query.minimumRating),
+    minimumReviews: Number(query.minimumReviews),
+    openNow: Boolean(query.openNow),
+    openForMinutes: Number(query.openForMinutes),
+    latitude: Number(origin.latitude),
+    longitude: Number(origin.longitude),
+  }));
+}
+
+function firstRow(payload) {
+  return Array.isArray(payload) ? payload[0] : payload;
+}
+
+async function reserveCost(entitlementHash, deviceId, idempotencyKey, requestHash) {
+  return firstRow(await supabaseRpc('reserve_wallet_api_cost', {
+    p_entitlement_hash: entitlementHash,
     p_device_id: deviceId,
     p_service: COST_SERVICE,
     p_estimated_units: RESERVED_COST_UNITS,
-  });
-  const row = Array.isArray(payload) ? payload[0] : payload;
-  if (!row || typeof row.allowed !== 'boolean') {
-    throw new Error('Cost ledger returned an invalid reservation decision.');
-  }
-  return row;
+    p_idempotency_key: idempotencyKey,
+    p_request_hash: requestHash,
+  }));
 }
 
-async function finishReservation(reservationId, status, actualUnits) {
+async function finishReservation(reservationId, outcome, actualUnits, responsePayload = null, errorCode = null) {
   if (!reservationId) return false;
-  const payload = await supabaseRpc('finish_api_cost_reservation_v2', {
+  const payload = await supabaseRpc('finish_wallet_api_cost_reservation', {
     p_reservation_id: reservationId,
-    p_status: status,
+    p_outcome: outcome,
     p_actual_units: actualUnits,
+    p_response_payload: responsePayload,
+    p_error_code: errorCode,
   });
-  const value = Array.isArray(payload) ? payload[0] : payload;
-  return value === true || value?.finish_api_cost_reservation_v2 === true;
+  const value = firstRow(payload);
+  return value === true || value?.finish_wallet_api_cost_reservation === true;
 }
 
 function radiusFor(query) {
@@ -141,7 +142,6 @@ function restrictionRectangle(origin, radiusMeters) {
   const latitudeDelta = radiusMeters / 111320;
   const cosLatitude = Math.max(0.1, Math.cos((origin.latitude * Math.PI) / 180));
   const longitudeDelta = radiusMeters / (111320 * cosLatitude);
-
   return {
     low: {
       latitude: Math.max(-90, origin.latitude - latitudeDelta),
@@ -155,8 +155,6 @@ function restrictionRectangle(origin, radiusMeters) {
 }
 
 function safeGoogleMinRating(minimumRating) {
-  // Google rounds minRating UP to the nearest 0.5. Flooring first prevents
-  // provider-side filtering from removing a NearTime-valid result such as 4.3.
   return Math.floor(Number(minimumRating) * 2) / 2;
 }
 
@@ -181,17 +179,17 @@ function priceInfo(priceLevel) {
 function mapGooglePlace(place, routingSummary, origin, query) {
   const seconds = parseDurationSeconds(routingSummary?.legs?.[0]?.duration);
   if (seconds === null) return null;
+  const latitude = Number(place.location?.latitude);
+  const longitude = Number(place.location?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
 
   const travelMinutes = Math.ceil(seconds / 60);
   const distanceMeters = Number(routingSummary?.legs?.[0]?.distanceMeters ?? 0);
   const price = priceInfo(place.priceLevel);
   const open = place.currentOpeningHours?.openNow === true;
   const closesInMinutes = closingMinutes(place.currentOpeningHours);
-  const latitude = Number(place.location?.latitude);
-  const longitude = Number(place.location?.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-
   const unknownModeMinutes = 9999;
+
   return {
     id: String(place.id ?? ''),
     name: String(place.displayName?.text ?? ''),
@@ -239,9 +237,7 @@ function buildTextSearchBody(query, origin, pageToken) {
     strictTypeFiltering: true,
     pageSize: 20,
     rankPreference: 'DISTANCE',
-    locationRestriction: {
-      rectangle: restrictionRectangle(origin, radiusFor(query)),
-    },
+    locationRestriction: { rectangle: restrictionRectangle(origin, radiusFor(query)) },
     minRating: safeGoogleMinRating(query.minimumRating),
     openNow: Boolean(query.openNow || Number(query.openForMinutes) > 0),
     routingParameters: {
@@ -249,39 +245,28 @@ function buildTextSearchBody(query, origin, pageToken) {
       travelMode: TRAVEL_MODE_TO_GOOGLE[query.travelMode],
     },
   };
-
   if (pageToken) body.pageToken = pageToken;
   return body;
 }
 
 async function googleTextSearchPage(query, origin, pageToken) {
-  const apiKey = requiredEnv('GOOGLE_PLACES_SERVER_API_KEY');
   const response = await fetch(PLACES_ENDPOINT, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
+      'X-Goog-Api-Key': requiredEnv('GOOGLE_PLACES_SERVER_API_KEY'),
       'X-Goog-FieldMask': [
-        'places.id',
-        'places.displayName',
-        'places.formattedAddress',
-        'places.location',
-        'places.rating',
-        'places.userRatingCount',
-        'places.priceLevel',
-        'places.currentOpeningHours',
-        'routingSummaries',
-        'nextPageToken',
+        'places.id', 'places.displayName', 'places.formattedAddress', 'places.location',
+        'places.rating', 'places.userRatingCount', 'places.priceLevel',
+        'places.currentOpeningHours', 'routingSummaries', 'nextPageToken',
       ].join(','),
     },
     body: JSON.stringify(buildTextSearchBody(query, origin, pageToken)),
   });
-
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     throw new Error(`Google Places request failed (${response.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`);
   }
-
   return response.json();
 }
 
@@ -295,15 +280,12 @@ async function collectCandidatePages(query, origin, onSuccessfulCall) {
     const payload = await googleTextSearchPage(query, origin, pageToken);
     providerCalls += 1;
     onSuccessfulCall();
-
     const rawPlaces = Array.isArray(payload.places) ? payload.places : [];
     const routingSummaries = Array.isArray(payload.routingSummaries) ? payload.routingSummaries : [];
-
     rawPlaces.forEach((place, index) => {
       const mapped = mapGooglePlace(place, routingSummaries[index], origin, query);
       if (mapped?.id) byId.set(mapped.id, mapped);
     });
-
     pageToken = typeof payload.nextPageToken === 'string' && payload.nextPageToken ? payload.nextPageToken : undefined;
     if (!pageToken) {
       providerHasMore = false;
@@ -312,11 +294,15 @@ async function collectCandidatePages(query, origin, onSuccessfulCall) {
     providerHasMore = page === MAX_PROVIDER_CALLS_PER_SEARCH - 1;
   }
 
-  return {
-    candidates: [...byId.values()],
-    providerCalls,
-    providerHasMore,
-  };
+  return { candidates: [...byId.values()], providerCalls, providerHasMore };
+}
+
+function blockedStatus(reason) {
+  if (reason === 'wallet_quota_exhausted') return 402;
+  if (reason === 'wallet_not_found' || reason === 'entitlement_inactive') return 403;
+  if (reason === 'request_in_progress' || reason === 'idempotency_conflict' || reason === 'previous_attempt_failed') return 409;
+  if (reason === 'external_calls_disabled' || reason === 'kill_switch_active') return 503;
+  return 429;
 }
 
 module.exports = async function handler(req, res) {
@@ -328,15 +314,41 @@ module.exports = async function handler(req, res) {
   const validationError = validateRequest(req.body);
   if (validationError) return send(res, 400, { error: validationError });
 
+  const idempotencyKey = sanitizeIdempotencyKey(req.headers['x-neartime-idempotency-key']);
+  if (!idempotencyKey) return send(res, 400, { error: 'invalid_idempotency_key' });
+
+  const rawSession = typeof req.headers['x-neartime-entitlement-session'] === 'string'
+    ? req.headers['x-neartime-entitlement-session']
+    : '';
+  if (!rawSession) return send(res, 401, { error: 'subscription_verification_required' });
+
   const deviceId = sanitizeDeviceId(req.headers['x-neartime-device-id']);
   let reservationId = null;
   let successfulProviderCalls = 0;
+  let reservationFinalized = false;
 
   try {
-    const decision = await reserveCost(deviceId);
+    const session = await resolveEntitlementSession(rawSession);
+    if (!session) return send(res, 401, { error: 'invalid_or_expired_entitlement_session' });
+
+    const decision = await reserveCost(
+      session.entitlementHash,
+      deviceId,
+      idempotencyKey,
+      canonicalRequestHash(req.body),
+    );
+    if (!decision || typeof decision.allowed !== 'boolean') {
+      throw new Error('Cost ledger returned an invalid reservation decision.');
+    }
+
     if (!decision.allowed) {
-      const status = decision.reason === 'kill_switch_active' || decision.reason === 'external_calls_disabled' ? 503 : 429;
-      return send(res, status, { error: 'external_search_blocked', reason: decision.reason });
+      if (decision.reason === 'idempotent_replay' && decision.replay_response) {
+        return send(res, 200, decision.replay_response);
+      }
+      return send(res, blockedStatus(decision.reason), {
+        error: decision.reason === 'wallet_quota_exhausted' ? 'usage_quota_exhausted' : 'external_search_blocked',
+        reason: decision.reason,
+      });
     }
 
     reservationId = decision.reservation_id;
@@ -345,14 +357,9 @@ module.exports = async function handler(req, res) {
     const collection = await collectCandidatePages(req.body.query, req.body.origin, () => {
       successfulProviderCalls += 1;
     });
-
     const qualified = applyHardFilters(collection.candidates, req.body.query);
     const places = sortByTravelTime(qualified, req.body.query).slice(0, RESULT_LIMIT);
-
-    const committed = await finishReservation(reservationId, 'committed', successfulProviderCalls);
-    if (!committed) throw new Error('External calls completed but the cost reservation could not be committed.');
-
-    return send(res, 200, {
+    const payload = {
       places,
       provider: 'google-places-text-search-new',
       billingSku: COST_SERVICE,
@@ -360,21 +367,25 @@ module.exports = async function handler(req, res) {
       candidateCount: collection.candidates.length,
       qualifiedCount: qualified.length,
       providerResultLimitReached: collection.providerHasMore,
-    });
+    };
+
+    const committed = await finishReservation(reservationId, 'succeeded', successfulProviderCalls, payload, null);
+    if (!committed) throw new Error('External calls completed but the wallet reservation could not be committed.');
+    reservationFinalized = true;
+    return send(res, 200, payload);
   } catch (error) {
-    if (reservationId) {
+    if (reservationId && !reservationFinalized) {
       try {
         if (successfulProviderCalls > 0) {
-          await finishReservation(reservationId, 'committed', successfulProviderCalls);
+          await finishReservation(reservationId, 'failed', successfulProviderCalls, null, 'live_search_failed');
         } else {
-          await finishReservation(reservationId, 'released', 0);
+          await finishReservation(reservationId, 'released', 0, null, 'live_search_failed');
         }
       } catch {
-        // Preserve the original error. A stale reservation remains conservatively
-        // counted until its expiry if reconciliation itself fails.
+        // A stale reservation remains conservatively counted until expiry if reconciliation fails.
       }
     }
-    console.error('NearTime live search failed', error);
+    console.error('NearTime live search failed', error instanceof Error ? error.message : error);
     return send(res, 502, { error: 'live_search_failed' });
   }
 };
