@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 import type { LaunchProduct } from './catalog';
+import { purchaseFromNativeStore } from './nativeStoreAdapter';
 
 export type StorePlatform = 'ios' | 'android';
 
@@ -33,8 +34,8 @@ export type VerifiedPurchaseReceipt =
     };
 
 export class StorePurchaseUnavailableError extends Error {
-  constructor() {
-    super('STORE_PURCHASE_NOT_CONFIGURED');
+  constructor(message = 'STORE_PURCHASE_NOT_CONFIGURED') {
+    super(message);
     this.name = 'StorePurchaseUnavailableError';
   }
 }
@@ -46,12 +47,15 @@ export function currentStorePlatform(): StorePlatform | null {
 }
 
 /**
- * Native store purchase boundary.
+ * Native checkout boundary.
  *
- * This deliberately fails closed until the native billing adapter and the
- * matching App Store / Google Play products have been configured. The app must
- * never synthesize a receipt or activate an entitlement client-side.
+ * expo-iap opens the App Store / Google Play checkout and returns only the
+ * store receipt identifiers needed for NearTime's server verification. The
+ * client still cannot activate an entitlement by itself.
  */
-export async function beginStorePurchase(_product: LaunchProduct): Promise<VerifiedPurchaseReceipt> {
-  throw new StorePurchaseUnavailableError();
+export async function beginStorePurchase(product: LaunchProduct): Promise<VerifiedPurchaseReceipt> {
+  if (!currentStorePlatform()) {
+    throw new StorePurchaseUnavailableError('STORE_PLATFORM_UNSUPPORTED');
+  }
+  return purchaseFromNativeStore(product);
 }
