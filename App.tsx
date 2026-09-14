@@ -5,12 +5,13 @@ import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import MapView, { Callout, Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { DEFAULT_ORIGIN, formatDistance, getTravelMinutes, modeLabel, mockPlaces, querySummary, runQuery } from './src/core/neartime';
+import { DEFAULT_ORIGIN, formatDistance, getTravelMinutes, modeLabel, querySummary } from './src/core/neartime';
 import { categories, openForOptions, reviewOptions, sortOptions, travelModes, travelOptions } from './src/domain/options';
 import type { Coordinate, OpenForMinutes, Place, ReviewMinimum, SearchQuery, SortKey, TravelMinutes, TravelMode } from './src/domain/types';
-import { executeSearch, mockSearchProvider } from './src/providers';
+import { executeSearch, googlePlacesSearchProvider } from './src/providers';
 
 const REGION_DELTA = 0.022;
+const DEVICE_ID = 'prototype-device';
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
@@ -22,6 +23,23 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 
 function toRegion(coordinate: Coordinate): Region {
   return { ...coordinate, latitudeDelta: REGION_DELTA, longitudeDelta: REGION_DELTA };
+}
+
+function sortPlaces(places: Place[], sortKey: SortKey, travelMode: TravelMode): Place[] {
+  const copy = [...places];
+  const time = (place: Place) => getTravelMinutes(place, travelMode);
+  copy.sort((a, b) => {
+    switch (sortKey) {
+      case 'rating': return b.rating - a.rating || time(a) - time(b);
+      case 'distance': return a.distanceMeters - b.distanceMeters;
+      case 'price': return a.priceLevel - b.priceLevel || time(a) - time(b);
+      case 'reviews': return b.reviewCount - a.reviewCount || time(a) - time(b);
+      case 'open': return b.closesInMinutes - a.closesInMinutes || time(a) - time(b);
+      case 'time':
+      default: return time(a) - time(b);
+    }
+  });
+  return copy;
 }
 
 export default function App() {
@@ -43,7 +61,9 @@ export default function App() {
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('time');
   const [providerResults, setProviderResults] = useState<Place[]>([]);
-  const [providerStatus, setProviderStatus] = useState('Mock provider ready · 0 cost units');
+  const [providerStatus, setProviderStatus] = useState('Live search ready · protected by server cost gate');
+  const [hasSearched, setHasSearched] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
   const query = useMemo<SearchQuery>(() => ({
     category,
@@ -55,7 +75,7 @@ export default function App() {
     openForMinutes,
   }), [category, travelMode, maxMinutes, minimumRating, minimumReviews, openNow, openForMinutes]);
 
-  const { filtered: filteredResults } = useMemo(() => runQuery(mockPlaces, query, sortKey), [query, sortKey]);
+  const sortedResults = useMemo(() => sortPlaces(providerResults, sortKey, travelMode), [providerResults, sortKey, travelMode]);
 
   const requestCurrentLocation = async () => {
     try {
@@ -75,6 +95,8 @@ export default function App() {
       setLocationAccuracy(current.coords.accuracy ?? null);
       setLocationReady(true);
       setLocationLabel('My current location');
+      setProviderResults([]);
+      setHasSearched(false);
       requestAnimationFrame(() => mapRef.current?.animateToRegion(nextRegion, 350));
     } catch {
       setLocationLabel('Could not read current location');
@@ -89,17 +111,28 @@ export default function App() {
     mapRef.current?.animateToRegion(nextRegion, 300);
   };
 
-  const runProviderSearch = async (nextSortKey: SortKey = sortKey, openModal = true) => {
+  const runProviderSearch = async () => {
+    if (!locationReady) {
+      setProviderStatus('Live search blocked until current location is available.');
+      setResultsVisible(true);
+      return;
+    }
+
     try {
-      setProviderStatus('Running protected mock provider…');
-      const result = await executeSearch(mockSearchProvider, query, nextSortKey);
+      setIsSearching(true);
+      setProviderStatus('Searching live Google Places data through NearTime…');
+      const result = await executeSearch(googlePlacesSearchProvider, query, 'time', DEVICE_ID, origin);
       setProviderResults(result.places);
-      setProviderStatus(`${result.provider} · ${result.costUnits} cost units · external call: no`);
-      if (openModal) setResultsVisible(true);
+      setHasSearched(true);
+      setProviderStatus(`${result.places.length} live ${result.places.length === 1 ? 'match' : 'matches'} · ${result.costUnits} cost unit · protected backend call`);
+      setResultsVisible(true);
     } catch (error) {
       setProviderResults([]);
-      setProviderStatus(error instanceof Error ? error.message : 'Search blocked');
-      if (openModal) setResultsVisible(true);
+      setHasSearched(true);
+      setProviderStatus(error instanceof Error ? error.message : 'Live search failed');
+      setResultsVisible(true);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -211,15 +244,15 @@ export default function App() {
 
           <View style={styles.summaryBar}>
             <View style={styles.summaryTextWrap}>
-              <Text style={styles.summaryMain}>{filteredResults.length} mock {filteredResults.length === 1 ? 'match' : 'matches'} · {category}</Text>
+              <Text style={styles.summaryMain}>{hasSearched ? `${providerResults.length} live ${providerResults.length === 1 ? 'match' : 'matches'} · ${category}` : `Live ${category} search ready`}</Text>
               <Text style={styles.summaryDetail} numberOfLines={2}>{querySummary(query)}</Text>
             </View>
-            <TouchableOpacity style={styles.seeResultsButton} onPress={() => void runProviderSearch()}><Text style={styles.seeResultsButtonText}>See results</Text></TouchableOpacity>
+            <TouchableOpacity disabled={isSearching} style={styles.seeResultsButton} onPress={() => void runProviderSearch()}><Text style={styles.seeResultsButtonText}>{isSearching ? 'Searching…' : 'Search live'}</Text></TouchableOpacity>
           </View>
 
-          <View style={styles.mockWarning}>
-            <Text style={styles.mockWarningTitle}>Test results only</Text>
-            <Text style={styles.mockWarningText}>These names are local placeholder data, not businesses found near your GPS position. Real Places search is still locked behind the cost gate.</Text>
+          <View style={styles.liveNotice}>
+            <Text style={styles.liveNoticeTitle}>Live Places test mode</Text>
+            <Text style={styles.liveNoticeText}>Results below come from Google Places through the NearTime backend. Every external request must first pass the server-side cost gate.</Text>
           </View>
 
           <View style={styles.mapShell}>
@@ -238,7 +271,7 @@ export default function App() {
               pitchEnabled={false}
               rotateEnabled={false}
             >
-              {filteredResults.map((place) => {
+              {sortedResults.map((place) => {
                 const coordinate = { latitude: origin.latitude + place.latitudeOffset, longitude: origin.longitude + place.longitudeOffset };
                 const minutes = getTravelMinutes(place, travelMode);
                 return (
@@ -246,25 +279,25 @@ export default function App() {
                     <View style={styles.mapTimePin}><Text style={styles.mapTimePinText}>{minutes} min</Text></View>
                     <Callout onPress={() => setSelectedPlace(place)}>
                       <View style={styles.callout}>
-                        <Text style={styles.calloutTitle}>{place.name} · MOCK</Text>
-                        <Text style={styles.calloutText}>{place.rating.toFixed(1)} ★ · {place.reviewCount.toLocaleString()} reviews</Text>
+                        <Text style={styles.calloutTitle}>{place.name}</Text>
+                        <Text style={styles.calloutText}>{place.rating.toFixed(1)} ★ · {place.reviewCount.toLocaleString()} reviews · LIVE</Text>
                       </View>
                     </Callout>
                   </Marker>
                 );
               })}
             </MapView>
-            <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>{mapReady ? 'MAP READY' : 'LOADING MAP'} · MOCK PLACES</Text></View>
+            <View style={styles.mapBadge}><Text style={styles.mapBadgeText}>{mapReady ? 'MAP READY' : 'LOADING MAP'} · {hasSearched ? `${providerResults.length} LIVE PLACES` : 'NO SEARCH YET'}</Text></View>
             <TouchableOpacity style={styles.recenterButton} onPress={recenterMap}><Text style={styles.recenterText}>◎</Text></TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.largeResultsButton} onPress={() => void runProviderSearch()}>
-            <Text style={styles.largeResultsButtonText}>See {filteredResults.length} mock {filteredResults.length === 1 ? 'result' : 'results'}</Text>
+          <TouchableOpacity disabled={isSearching} style={styles.largeResultsButton} onPress={() => void runProviderSearch()}>
+            <Text style={styles.largeResultsButtonText}>{isSearching ? 'Searching live places…' : 'Search live places'}</Text>
           </TouchableOpacity>
 
           <View style={styles.devNotice}>
-            <Text style={styles.devNoticeTitle}>Protected prototype mode</Text>
-            <Text style={styles.devNoticeText}>GPS is live. Query/filter logic is live. Place names and travel times remain mock data. Google Places is present only as a locked provider boundary; external APIs cannot run under the current zero-cost policy.</Text>
+            <Text style={styles.devNoticeTitle}>Protected live prototype</Text>
+            <Text style={styles.devNoticeText}>GPS, Google Places data, routing summaries and hard filters are live. Sorting existing results is local and does not spend another Places request.</Text>
             <Text style={styles.devNoticeStatus}>{providerStatus}</Text>
           </View>
         </ScrollView>
@@ -274,30 +307,30 @@ export default function App() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>{category} results</Text>
-                <Text style={styles.modalSubtitle}>{providerResults.length} mock places · not live nearby businesses</Text>
+                <Text style={styles.modalSubtitle}>{providerResults.length} live nearby {providerResults.length === 1 ? 'place' : 'places'}</Text>
               </View>
               <TouchableOpacity onPress={() => setResultsVisible(false)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
               {sortOptions.map((option) => (
-                <Chip key={option.key} label={option.label} active={sortKey === option.key} onPress={() => { setSortKey(option.key); void runProviderSearch(option.key, false); }} />
+                <Chip key={option.key} label={option.label} active={sortKey === option.key} onPress={() => setSortKey(option.key)} />
               ))}
             </ScrollView>
 
             <ScrollView contentContainerStyle={styles.resultsList}>
-              {providerResults.length === 0 ? (
-                <View style={styles.emptyState}><Text style={styles.emptyTitle}>No mock matches</Text><Text style={styles.emptyText}>Increase travel time or relax one of the filters.</Text></View>
-              ) : providerResults.map((place) => (
+              {sortedResults.length === 0 ? (
+                <View style={styles.emptyState}><Text style={styles.emptyTitle}>No live matches</Text><Text style={styles.emptyText}>Increase travel time or relax one of the filters, then run a new search.</Text></View>
+              ) : sortedResults.map((place) => (
                 <TouchableOpacity key={place.id} style={styles.resultCard} onPress={() => setSelectedPlace(place)}>
                   <View style={styles.resultTopRow}>
                     <View style={styles.resultTitleWrap}>
-                      <Text style={styles.travelTime}>{getTravelMinutes(place, travelMode)} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)} · MOCK</Text>
+                      <Text style={styles.travelTime}>{getTravelMinutes(place, travelMode)} min {modeLabel(travelMode)} · {formatDistance(place.distanceMeters)} · LIVE</Text>
                       <Text style={styles.placeName}>{place.name}</Text>
                     </View>
                     <View style={styles.ratingBadge}><Text style={styles.ratingBadgeText}>{place.rating.toFixed(1)} ★</Text></View>
                   </View>
-                  <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · Open for {Math.floor(place.closesInMinutes / 60)}h {place.closesInMinutes % 60}m</Text>
+                  <Text style={styles.placeMeta}>{place.reviewCount.toLocaleString()} reviews · {place.price} · {place.open ? `Open for ${Math.floor(place.closesInMinutes / 60)}h ${place.closesInMinutes % 60}m` : 'Closed'}</Text>
                   <Text style={styles.placeAddress}>{place.address}</Text>
                 </TouchableOpacity>
               ))}
@@ -312,13 +345,13 @@ export default function App() {
                 <>
                   <View style={styles.detailHandle} />
                   <View style={styles.detailHeaderRow}>
-                    <View style={styles.detailTitleWrap}><Text style={styles.detailTitle}>{selectedPlace.name}</Text><Text style={styles.detailSub}>MOCK PLACE · {selectedPlace.rating.toFixed(1)} ★ · {selectedPlace.reviewCount.toLocaleString()} reviews</Text></View>
+                    <View style={styles.detailTitleWrap}><Text style={styles.detailTitle}>{selectedPlace.name}</Text><Text style={styles.detailSub}>LIVE PLACE · {selectedPlace.rating.toFixed(1)} ★ · {selectedPlace.reviewCount.toLocaleString()} reviews</Text></View>
                     <TouchableOpacity onPress={() => setSelectedPlace(null)}><Text style={styles.closeButton}>Close</Text></TouchableOpacity>
                   </View>
                   <Text style={styles.detailLead}>{getTravelMinutes(selectedPlace, travelMode)} min {modeLabel(travelMode)} · {formatDistance(selectedPlace.distanceMeters)}</Text>
                   <Text style={styles.detailLine}>📍 {selectedPlace.address}</Text>
-                  <Text style={styles.detailLine}>🕒 Open for {Math.floor(selectedPlace.closesInMinutes / 60)}h {selectedPlace.closesInMinutes % 60}m</Text>
-                  <Text style={styles.detailLine}>Placeholder details — no external lookup performed.</Text>
+                  <Text style={styles.detailLine}>{selectedPlace.open ? `🕒 Open for ${Math.floor(selectedPlace.closesInMinutes / 60)}h ${selectedPlace.closesInMinutes % 60}m` : '🕒 Closed'}</Text>
+                  <Text style={styles.detailLine}>Google Places data via NearTime protected backend.</Text>
                 </>
               )}
             </View>
@@ -381,9 +414,9 @@ const styles = StyleSheet.create({
   summaryDetail: { marginTop: 2, color: '#DDEBE4', fontSize: 11, lineHeight: 15, fontWeight: '600' },
   seeResultsButton: { borderRadius: 12, backgroundColor: '#FFFFFF', paddingHorizontal: 13, paddingVertical: 9 },
   seeResultsButtonText: { color: '#183C2C', fontSize: 12, fontWeight: '800' },
-  mockWarning: { borderRadius: 14, backgroundColor: '#F2EEE3', borderWidth: 1, borderColor: '#DCCFAE', padding: 12 },
-  mockWarningTitle: { fontSize: 12, fontWeight: '800', color: '#6A592D' },
-  mockWarningText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: '#75663D' },
+  liveNotice: { borderRadius: 14, backgroundColor: '#EAF4ED', borderWidth: 1, borderColor: '#BDD8C6', padding: 12 },
+  liveNoticeTitle: { fontSize: 12, fontWeight: '800', color: '#28583D' },
+  liveNoticeText: { marginTop: 3, fontSize: 11, lineHeight: 16, color: '#496B58' },
   mapShell: { height: 260, borderRadius: 22, overflow: 'hidden', backgroundColor: '#DDE5DD', position: 'relative' },
   map: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   mapBadge: { position: 'absolute', top: 12, left: 12, borderRadius: 999, backgroundColor: '#183C2C', paddingHorizontal: 10, paddingVertical: 6 },
