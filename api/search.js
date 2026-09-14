@@ -1,6 +1,9 @@
-const PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchNearby';
-const COST_SERVICE = 'places-nearby-enterprise-atmosphere';
-const COST_UNITS_PER_SEARCH = 1;
+const PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
+const COST_SERVICE = 'places-text-search-enterprise-atmosphere';
+const COST_UNITS_PER_PROVIDER_CALL = 1;
+const MAX_PROVIDER_CALLS_PER_SEARCH = 3;
+const RESERVED_COST_UNITS = COST_UNITS_PER_PROVIDER_CALL * MAX_PROVIDER_CALLS_PER_SEARCH;
+const RESULT_LIMIT = 20;
 
 const CATEGORY_TO_GOOGLE_TYPE = {
   Restaurant: 'restaurant',
@@ -10,16 +13,26 @@ const CATEGORY_TO_GOOGLE_TYPE = {
   Parking: 'parking',
 };
 
+const CATEGORY_TO_TEXT_QUERY = {
+  Restaurant: 'restaurants',
+  Cafe: 'cafes',
+  Grocery: 'grocery stores',
+  Pharmacy: 'pharmacies',
+  Parking: 'parking',
+};
+
 const TRAVEL_MODE_TO_GOOGLE = {
   Walk: 'WALK',
   Drive: 'DRIVE',
   Bike: 'BICYCLE',
 };
 
+// Deliberately conservative candidate envelopes. Actual eligibility is always
+// decided from Google's routing duration, never from this geometric envelope.
 const RADIUS_METERS_PER_MINUTE = {
-  Walk: 120,
-  Bike: 350,
-  Drive: 1000,
+  Walk: 150,
+  Bike: 600,
+  Drive: 2500,
 };
 
 const PRICE_LEVELS = {
@@ -99,7 +112,7 @@ async function reserveCost(deviceId) {
   const payload = await supabaseRpc('reserve_api_cost', {
     p_device_id: deviceId,
     p_service: COST_SERVICE,
-    p_estimated_units: COST_UNITS_PER_SEARCH,
+    p_estimated_units: RESERVED_COST_UNITS,
   });
   const row = Array.isArray(payload) ? payload[0] : payload;
   if (!row || typeof row.allowed !== 'boolean') {
@@ -108,19 +121,43 @@ async function reserveCost(deviceId) {
   return row;
 }
 
-async function finishReservation(reservationId, status) {
+async function finishReservation(reservationId, status, actualUnits) {
   if (!reservationId) return false;
-  const payload = await supabaseRpc('finish_api_cost_reservation', {
+  const payload = await supabaseRpc('finish_api_cost_reservation_v2', {
     p_reservation_id: reservationId,
     p_status: status,
+    p_actual_units: actualUnits,
   });
   const value = Array.isArray(payload) ? payload[0] : payload;
-  return value === true || value?.finish_api_cost_reservation === true;
+  return value === true || value?.finish_api_cost_reservation_v2 === true;
 }
 
 function radiusFor(query) {
   const raw = RADIUS_METERS_PER_MINUTE[query.travelMode] * Number(query.maxMinutes);
   return Math.min(50000, Math.max(500, raw));
+}
+
+function restrictionRectangle(origin, radiusMeters) {
+  const latitudeDelta = radiusMeters / 111320;
+  const cosLatitude = Math.max(0.1, Math.cos((origin.latitude * Math.PI) / 180));
+  const longitudeDelta = radiusMeters / (111320 * cosLatitude);
+
+  return {
+    low: {
+      latitude: Math.max(-90, origin.latitude - latitudeDelta),
+      longitude: Math.max(-180, origin.longitude - longitudeDelta),
+    },
+    high: {
+      latitude: Math.min(90, origin.latitude + latitudeDelta),
+      longitude: Math.min(180, origin.longitude + longitudeDelta),
+    },
+  };
+}
+
+function safeGoogleMinRating(minimumRating) {
+  // Google rounds minRating UP to the nearest 0.5. Flooring first prevents
+  // provider-side filtering from removing a NearTime-valid result such as 4.3.
+  return Math.floor(Number(minimumRating) * 2) / 2;
 }
 
 function parseDurationSeconds(duration) {
@@ -190,24 +227,34 @@ function applyHardFilters(places, query) {
   });
 }
 
-function sortPlaces(places, sortKey, query) {
-  const copy = [...places];
+function sortByTravelTime(places, query) {
   const timeKey = query.travelMode === 'Walk' ? 'walkMinutes' : query.travelMode === 'Drive' ? 'driveMinutes' : 'bikeMinutes';
-  copy.sort((a, b) => {
-    switch (sortKey) {
-      case 'rating': return b.rating - a.rating || a[timeKey] - b[timeKey];
-      case 'distance': return a.distanceMeters - b.distanceMeters;
-      case 'price': return a.priceLevel - b.priceLevel || a[timeKey] - b[timeKey];
-      case 'reviews': return b.reviewCount - a.reviewCount || a[timeKey] - b[timeKey];
-      case 'open': return b.closesInMinutes - a.closesInMinutes || a[timeKey] - b[timeKey];
-      case 'time':
-      default: return a[timeKey] - b[timeKey];
-    }
-  });
-  return copy;
+  return [...places].sort((a, b) => a[timeKey] - b[timeKey] || a.distanceMeters - b.distanceMeters);
 }
 
-async function googleNearbySearch(query, origin) {
+function buildTextSearchBody(query, origin, pageToken) {
+  const body = {
+    textQuery: CATEGORY_TO_TEXT_QUERY[query.category],
+    includedType: CATEGORY_TO_GOOGLE_TYPE[query.category],
+    strictTypeFiltering: true,
+    pageSize: 20,
+    rankPreference: 'DISTANCE',
+    locationRestriction: {
+      rectangle: restrictionRectangle(origin, radiusFor(query)),
+    },
+    minRating: safeGoogleMinRating(query.minimumRating),
+    openNow: Boolean(query.openNow || Number(query.openForMinutes) > 0),
+    routingParameters: {
+      origin,
+      travelMode: TRAVEL_MODE_TO_GOOGLE[query.travelMode],
+    },
+  };
+
+  if (pageToken) body.pageToken = pageToken;
+  return body;
+}
+
+async function googleTextSearchPage(query, origin, pageToken) {
   const apiKey = requiredEnv('GOOGLE_PLACES_SERVER_API_KEY');
   const response = await fetch(PLACES_ENDPOINT, {
     method: 'POST',
@@ -224,23 +271,10 @@ async function googleNearbySearch(query, origin) {
         'places.priceLevel',
         'places.currentOpeningHours',
         'routingSummaries',
+        'nextPageToken',
       ].join(','),
     },
-    body: JSON.stringify({
-      includedTypes: [CATEGORY_TO_GOOGLE_TYPE[query.category]],
-      maxResultCount: 20,
-      rankPreference: 'DISTANCE',
-      locationRestriction: {
-        circle: {
-          center: origin,
-          radius: radiusFor(query),
-        },
-      },
-      routingParameters: {
-        origin,
-        travelMode: TRAVEL_MODE_TO_GOOGLE[query.travelMode],
-      },
-    }),
+    body: JSON.stringify(buildTextSearchBody(query, origin, pageToken)),
   });
 
   if (!response.ok) {
@@ -249,6 +283,40 @@ async function googleNearbySearch(query, origin) {
   }
 
   return response.json();
+}
+
+async function collectCandidatePages(query, origin, onSuccessfulCall) {
+  const byId = new Map();
+  let pageToken;
+  let providerCalls = 0;
+  let providerHasMore = false;
+
+  for (let page = 0; page < MAX_PROVIDER_CALLS_PER_SEARCH; page += 1) {
+    const payload = await googleTextSearchPage(query, origin, pageToken);
+    providerCalls += 1;
+    onSuccessfulCall();
+
+    const rawPlaces = Array.isArray(payload.places) ? payload.places : [];
+    const routingSummaries = Array.isArray(payload.routingSummaries) ? payload.routingSummaries : [];
+
+    rawPlaces.forEach((place, index) => {
+      const mapped = mapGooglePlace(place, routingSummaries[index], origin, query);
+      if (mapped?.id) byId.set(mapped.id, mapped);
+    });
+
+    pageToken = typeof payload.nextPageToken === 'string' && payload.nextPageToken ? payload.nextPageToken : undefined;
+    if (!pageToken) {
+      providerHasMore = false;
+      break;
+    }
+    providerHasMore = page === MAX_PROVIDER_CALLS_PER_SEARCH - 1;
+  }
+
+  return {
+    candidates: [...byId.values()],
+    providerCalls,
+    providerHasMore,
+  };
 }
 
 module.exports = async function handler(req, res) {
@@ -262,7 +330,7 @@ module.exports = async function handler(req, res) {
 
   const deviceId = sanitizeDeviceId(req.headers['x-neartime-device-id']);
   let reservationId = null;
-  let googleCallSucceeded = false;
+  let successfulProviderCalls = 0;
 
   try {
     const decision = await reserveCost(deviceId);
@@ -274,31 +342,36 @@ module.exports = async function handler(req, res) {
     reservationId = decision.reservation_id;
     if (!reservationId) throw new Error('Cost gate allowed a call without a reservation id.');
 
-    const googlePayload = await googleNearbySearch(req.body.query, req.body.origin);
-    googleCallSucceeded = true;
+    const collection = await collectCandidatePages(req.body.query, req.body.origin, () => {
+      successfulProviderCalls += 1;
+    });
 
-    const rawPlaces = Array.isArray(googlePayload.places) ? googlePayload.places : [];
-    const routingSummaries = Array.isArray(googlePayload.routingSummaries) ? googlePayload.routingSummaries : [];
-    const mapped = rawPlaces
-      .map((place, index) => mapGooglePlace(place, routingSummaries[index], req.body.origin, req.body.query))
-      .filter(Boolean);
-    const places = sortPlaces(applyHardFilters(mapped, req.body.query), req.body.sortKey, req.body.query);
+    const qualified = applyHardFilters(collection.candidates, req.body.query);
+    const places = sortByTravelTime(qualified, req.body.query).slice(0, RESULT_LIMIT);
 
-    const committed = await finishReservation(reservationId, 'committed');
-    if (!committed) throw new Error('External call completed but the cost reservation could not be committed.');
+    const committed = await finishReservation(reservationId, 'committed', successfulProviderCalls);
+    if (!committed) throw new Error('External calls completed but the cost reservation could not be committed.');
 
     return send(res, 200, {
       places,
-      provider: 'google-places-nearby-new',
+      provider: 'google-places-text-search-new',
       billingSku: COST_SERVICE,
-      costUnits: COST_UNITS_PER_SEARCH,
+      costUnits: successfulProviderCalls,
+      candidateCount: collection.candidates.length,
+      qualifiedCount: qualified.length,
+      providerResultLimitReached: collection.providerHasMore,
     });
   } catch (error) {
     if (reservationId) {
       try {
-        await finishReservation(reservationId, googleCallSucceeded ? 'committed' : 'released');
+        if (successfulProviderCalls > 0) {
+          await finishReservation(reservationId, 'committed', successfulProviderCalls);
+        } else {
+          await finishReservation(reservationId, 'released', 0);
+        }
       } catch {
-        // Keep the original error. A stale reserved row remains conservatively counted until expiry.
+        // Preserve the original error. A stale reservation remains conservatively
+        // counted until its expiry if reconciliation itself fails.
       }
     }
     console.error('NearTime live search failed', error);
