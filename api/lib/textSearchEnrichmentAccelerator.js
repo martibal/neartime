@@ -71,6 +71,12 @@ function normalizePriceLevels(priceLevels) {
   return [...new Set(priceLevels.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
+function normalizeTargetPlaceIds(values) {
+  if (values == null) return null;
+  if (!Array.isArray(values)) throw new Error('invalid_target_place_ids');
+  return new Set(values.map(normalizePlaceId).filter(Boolean));
+}
+
 function attachRoutingSummaries(payload) {
   const places = Array.isArray(payload?.places) ? payload.places : [];
   const summaries = Array.isArray(payload?.routingSummaries) ? payload.routingSummaries : [];
@@ -106,6 +112,14 @@ function reconcileAggregateCandidates({ aggregatePlaceIds, textSearchPlaces }) {
   });
 }
 
+function textSearchUnitPrice(includeRouting, prices = LIST_PRICE_MICROUSD) {
+  const unit = includeRouting
+    ? Number(prices.textSearchEnterpriseAtmosphere)
+    : Number(prices.textSearchEnterprise);
+  if (!Number.isInteger(unit) || unit <= 0) throw new Error('invalid_text_search_price');
+  return unit;
+}
+
 function estimateObservedEnrichmentCost({
   textSearchCalls,
   missingCount,
@@ -117,11 +131,8 @@ function estimateObservedEnrichmentCost({
   if (!Number.isInteger(calls) || calls < 0) throw new Error('invalid_text_search_calls');
   if (!Number.isInteger(missing) || missing < 0) throw new Error('invalid_missing_count');
 
-  const textSearchUnit = includeRouting
-    ? Number(prices.textSearchEnterpriseAtmosphere)
-    : Number(prices.textSearchEnterprise);
+  const textSearchUnit = textSearchUnitPrice(includeRouting, prices);
   const detailsUnit = Number(prices.placeDetailsEnterprise);
-  if (!Number.isInteger(textSearchUnit) || textSearchUnit <= 0) throw new Error('invalid_text_search_price');
   if (!Number.isInteger(detailsUnit) || detailsUnit <= 0) throw new Error('invalid_details_price');
 
   const textSearchMicroUsd = calls * textSearchUnit;
@@ -131,6 +142,14 @@ function estimateObservedEnrichmentCost({
     reconciliationMicroUsd,
     totalMicroUsd: textSearchMicroUsd + reconciliationMicroUsd,
   });
+}
+
+function maxPagesWithinSpend({ includeRouting = false, maxSpendMicroUsd, prices = LIST_PRICE_MICROUSD }) {
+  if (maxSpendMicroUsd == null) return MAX_TEXT_SEARCH_PAGES;
+  const cap = Number(maxSpendMicroUsd);
+  if (!Number.isInteger(cap) || cap < 0) throw new Error('invalid_text_search_spend_cap');
+  const unit = textSearchUnitPrice(includeRouting, prices);
+  return Math.min(MAX_TEXT_SEARCH_PAGES, Math.floor(cap / unit));
 }
 
 function createTextSearchEnrichmentAccelerator({ apiKey, fetchImpl = global.fetch }) {
@@ -148,15 +167,20 @@ function createTextSearchEnrichmentAccelerator({ apiKey, fetchImpl = global.fetc
     includeRouting = false,
     routingOrigin = null,
     travelMode = null,
+    targetPlaceIds = null,
+    maxSpendMicroUsd = null,
   }) {
     const query = String(textQuery || '').trim();
     if (!query) throw new Error('text_query_required');
     const type = String(includedType || '').trim();
     if (!type) throw new Error('included_type_required');
-    const limit = Number(pageLimit);
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_TEXT_SEARCH_PAGES) throw new Error('invalid_page_limit');
+    const requestedLimit = Number(pageLimit);
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > MAX_TEXT_SEARCH_PAGES) throw new Error('invalid_page_limit');
+    const affordablePages = maxPagesWithinSpend({ includeRouting, maxSpendMicroUsd });
+    const limit = Math.min(requestedLimit, affordablePages);
     const circle = validateCircle(locationBiasCircle);
     const safePriceLevels = normalizePriceLevels(priceLevels);
+    const targets = normalizeTargetPlaceIds(targetPlaceIds);
 
     if (minRating != null) {
       const rating = Number(minRating);
@@ -174,9 +198,23 @@ function createTextSearchEnrichmentAccelerator({ apiKey, fetchImpl = global.fetc
       };
     }
 
+    if (limit === 0) {
+      return Object.freeze({
+        places: Object.freeze([]),
+        calls: 0,
+        exhausted: false,
+        nextPageToken: null,
+        targetSatisfied: targets?.size === 0,
+        stoppedBySpendCap: true,
+        skuId: includeRouting ? SKU.TEXT_SEARCH_ENTERPRISE_ATMOSPHERE : SKU.TEXT_SEARCH_ENTERPRISE,
+      });
+    }
+
     const places = [];
+    const matchedTargets = new Set();
     let pageToken = null;
     let calls = 0;
+    let targetSatisfied = targets?.size === 0;
 
     for (let page = 0; page < limit; page += 1) {
       const body = {
@@ -211,18 +249,31 @@ function createTextSearchEnrichmentAccelerator({ apiKey, fetchImpl = global.fetc
       }
 
       const payload = await response.json();
-      places.push(...attachRoutingSummaries(payload));
+      const pagePlaces = attachRoutingSummaries(payload);
+      places.push(...pagePlaces);
+      if (targets) {
+        for (const place of pagePlaces) {
+          const id = normalizePlaceId(place?.id || place?.name);
+          if (id && targets.has(id)) matchedTargets.add(id);
+        }
+        targetSatisfied = matchedTargets.size === targets.size;
+      }
       pageToken = typeof payload?.nextPageToken === 'string' && payload.nextPageToken.trim()
         ? payload.nextPageToken.trim()
         : null;
-      if (!pageToken) break;
+      if (!pageToken || targetSatisfied) break;
     }
 
+    const stoppedBySpendCap = Boolean(pageToken && !targetSatisfied && calls >= affordablePages && affordablePages < requestedLimit);
     return Object.freeze({
       places: Object.freeze(places),
       calls,
       exhausted: !pageToken,
       nextPageToken: pageToken,
+      targetSatisfied,
+      stoppedBySpendCap,
+      matchedTargetCount: matchedTargets.size,
+      targetCount: targets?.size ?? null,
       skuId: includeRouting ? SKU.TEXT_SEARCH_ENTERPRISE_ATMOSPHERE : SKU.TEXT_SEARCH_ENTERPRISE,
     });
   }
@@ -241,6 +292,8 @@ module.exports = {
   attachRoutingSummaries,
   createTextSearchEnrichmentAccelerator,
   estimateObservedEnrichmentCost,
+  maxPagesWithinSpend,
   normalizePlaceId,
   reconcileAggregateCandidates,
+  textSearchUnitPrice,
 };
