@@ -8,6 +8,7 @@ const PRODUCT = 'neartime_runtime_test';
 const PROVIDER_COGS_MICRO_USD = 3000000;
 const ORIGIN = { latitude: 59.9139, longitude: 10.7522 };
 const ALLOWED_RANKING_MODES = new Set(['RATING', 'PRICE', 'TRAVEL_TIME']);
+const ALLOWED_MINIMUM_REVIEWS = new Set([0, 100, 300, 1000]);
 
 function env(name) {
   const value = process.env[name]?.trim();
@@ -21,13 +22,19 @@ function rankingMode() {
   return value;
 }
 
-function queryFor(mode) {
+function minimumReviews() {
+  const value = Number((process.env.NEARTIME_TOPK_MINIMUM_REVIEWS || '0').trim());
+  if (!ALLOWED_MINIMUM_REVIEWS.has(value)) throw new Error(`Invalid NEARTIME_TOPK_MINIMUM_REVIEWS: ${value}`);
+  return value;
+}
+
+function queryFor(mode, reviewFloor) {
   return {
     category: 'Cafe',
     travelMode: 'Walk',
     maxMinutes: 10,
     minimumRating: 0,
-    minimumReviews: 0,
+    minimumReviews: reviewFloor,
     openNow: false,
     openForMinutes: 0,
     rankingMode: mode,
@@ -149,7 +156,8 @@ async function main() {
   const token = env('NEARTIME_LIVE_PROBE_TOKEN');
   const url = env('NEARTIME_TOPK_SEARCH_URL');
   const mode = rankingMode();
-  const query = queryFor(mode);
+  const reviewFloor = minimumReviews();
+  const query = queryFor(mode, reviewFloor);
   const db = new Client({
     connectionString: env('NEARTIME_TEST_DATABASE_URL'),
     ssl: { rejectUnauthorized: false },
@@ -166,7 +174,7 @@ async function main() {
         'content-type': 'application/json',
         'x-neartime-entitlement-session': token,
         'x-neartime-device-id': DEVICE,
-        'x-neartime-idempotency-key': `topk-live-${mode.toLowerCase()}-${runId}`,
+        'x-neartime-idempotency-key': `topk-live-${mode.toLowerCase()}-reviews-${reviewFloor}-${runId}`,
       },
       body: JSON.stringify({ query, origin: ORIGIN }),
     });
@@ -181,6 +189,9 @@ async function main() {
     }
     if (!Array.isArray(payload.places) || payload.places.length < 1 || payload.places.length > 20) {
       throw new Error('Top-K returned invalid place count.');
+    }
+    if (payload.places.some((place) => Number(place.reviewCount || 0) < reviewFloor)) {
+      throw new Error(`Top-K violated minimumReviews=${reviewFloor}.`);
     }
 
     const ledger = await db.query(`select
@@ -198,6 +209,7 @@ async function main() {
     console.log('LIVE_TOPK_SUCCESS', JSON.stringify({
       resultStatus: payload.resultStatus,
       rankingMode: payload.rankingMode,
+      minimumReviews: reviewFloor,
       returned: payload.places.length,
       providerCalls: payload.providerCalls,
       actualProviderCogsMicroUsd: Number(row.actual_micro_usd),
