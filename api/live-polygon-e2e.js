@@ -4,7 +4,6 @@ const { createGoogleIsochroneEnvelopeProvider } = require('./lib/googleIsochrone
 const { createGoogleCoverageProvider } = require('./lib/googleCoverageProvider');
 const { runPolygonCoveragePath } = require('./lib/polygonCoveragePath');
 
-// Preview-only live probe. Touch this file to force a redeploy after Preview env changes.
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
@@ -16,8 +15,8 @@ module.exports = async function handler(req, res) {
 
   const origin = { latitude: 59.9139, longitude: 10.7522 };
   const travelMode = 'Walk';
-  const maxMinutes = 10;
-  const includedTypes = ['cafe'];
+  const maxMinutes = 20;
+  const includedTypes = ['restaurant'];
 
   try {
     const envelopeProvider = createGoogleIsochroneEnvelopeProvider({ apiKey, fetchImpl: global.fetch });
@@ -30,11 +29,11 @@ module.exports = async function handler(req, res) {
       travelMode,
       maxMinutes,
       includedTypes,
-      searchKey: 'live-polygon-e2e-oslo-20260915',
+      searchKey: 'live-polygon-e2e-oslo-over100-20260915',
       enumerationOptions: {
         maxIdsPerPolygon: 100,
-        maxDepth: 4,
-        maxAggregateCalls: 6,
+        maxDepth: 6,
+        maxAggregateCalls: 24,
       },
     });
 
