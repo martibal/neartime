@@ -8,7 +8,6 @@ const {
 } = require('./lib/entitlements');
 const {
   COMPLETE_TOP_K,
-  RANKING_MODE,
 } = require('./lib/topKProofPlanner');
 const {
   CATEGORY_TYPES,
@@ -21,6 +20,14 @@ const TRAVEL_MODES = new Set(['Walk', 'Drive', 'Bike']);
 const MAX_MINUTES = new Set([5, 10, 15, 20]);
 const MINIMUM_REVIEWS = new Set([0, 100, 300, 1000]);
 const OPEN_FOR_MINUTES = new Set([0, 60, 120, 180]);
+
+// The production Top-K route remains feature-gated for ordinary traffic.
+// The bounded GitHub Actions live probe may pass the disabled gate only when
+// BOTH the exact internal probe device id and the exact pseudonymous test
+// entitlement resolve. The probe token itself remains secret and the fixture
+// is revoked after every run.
+const LIVE_PROBE_DEVICE_ID = 'internal-live-topk-probe';
+const LIVE_PROBE_ENTITLEMENT_HASH = '3f4aab5f5f21856ff3f402753a597d494a53eecb91fce35b36d37972f39d5b91';
 
 function enabled(name) {
   return String(process.env[name] || '').trim().toLowerCase() === 'true';
@@ -100,13 +107,14 @@ function blockedStatus(reason) {
   return 429;
 }
 
+function canUseDisabledTopKGate({ deviceId, entitlementHash }) {
+  return deviceId === LIVE_PROBE_DEVICE_ID && entitlementHash === LIVE_PROBE_ENTITLEMENT_HASH;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return send(res, 405, { error: 'method_not_allowed' });
-  }
-  if (!enabled('NEARTIME_TOP_K_V2_ENABLED')) {
-    return send(res, 503, { error: 'top_k_v2_disabled' });
   }
 
   const validationError = validate(req.body);
@@ -128,11 +136,20 @@ module.exports = async function handler(req, res) {
   if (!idempotencyKey) return send(res, 400, { error: 'invalid_idempotency_key' });
   if (!rawSession) return send(res, 401, { error: 'paid_entitlement_required' });
 
+  const topKEnabled = enabled('NEARTIME_TOP_K_V2_ENABLED');
+  if (!topKEnabled && deviceId !== LIVE_PROBE_DEVICE_ID) {
+    return send(res, 503, { error: 'top_k_v2_disabled' });
+  }
+
   let logicalReservationId = null;
   let logicalFinalized = false;
   try {
     const session = await resolveEntitlementSession(rawSession);
     if (!session?.entitlementHash) return send(res, 401, { error: 'invalid_or_expired_entitlement_session' });
+
+    if (!topKEnabled && !canUseDisabledTopKGate({ deviceId, entitlementHash: session.entitlementHash })) {
+      return send(res, 503, { error: 'top_k_v2_disabled' });
+    }
 
     const requestHash = canonicalRequestHash(req.body);
     const installHash = sha256Hex(`install:${deviceId}`);
@@ -215,3 +232,7 @@ module.exports = async function handler(req, res) {
     return send(res, 502, { error: 'top_k_search_failed', reason });
   }
 };
+
+module.exports.canUseDisabledTopKGate = canUseDisabledTopKGate;
+module.exports.LIVE_PROBE_DEVICE_ID = LIVE_PROBE_DEVICE_ID;
+module.exports.LIVE_PROBE_ENTITLEMENT_HASH = LIVE_PROBE_ENTITLEMENT_HASH;
