@@ -4,9 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  assertProviderSearchCeiling,
   budgetQuantities,
   mergeRatingFilter,
   normalizeRankingMode,
+  providerCostSpecs,
   unsupportedHardFilterReason,
 } = require('./lib/topKSearchRuntime');
 
@@ -72,4 +74,70 @@ test('minimum-reviews proof reserves bounded details/routes and expanded rating 
     assert.equal(budget.details, 100);
     assert.equal(budget.route, 100);
   }
+});
+
+test('provider cost plan is derived from the exact worst-case quantities', () => {
+  const quantities = {
+    aggregate: 8,
+    details: 20,
+    route: 120,
+    routeSkuId: '2E25-887A-DAD4',
+  };
+  assert.deepEqual(providerCostSpecs(quantities), [
+    { name: 'aggregate', skuId: '546C-66B2-E5A6', quantity: 8 },
+    { name: 'details', skuId: '2D9A-3DE0-3766', quantity: 20 },
+    { name: 'route', skuId: '2E25-887A-DAD4', quantity: 120 },
+  ]);
+});
+
+test('NOK 9.99 equivalent passes the pre-reservation ceiling gate', async () => {
+  const calls = [];
+  const supabaseRpc = async (name, body) => {
+    calls.push({ name, body });
+    return [{
+      allowed: true,
+      reason: 'within_per_search_cost_ceiling',
+      worst_case_micro_usd: 900000,
+      worst_case_micro_nok: 9990000,
+      max_search_micro_nok: 10000000,
+      conservative_nok_per_usd_micro: 11100000,
+    }];
+  };
+
+  const decision = await assertProviderSearchCeiling({
+    quantities: { aggregate: 1, details: 1, route: 1, routeSkuId: '2E25-887A-DAD4' },
+    supabaseRpc,
+  });
+
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.worst_case_micro_nok, 9990000);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, 'check_provider_cogs_search_ceiling');
+});
+
+test('NOK 10.01 equivalent fails closed before any provider reservation', async () => {
+  let reservationCalls = 0;
+  const supabaseRpc = async (name) => {
+    if (name === 'reserve_provider_cogs') reservationCalls += 1;
+    if (name === 'check_provider_cogs_search_ceiling') {
+      return [{
+        allowed: false,
+        reason: 'per_search_cost_ceiling_exceeded',
+        worst_case_micro_usd: 910000,
+        worst_case_micro_nok: 10010000,
+        max_search_micro_nok: 10000000,
+        conservative_nok_per_usd_micro: 11000000,
+      }];
+    }
+    throw new Error(`unexpected_rpc:${name}`);
+  };
+
+  await assert.rejects(
+    () => assertProviderSearchCeiling({
+      quantities: { aggregate: 1, details: 1, route: 1, routeSkuId: '2E25-887A-DAD4' },
+      supabaseRpc,
+    }),
+    (error) => error.code === 'per_search_cost_ceiling_exceeded',
+  );
+  assert.equal(reservationCalls, 0);
 });
