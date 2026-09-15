@@ -12,6 +12,10 @@ const {
   estimateTopKWorstCase,
   proveTopK,
 } = require('./topKProofPlanner');
+const {
+  provePriceTopKWithHardTravel,
+  proveRatingTopKWithHardTravel,
+} = require('./topKHardTravelProof');
 
 const CATEGORY_TYPES = Object.freeze({
   Restaurant: ['restaurant'],
@@ -71,10 +75,18 @@ function mergeRatingFilter(requested, hardMinimum) {
 function budgetQuantities({ rankingMode, travelMode, maxMinutes, k = 20 }) {
   const mode = normalizeRankingMode(rankingMode);
   const plan = estimateTopKWorstCase({ rankingMode: mode, maxMinutes, k });
+  const details = mode === RANKING_MODE.RATING
+    ? Math.max(plan.maxProofDetailCalls, plan.maxFinalistDetailCalls)
+    : plan.maxProofDetailCalls + plan.maxFinalistDetailCalls;
+  const route = mode === RANKING_MODE.RATING
+    ? 100
+    : mode === RANKING_MODE.PRICE
+      ? 500
+      : plan.maxRouteElements + k;
   return Object.freeze({
     aggregate: plan.maxAggregateCalls,
-    details: plan.maxProofDetailCalls + plan.maxFinalistDetailCalls,
-    route: plan.maxRouteElements + k,
+    details,
+    route,
     routeSkuId: routeMatrixSkuForTravelMode(travelMode),
   });
 }
@@ -261,8 +273,24 @@ async function runTopKSearchRuntime({
       } else {
         const polygon = toLonLatRing(envelope.polygons[0]);
         proof = rankingMode === RANKING_MODE.RATING
-          ? await proveTopK({ rankingMode, polygon, includedTypes, aggregateSearch, placeDetails, k })
-          : await proveTopK({ rankingMode, polygon, includedTypes, aggregateSearch, k, ratingFilter: hardRating });
+          ? await proveRatingTopKWithHardTravel({
+              polygon,
+              includedTypes,
+              aggregateSearch,
+              placeDetails,
+              routeMatrixCompute,
+              maxMinutes: Number(query.maxMinutes),
+              k,
+            })
+          : await provePriceTopKWithHardTravel({
+              polygon,
+              includedTypes,
+              aggregateSearch,
+              routeMatrixCompute,
+              maxMinutes: Number(query.maxMinutes),
+              k,
+              ratingFilter: hardRating,
+            });
       }
     }
 
@@ -275,7 +303,7 @@ async function runTopKSearchRuntime({
     const places = [];
     for (const candidate of proof.topK) {
       const details = candidate.details || await placeDetails({ placeId: candidate.placeId });
-      const route = await routeMatrixCompute({ placeId: candidate.placeId });
+      const route = candidate.route || await routeMatrixCompute({ placeId: candidate.placeId });
       const seconds = durationSecondsFromRouteResult(route);
       if (seconds > Number(query.maxMinutes) * 60) {
         await settleWorstCaseBudget({ reservations, actual, outcome: 'succeeded', supabaseRpc });
