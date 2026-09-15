@@ -53,6 +53,33 @@ test('Aggregate provider sends rating, price and operating-status filters server
   assert.deepEqual(calls[0].body.filter.operatingStatus, ['OPERATING_STATUS_OPERATIONAL']);
 });
 
+test('exact 5.0 top-k is complete without Place Details because all candidates tie on rating', async () => {
+  const ids = Array.from({ length: 36 }, (_, index) => `p${String(index + 1).padStart(2, '0')}`);
+  let detailCalls = 0;
+  const result = await proveTopKByRating({
+    polygon: polygon(),
+    includedTypes: ['restaurant'],
+    aggregateSearch: async ({ includePlaceIds, ratingFilter }) => {
+      assert.deepEqual(ratingFilter, { minRating: 5, maxRating: 5 });
+      return includePlaceIds ? { count: 36, placeIds: ids } : { count: 36 };
+    },
+    placeDetails: async () => {
+      detailCalls += 1;
+      return { rating: 5, userRatingCount: 100 };
+    },
+  });
+
+  assert.equal(result.status, COMPLETE_TOP_K);
+  assert.equal(result.selectedThreshold, 5);
+  assert.equal(result.candidateCount, 36);
+  assert.equal(result.topK.length, 20);
+  assert.equal(result.aggregateCalls, 2);
+  assert.equal(result.detailCalls, 0);
+  assert.equal(detailCalls, 0);
+  assert.equal(result.proof.tiePolicy, 'RATING_TIES_EQUIVALENT');
+  assert.equal(result.proof.deterministicSelection, 'PLACE_ID_ASC');
+});
+
 test('rating proof stops when cumulative threshold contains enough candidates and returns verified top 20', async () => {
   const ids = Array.from({ length: 24 }, (_, index) => `p${index + 1}`);
   const counts = new Map([
@@ -135,9 +162,11 @@ test('planner fails closed if Aggregate says a rating-filtered candidate has no 
     polygon: polygon(),
     includedTypes: ['cafe'],
     k: 1,
-    aggregateSearch: async ({ includePlaceIds }) => includePlaceIds
-      ? { count: 1, placeIds: ['p1'] }
-      : { count: 1 },
+    ratingThresholds: [4.8, 1],
+    aggregateSearch: async ({ includePlaceIds, ratingFilter }) => {
+      if (ratingFilter.minRating === 4.8) return includePlaceIds ? { count: 1, placeIds: ['p1'] } : { count: 1 };
+      return { count: 1 };
+    },
     placeDetails: async () => ({ id: 'p1' }),
   });
 

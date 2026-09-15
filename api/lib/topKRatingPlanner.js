@@ -53,6 +53,16 @@ function candidateComparator(a, b) {
   return a.placeId.localeCompare(b.placeId);
 }
 
+function exactFiveStarTopK(placeIds, k) {
+  const orderedIds = [...placeIds].sort((a, b) => a.localeCompare(b));
+  return orderedIds.slice(0, k).map((placeId) => ({
+    placeId,
+    rating: 5,
+    userRatingCount: null,
+    details: null,
+  }));
+}
+
 async function proveTopKByRating({
   polygon,
   includedTypes,
@@ -178,6 +188,32 @@ async function proveTopKByRating({
     };
   }
 
+  // If the first proven bucket is exactly 5.0, every materialized candidate is tied
+  // on the user's chosen ranking criterion. Any deterministic K-subset is therefore
+  // a valid complete top-K result. Do not spend on Place Details merely to invent a
+  // secondary ranking the user did not request.
+  if (selectedThreshold === 5) {
+    return {
+      status: COMPLETE_TOP_K,
+      reason: null,
+      topK: exactFiveStarTopK(placeIds, k),
+      candidateCount: selectedCount,
+      selectedThreshold,
+      aggregateCalls,
+      detailCalls,
+      diagnostics,
+      proof: {
+        ranking: 'RATING_DESC',
+        tiePolicy: 'RATING_TIES_EQUIVALENT',
+        deterministicSelection: 'PLACE_ID_ASC',
+        k,
+        complete: true,
+        fewerThanKAvailable: selectedCount < k,
+        excludedBelowRating: selectedThreshold,
+      },
+    };
+  }
+
   const candidates = [];
   for (const placeId of placeIds) {
     const details = await placeDetails({ placeId });
@@ -232,6 +268,7 @@ module.exports = {
   DEGRADED,
   DEFAULT_RATING_THRESHOLDS,
   candidateComparator,
+  exactFiveStarTopK,
   proveTopKByRating,
   uniquePlaceIds,
   validateThresholds,
