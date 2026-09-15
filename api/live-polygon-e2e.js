@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
       travelMode,
       maxMinutes,
       includedTypes,
-      searchKey: 'live-polygon-e2e-oslo-over100-20260915',
+      searchKey: 'live-polygon-e2e-oslo-over100-20260915-diagnostics',
       enumerationOptions: {
         maxIdsPerPolygon: 100,
         maxDepth: 6,
@@ -50,6 +50,15 @@ module.exports = async function handler(req, res) {
       travelMode,
       maxMinutes,
       includedTypes,
+      partitionDiagnostics: (result.polygonResults || []).map((polygon) => ({
+        polygonIndex: polygon.polygonIndex,
+        verified: polygon.verified,
+        reason: polygon.reason,
+        rootCount: polygon.rootCount,
+        aggregateCalls: polygon.aggregateCalls,
+        leafCount: polygon.leafCount,
+        diagnostics: polygon.diagnostics || [],
+      })),
     });
   } catch (error) {
     return res.status(500).json({ error: error?.code || error?.message || 'live_polygon_e2e_failed' });
