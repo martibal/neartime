@@ -16,6 +16,11 @@ const {
   provePriceTopKWithHardTravel,
   proveRatingTopKWithHardTravel,
 } = require('./topKHardTravelProof');
+const {
+  provePriceTopKWithMinimumReviews,
+  proveRatingTopKWithMinimumReviews,
+  proveTravelTimeTopKWithMinimumReviews,
+} = require('./topKMinimumReviewsProof');
 
 const CATEGORY_TYPES = Object.freeze({
   Restaurant: ['restaurant'],
@@ -44,7 +49,6 @@ function normalizeRankingMode(value) {
 }
 
 function unsupportedHardFilterReason(query) {
-  if (Number(query?.minimumReviews || 0) > 0) return 'top_k_minimum_reviews_proof_not_ready';
   if (query?.openNow === true) return 'top_k_open_now_proof_not_ready';
   if (Number(query?.openForMinutes || 0) > 0) return 'top_k_open_for_minutes_proof_not_ready';
   return null;
@@ -72,19 +76,27 @@ function mergeRatingFilter(requested, hardMinimum) {
   return { minRating, maxRating };
 }
 
-function budgetQuantities({ rankingMode, travelMode, maxMinutes, k = 20 }) {
+function budgetQuantities({ rankingMode, travelMode, maxMinutes, minimumReviews = 0, k = 20 }) {
   const mode = normalizeRankingMode(rankingMode);
   const plan = estimateTopKWorstCase({ rankingMode: mode, maxMinutes, k });
-  const details = mode === RANKING_MODE.RATING
-    ? Math.max(plan.maxProofDetailCalls, plan.maxFinalistDetailCalls)
-    : plan.maxProofDetailCalls + plan.maxFinalistDetailCalls;
-  const route = mode === RANKING_MODE.RATING
+  const hasMinimumReviews = Number(minimumReviews) > 0;
+  const aggregate = hasMinimumReviews && mode === RANKING_MODE.RATING
+    ? plan.maxAggregateCalls * 2
+    : plan.maxAggregateCalls;
+  const details = hasMinimumReviews
     ? 100
-    : mode === RANKING_MODE.PRICE
-      ? 500
-      : plan.maxRouteElements + k;
+    : mode === RANKING_MODE.RATING
+      ? Math.max(plan.maxProofDetailCalls, plan.maxFinalistDetailCalls)
+      : plan.maxProofDetailCalls + plan.maxFinalistDetailCalls;
+  const route = hasMinimumReviews
+    ? 100
+    : mode === RANKING_MODE.RATING
+      ? 100
+      : mode === RANKING_MODE.PRICE
+        ? 500
+        : plan.maxRouteElements + k;
   return Object.freeze({
-    aggregate: plan.maxAggregateCalls,
+    aggregate,
     details,
     route,
     routeSkuId: routeMatrixSkuForTravelMode(travelMode),
@@ -218,7 +230,14 @@ async function runTopKSearchRuntime({
     return { status: DEGRADED, rankingMode, reason: unsupportedReason, places: [], providerCalls: { aggregate: 0, details: 0, route: 0, envelope: 0 } };
   }
 
-  const quantities = budgetQuantities({ rankingMode, travelMode: query.travelMode, maxMinutes: Number(query.maxMinutes), k });
+  const minimumReviews = Number(query?.minimumReviews || 0);
+  const quantities = budgetQuantities({
+    rankingMode,
+    travelMode: query.travelMode,
+    maxMinutes: Number(query.maxMinutes),
+    minimumReviews,
+    k,
+  });
   const reservations = await reserveWorstCaseBudget({ entitlementHash, deviceId, searchKey, quantities, supabaseRpc });
   const actual = { aggregate: 0, details: 0, route: 0, envelope: 0 };
   let settled = false;
@@ -249,7 +268,21 @@ async function runTopKSearchRuntime({
     };
 
     let proof;
-    if (rankingMode === RANKING_MODE.TRAVEL_TIME) {
+    if (minimumReviews > 0 && rankingMode === RANKING_MODE.TRAVEL_TIME) {
+      proof = await proveTravelTimeTopKWithMinimumReviews({
+        envelopeProvider: trackedEnvelopeProvider,
+        aggregateSearch,
+        placeDetails,
+        routeMatrixCompute,
+        origin,
+        travelMode: query.travelMode,
+        maxMinutes: Number(query.maxMinutes),
+        includedTypes,
+        minimumReviews,
+        k,
+        ratingFilter: hardRating,
+      });
+    } else if (minimumReviews === 0 && rankingMode === RANKING_MODE.TRAVEL_TIME) {
       proof = await proveTopK({
         rankingMode,
         envelopeProvider: trackedEnvelopeProvider,
@@ -272,25 +305,50 @@ async function runTopKSearchRuntime({
         proof = { status: DEGRADED, rankingMode, reason: 'top_k_envelope_not_simple_exact', topK: [] };
       } else {
         const polygon = toLonLatRing(envelope.polygons[0]);
-        proof = rankingMode === RANKING_MODE.RATING
-          ? await proveRatingTopKWithHardTravel({
-              polygon,
-              includedTypes,
-              aggregateSearch,
-              placeDetails,
-              routeMatrixCompute,
-              maxMinutes: Number(query.maxMinutes),
-              k,
-            })
-          : await provePriceTopKWithHardTravel({
-              polygon,
-              includedTypes,
-              aggregateSearch,
-              routeMatrixCompute,
-              maxMinutes: Number(query.maxMinutes),
-              k,
-              ratingFilter: hardRating,
-            });
+        if (minimumReviews > 0) {
+          proof = rankingMode === RANKING_MODE.RATING
+            ? await proveRatingTopKWithMinimumReviews({
+                polygon,
+                includedTypes,
+                aggregateSearch,
+                placeDetails,
+                routeMatrixCompute,
+                maxMinutes: Number(query.maxMinutes),
+                minimumReviews,
+                k,
+              })
+            : await provePriceTopKWithMinimumReviews({
+                polygon,
+                includedTypes,
+                aggregateSearch,
+                placeDetails,
+                routeMatrixCompute,
+                maxMinutes: Number(query.maxMinutes),
+                minimumReviews,
+                k,
+                ratingFilter: hardRating,
+              });
+        } else {
+          proof = rankingMode === RANKING_MODE.RATING
+            ? await proveRatingTopKWithHardTravel({
+                polygon,
+                includedTypes,
+                aggregateSearch,
+                placeDetails,
+                routeMatrixCompute,
+                maxMinutes: Number(query.maxMinutes),
+                k,
+              })
+            : await provePriceTopKWithHardTravel({
+                polygon,
+                includedTypes,
+                aggregateSearch,
+                routeMatrixCompute,
+                maxMinutes: Number(query.maxMinutes),
+                k,
+                ratingFilter: hardRating,
+              });
+        }
       }
     }
 
@@ -326,6 +384,19 @@ async function runTopKSearchRuntime({
           status: DEGRADED,
           rankingMode,
           reason: 'top_k_finalist_rating_contract_mismatch',
+          places: [],
+          proof,
+          providerCalls: actual,
+          budgetPlan: quantities,
+        };
+      }
+      if (minimumReviews > 0 && place.reviewCount < minimumReviews) {
+        await settleWorstCaseBudget({ reservations, actual, outcome: 'succeeded', supabaseRpc });
+        settled = true;
+        return {
+          status: DEGRADED,
+          rankingMode,
+          reason: 'top_k_finalist_minimum_reviews_contract_mismatch',
           places: [],
           proof,
           providerCalls: actual,
