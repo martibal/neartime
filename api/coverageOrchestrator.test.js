@@ -131,12 +131,35 @@ test('incomplete Aggregate Place ID witness cannot produce COMPLETE', async () =
   assert.match(result.coverageReason, /aggregate_place_ids_incomplete/);
 });
 
-test('dense root uses count-only first and splits before requesting Place IDs', async () => {
+test('Aggregate enumerates exactly 100 Place IDs without partitioning', async () => {
+  const ids = Array.from({ length: 100 }, (_, index) => `p${index + 1}`);
+  const result = await runCoverageSearch({
+    origin: makeOrigin(),
+    radiusMeters: 1200,
+    categoryTypes: ['cafe'],
+    searchKey: 'search-hundred-0001',
+    aggregateSearch: async ({ includePlaceIds }) => includePlaceIds
+      ? ({ count: 100, placeIds: ids })
+      : ({ count: 100 }),
+    nearbySearch: async () => ({ places: ids.map((id) => ({ id })) }),
+    placeDetails: async () => { throw new Error('fallback not expected'); },
+    applyHardFilters: (places) => places,
+  });
+
+  assert.equal(result.resultStatus, RESULT_STATUS.COMPLETE);
+  assert.equal(result.coverageState, COVERAGE_STATE.VERIFIED_CURRENT);
+  assert.equal(result.expectedCount, 100);
+  assert.equal(result.retrievedCount, 100);
+  assert.equal(result.providerCalls.aggregateCalls, 2);
+  assert.equal(result.providerCalls.nearbyCalls, 1);
+});
+
+test('dense root above 100 uses count-only first and splits before requesting Place IDs', async () => {
   const root = { center: makeOrigin(), radius: 2000 };
   const children = splitCircle(root);
   const map = new Map();
   const key = (c) => `${c.center.latitude.toFixed(6)}:${c.center.longitude.toFixed(6)}:${c.radius.toFixed(1)}`;
-  map.set(key(root), { count: 40, ids: [] });
+  map.set(key(root), { count: 101, ids: [] });
   children.forEach((child, index) => map.set(key(child), { count: 1, ids: [`p${index + 1}`] }));
 
   const result = await runCoverageSearch({
@@ -167,7 +190,7 @@ test('partition depth exhaustion yields DEGRADED instead of false completeness',
     categoryTypes: ['restaurant'],
     searchKey: 'search-depth-0001',
     options: { maxDepth: 0, maxAggregateCalls: 2, maxNearbyCalls: 2 },
-    aggregateSearch: async () => ({ count: 50 }),
+    aggregateSearch: async () => ({ count: 101 }),
     nearbySearch: async () => ({ places: [{ id: 'partial' }] }),
     placeDetails: async () => null,
     applyHardFilters: (places) => places,
