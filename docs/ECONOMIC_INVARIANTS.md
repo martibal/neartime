@@ -2,52 +2,90 @@
 
 These are permanent product and architecture requirements. They are not targets, heuristics, temporary development assumptions, or values that may be relaxed to make a feature work.
 
-## Invariant 1 — a customer may never cost more than they earn
+## Invariant 1 — every customer must be contribution-positive by construction
 
-NearTime must be designed so that the maximum provider cost attributable to one customer can never exceed the net revenue allocated to that customer for the same billing period.
+NearTime must be designed so that no possible usage pattern by one customer can make that customer contribution-negative for a billing period.
 
-This must be enforced before provider calls are made, not checked after the fact.
+This is stronger than merely preventing runaway API spend. The system must guarantee before billable provider work is admitted that the customer's total attributable variable cost remains below the conservative net revenue actually available from that customer for the same billing period.
 
-A subscription, search quota, top-up, feature, ranking mode, retry policy, fallback path, or provider integration is invalid if its worst-case provider COGS can exceed the funded customer revenue available to cover it.
+The relevant revenue base is not headline subscription price. It is conservative net customer revenue after unavoidable transaction/store deductions, taxes where applicable, refunds/chargeback allowance, and any other attributable variable costs that must be paid before provider COGS.
 
-If the remaining funded margin is insufficient, the request must fail closed before any additional billable provider work begins.
+Provider COGS must therefore consume only an explicitly funded customer cost wallet that is strictly smaller than conservative net customer revenue. The ratio allocated to provider COGS must be configured below 100%, leaving a positive contribution margin by construction.
 
-## Invariant 2 — one logical search must never cost more than NOK 10 in provider COGS
+A subscription, search quota, top-up, feature, ranking mode, retry policy, fallback path, or provider integration is invalid if any allowed customer usage pattern can spend more than the customer's funded provider-cost wallet.
 
-NOK 10 is an absolute per-search ceiling, not an expected average.
+If the remaining funded provider-cost wallet is insufficient, no further billable provider work may begin for that customer until a new funded entitlement period or paid top-up provides additional cost coverage.
 
-A search plan may only be admitted when NearTime can prove before execution that the worst-case provider cost for that logical search is at or below the NOK 10 ceiling.
+## Invariant 2 — per-search cost is derived from customer economics, never chosen as a standalone ceiling
 
-If a search algorithm, filter combination, ranking mode, retry path, or fallback cannot be completed within that ceiling, NearTime must return a fail-closed/degraded result or use a cheaper architecture. It must never continue spending past the ceiling in order to preserve completeness.
+There is no fixed NOK-per-search ceiling that can make an otherwise loss-making plan acceptable.
 
-Provider prices may be denominated in another currency. Production enforcement therefore requires a conservative conversion policy that cannot understate the NOK equivalent. The conversion mechanism itself must be documented and tested before paid production traffic is enabled.
+The maximum admissible worst-case cost of one logical search must be derived from the customer's remaining funded provider-cost wallet and the product's promised remaining usage entitlement.
 
-## Invariant 3 — coverage and economics are both hard constraints
+If a plan promises N remaining included searches in the billing period, the server must preserve enough funded provider budget for all N. A search may therefore reserve at most the conservative budget available for one of those remaining searches, unless the product contract explicitly allows a different usage-allocation rule that still guarantees positive customer contribution under every allowed usage pattern.
 
-NearTime's completeness requirement does not override the cost ceiling, and the cost ceiling does not permit silently incomplete results.
+If the product is marketed as unlimited search, then NearTime can only guarantee this invariant if marginal provider cost is effectively bounded near zero through caching/precomputation/owned data, or if paid usage beyond a funded threshold is separately monetized. 'Unlimited billable provider calls for a fixed low subscription price' is incompatible with this invariant.
+
+Measured searches costing dollars each are therefore not merely expensive; they are evidence that the current search architecture is commercially invalid for a low-price consumer subscription and must be redesigned.
+
+## Invariant 3 — development and test spend must also be fail-closed
+
+NearTime must be cheap enough to develop and validate before launch without creating uncontrolled provider spend for the developer.
+
+Development, staging and manual live-probe traffic must have a separate hard provider-cost budget that is enforced before any billable external call is made. The test budget must be small enough that repeated development searches cannot accumulate into hundreds of NOK of spend simply because production has not launched yet.
+
+The development cost gate must be independent of the production customer-profit wallet. A test fixture, probe token or internal device must never inherit a large synthetic wallet that makes expensive searches appear acceptable.
+
+Paid live probes are allowed only when all of the following are true:
+
+1. the specific probe has a justified purpose that cannot be validated with mocks, recorded responses or deterministic unit/integration tests;
+2. a conservative worst-case cost for that single probe is reserved against the remaining development test budget before execution;
+3. the cumulative development spend cap for the configured period cannot be exceeded by concurrency, retries or repeated manual runs;
+4. the probe cost is representative of a search architecture that is still commercially plausible, rather than repeatedly validating a path already known to be too expensive.
+
+Once a live path is shown to be commercially invalid on cost, further paid probing of that same architecture must stop until the cost model has been redesigned. Regression testing should then use mocks, fixtures, recorded provider responses or non-billable paths wherever possible.
+
+## Invariant 4 — coverage and economics are both hard constraints
+
+NearTime's completeness requirement does not override the economic invariant, and the economic invariant does not permit silently incomplete results.
 
 The only valid outcomes are:
 
-- complete/proven result inside the economic limits; or
-- fail closed (`DEGRADED`) before the economic limits can be exceeded.
+- complete/proven result inside the customer's funded economic limits; or
+- fail closed (`DEGRADED`) before those limits can be exceeded.
 
-Returning an arbitrary/truncated set as complete is forbidden. Spending beyond the economic limits to obtain completeness is also forbidden.
+Returning an arbitrary/truncated set as complete is forbidden. Spending beyond the customer's funded limits to obtain completeness is also forbidden.
 
 ## Required admission order
 
-Before any billable provider work begins, the server must determine and atomically reserve the conservative worst case for the logical search and verify both:
+Before any billable provider work begins, the server must determine and atomically reserve the conservative worst case for the logical search and verify all of the following:
 
-1. per-search worst-case provider COGS <= NOK 10 equivalent; and
-2. the customer's remaining funded provider-cost budget after reservation cannot exceed the net revenue allocated to that customer for the billing period.
+1. the customer has conservative net revenue available for the current billing period;
+2. a configured provider-COGS allocation smaller than that net revenue has funded the customer's provider-cost wallet;
+3. the worst-case cost of the proposed search fits inside the customer's remaining provider-cost wallet;
+4. admitting the search cannot make the customer contribution-negative even if the customer fully exercises all remaining usage rights promised by the plan;
+5. retries, fallbacks, concurrency and provider failures are included in the reservation bound.
+
+For development/staging traffic, the same reserve-before-call rule applies against the separate development test budget rather than a production customer wallet.
 
 Only then may the first billable provider call execute.
 
-Actual usage must be committed after the search and unused reservation released. Retries, duplicate requests, concurrency, fallbacks, and provider errors must not create an unreserved path around either invariant.
+Actual usage must be committed after the search and unused reservation released. Retries, duplicate requests, concurrency, fallbacks, and provider errors must not create an unreserved path around the invariant.
+
+## Pricing and quota design rule
+
+Pricing, included usage and provider architecture must be designed together.
+
+A plan is not commercially valid until NearTime can prove, using conservative provider prices and conservative net revenue assumptions, that the maximum provider spend permitted by that plan is below the customer's funded provider-cost allocation and therefore leaves a positive contribution margin.
+
+For example, a low-price monthly plan cannot include a volume of live searches whose worst-case cumulative provider cost could exceed the plan's conservative net proceeds. If the desired customer experience requires that volume, the provider cost per search must be reduced, the included usage must be reduced, the plan price must increase, or paid top-ups/usage charges must cover the excess. The system may not rely on 'average users probably search less'.
 
 ## Engineering gate
 
-No production feature that can cause billable provider traffic is complete until tests demonstrate its worst-case admission bound and fail-closed behavior.
+No production feature that can cause billable provider traffic is complete until tests demonstrate its worst-case admission bound and fail-closed behavior at both search level and billing-period/customer level.
 
-Live probes are validation tools, not a license to spend up to their test-wallet size. A test wallet larger than the commercial per-search ceiling must never be interpreted as an acceptable production search cost.
+No development workflow that can cause billable provider traffic is complete until it has an independently enforced cumulative test-spend cap and a per-probe worst-case reservation.
 
-Any measured live search above NOK 10 equivalent is a product/architecture failure that must trigger redesign before that path is eligible for production.
+Live probes are validation tools only. A large test wallet must never be interpreted as an acceptable production unit cost, and development testing must not be permitted to accumulate material spend simply because the calls are marked as tests.
+
+The production feature gate must remain closed until the search architecture, product pricing and usage entitlement together satisfy the customer-profit invariant with conservative assumptions.
