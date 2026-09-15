@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { enumeratePolygonCandidates } = require('./lib/polygonAggregateEnumerator');
-const { splitRingForAggregate } = require('./lib/polygonPartition');
+const { splitRingForAggregate, splitRingIntoStripsForAggregate } = require('./lib/polygonPartition');
 
 function osloSquare(sizeDegrees = 0.02) {
   const minLon = 10.74;
@@ -73,13 +73,47 @@ test('count >100 recursively splits and verifies union against root count', asyn
   assert.equal(result.aggregateCalls, 5);
 });
 
+test('dense root uses count-derived multiway fanout to stay below binary call growth', async () => {
+  const root = osloSquare();
+  const split = splitRingIntoStripsForAggregate(root, 7);
+  assert.equal(split.allowed, true);
+  assert.equal(split.parts.length, 7);
+
+  const key = (ring) => JSON.stringify(ring);
+  const map = new Map([[key(root), { count: 650 }]]);
+  let nextId = 1;
+  split.parts.forEach((part, index) => {
+    const count = index < 6 ? 93 : 92;
+    const ids = Array.from({ length: count }, () => `p${nextId++}`);
+    map.set(key(part), { count, ids });
+  });
+
+  const result = await enumeratePolygonCandidates({
+    rootRing: root,
+    includedTypes: ['restaurant'],
+    searchKey: 'polygon-fanout-0001',
+    options: { maxAggregateCalls: 24 },
+    aggregateSearch: async ({ polygon, includePlaceIds }) => {
+      const entry = map.get(key(polygon));
+      assert.ok(entry, 'unexpected polygon');
+      return includePlaceIds ? { count: entry.count, placeIds: entry.ids } : { count: entry.count };
+    },
+  });
+
+  assert.equal(result.verified, true);
+  assert.equal(result.rootCount, 650);
+  assert.equal(result.placeIds.length, 650);
+  assert.equal(result.leafCount, 7);
+  assert.equal(result.aggregateCalls, 15);
+});
+
 test('dedupe cannot silently hide partition overlap because unique union must equal root count', async () => {
   const root = osloSquare();
   const split = splitRingForAggregate(root);
   const [childA, childB] = split.parts;
   const key = (ring) => JSON.stringify(ring);
   const idsA = Array.from({ length: 80 }, (_, i) => `p${i + 1}`);
-  const idsB = Array.from({ length: 70 }, (_, i) => `p${i + 71}`); // 10 overlap, 140 unique total
+  const idsB = Array.from({ length: 70 }, (_, i) => `p${i + 71}`);
   const map = new Map([
     [key(root), { count: 150 }],
     [key(childA), { count: 80, ids: idsA }],

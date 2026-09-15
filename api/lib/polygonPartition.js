@@ -112,6 +112,105 @@ function splitRingAtMidpoint(inputRing) {
   });
 }
 
+function validateAggregateParts(parts, originalAreaSquareMeters, minimumAreaSquareMeters, metadata = {}) {
+  const partAreasSquareMeters = parts.map((part) => ringAreaSquareMeters(part));
+  const undersizedIndexes = partAreasSquareMeters
+    .map((area, index) => ({ area, index }))
+    .filter(({ area }) => area < minimumAreaSquareMeters)
+    .map(({ index }) => index);
+
+  if (undersizedIndexes.length > 0) {
+    return Object.freeze({
+      allowed: false,
+      reason: 'aggregate_partition_would_create_undersized_component',
+      ...metadata,
+      originalAreaSquareMeters,
+      minimumAreaSquareMeters,
+      parts: Object.freeze([]),
+      partAreasSquareMeters: Object.freeze(partAreasSquareMeters),
+      undersizedIndexes: Object.freeze(undersizedIndexes),
+    });
+  }
+
+  return Object.freeze({
+    allowed: true,
+    reason: null,
+    ...metadata,
+    originalAreaSquareMeters,
+    minimumAreaSquareMeters,
+    parts: Object.freeze(parts),
+    partAreasSquareMeters: Object.freeze(partAreasSquareMeters),
+    undersizedIndexes: Object.freeze([]),
+  });
+}
+
+function splitRingIntoStripsForAggregate(inputRing, requestedStripCount, options = {}) {
+  const minimumAreaSquareMeters = Number(options.minimumAreaSquareMeters ?? AGGREGATE_MIN_AREA_SQUARE_METERS);
+  if (!Number.isFinite(minimumAreaSquareMeters) || minimumAreaSquareMeters <= 0) {
+    throw new Error('invalid_minimum_area_square_meters');
+  }
+
+  const stripCount = Number(requestedStripCount);
+  if (!Number.isInteger(stripCount) || stripCount < 2) throw new Error('invalid_strip_count');
+
+  const ring = normalizeRing(inputRing);
+  const originalAreaSquareMeters = ringAreaSquareMeters(ring);
+  if (originalAreaSquareMeters < minimumAreaSquareMeters) {
+    return Object.freeze({
+      allowed: false,
+      reason: 'aggregate_polygon_below_minimum_area',
+      originalAreaSquareMeters,
+      minimumAreaSquareMeters,
+      parts: Object.freeze([]),
+      partAreasSquareMeters: Object.freeze([]),
+    });
+  }
+
+  const bounds = boundsOfRing(ring);
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  if (!(width > 0) || !(height > 0)) throw new Error('degenerate_polygon');
+
+  const axis = width >= height ? 'X' : 'Y';
+  const span = axis === 'X' ? width : height;
+  const margin = Math.max(width, height) + 1;
+  const subject = [ring];
+  const parts = [];
+  const cuts = [];
+
+  for (let index = 0; index < stripCount; index += 1) {
+    const start = (axis === 'X' ? bounds.minX : bounds.minY) + (span * index / stripCount);
+    const end = (axis === 'X' ? bounds.minX : bounds.minY) + (span * (index + 1) / stripCount);
+    cuts.push([start, end]);
+
+    const clip = axis === 'X'
+      ? rectangle(start, bounds.minY - margin, end, bounds.maxY + margin)
+      : rectangle(bounds.minX - margin, start, bounds.maxX + margin, end);
+    const stripParts = exteriorRingsFromMultiPolygon(polygonClipping.intersection(subject, clip));
+    parts.push(...stripParts);
+  }
+
+  if (parts.length < 2) {
+    return Object.freeze({
+      allowed: false,
+      reason: 'aggregate_polygon_split_invalid',
+      axis,
+      stripCount,
+      cuts: Object.freeze(cuts),
+      originalAreaSquareMeters,
+      minimumAreaSquareMeters,
+      parts: Object.freeze([]),
+      partAreasSquareMeters: Object.freeze([]),
+    });
+  }
+
+  return validateAggregateParts(parts, originalAreaSquareMeters, minimumAreaSquareMeters, {
+    axis,
+    stripCount,
+    cuts: Object.freeze(cuts),
+  });
+}
+
 function splitRingForAggregate(inputRing, options = {}) {
   const minimumAreaSquareMeters = Number(options.minimumAreaSquareMeters ?? AGGREGATE_MIN_AREA_SQUARE_METERS);
   if (!Number.isFinite(minimumAreaSquareMeters) || minimumAreaSquareMeters <= 0) {
@@ -132,36 +231,9 @@ function splitRingForAggregate(inputRing, options = {}) {
   }
 
   const split = splitRingAtMidpoint(ring);
-  const partAreasSquareMeters = split.parts.map((part) => ringAreaSquareMeters(part));
-  const undersizedIndexes = partAreasSquareMeters
-    .map((area, index) => ({ area, index }))
-    .filter(({ area }) => area < minimumAreaSquareMeters)
-    .map(({ index }) => index);
-
-  if (undersizedIndexes.length > 0) {
-    return Object.freeze({
-      allowed: false,
-      reason: 'aggregate_partition_would_create_undersized_component',
-      axis: split.axis,
-      split: split.split,
-      originalAreaSquareMeters,
-      minimumAreaSquareMeters,
-      parts: Object.freeze([]),
-      partAreasSquareMeters: Object.freeze(partAreasSquareMeters),
-      undersizedIndexes: Object.freeze(undersizedIndexes),
-    });
-  }
-
-  return Object.freeze({
-    allowed: true,
-    reason: null,
+  return validateAggregateParts(split.parts, originalAreaSquareMeters, minimumAreaSquareMeters, {
     axis: split.axis,
     split: split.split,
-    originalAreaSquareMeters,
-    minimumAreaSquareMeters,
-    parts: split.parts,
-    partAreasSquareMeters: Object.freeze(partAreasSquareMeters),
-    undersizedIndexes: Object.freeze([]),
   });
 }
 
@@ -173,4 +245,5 @@ module.exports = {
   ringAreaSquareMeters,
   splitRingAtMidpoint,
   splitRingForAggregate,
+  splitRingIntoStripsForAggregate,
 };

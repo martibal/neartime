@@ -5,12 +5,14 @@ const {
   normalizeRing,
   ringAreaSquareMeters,
   splitRingForAggregate,
+  splitRingIntoStripsForAggregate,
 } = require('./polygonPartition');
 
 const DEFAULTS = Object.freeze({
   maxIdsPerPolygon: 100,
   maxDepth: 8,
   maxAggregateCalls: 64,
+  maxSplitParts: 8,
   minimumAreaSquareMeters: AGGREGATE_MIN_AREA_SQUARE_METERS,
 });
 
@@ -40,6 +42,7 @@ function assertOptions(options) {
   const maxIdsPerPolygon = Number(options.maxIdsPerPolygon);
   const maxDepth = Number(options.maxDepth);
   const maxAggregateCalls = Number(options.maxAggregateCalls);
+  const maxSplitParts = Number(options.maxSplitParts);
   const minimumAreaSquareMeters = Number(options.minimumAreaSquareMeters);
 
   if (!Number.isInteger(maxIdsPerPolygon) || maxIdsPerPolygon <= 0 || maxIdsPerPolygon > 100) {
@@ -47,6 +50,7 @@ function assertOptions(options) {
   }
   if (!Number.isInteger(maxDepth) || maxDepth < 0) throw makeError('invalid_max_depth');
   if (!Number.isInteger(maxAggregateCalls) || maxAggregateCalls <= 0) throw makeError('invalid_max_aggregate_calls');
+  if (!Number.isInteger(maxSplitParts) || maxSplitParts < 2 || maxSplitParts > 16) throw makeError('invalid_max_split_parts');
   if (!Number.isFinite(minimumAreaSquareMeters) || minimumAreaSquareMeters <= 0) {
     throw makeError('invalid_minimum_area_square_meters');
   }
@@ -91,6 +95,24 @@ async function enumeratePolygonCandidates({
     return aggregateSearch(args);
   }
 
+  function chooseSplit(currentRing, count) {
+    const desiredParts = Math.max(2, Math.min(
+      options.maxSplitParts,
+      Math.ceil(count / options.maxIdsPerPolygon),
+    ));
+
+    if (desiredParts > 2) {
+      const fanout = splitRingIntoStripsForAggregate(currentRing, desiredParts, {
+        minimumAreaSquareMeters: options.minimumAreaSquareMeters,
+      });
+      if (fanout.allowed && Array.isArray(fanout.parts) && fanout.parts.length >= 2) return fanout;
+    }
+
+    return splitRingForAggregate(currentRing, {
+      minimumAreaSquareMeters: options.minimumAreaSquareMeters,
+    });
+  }
+
   async function visit(currentRing, depth, ordinal, isRoot = false) {
     const countStepKey = `${searchKey}:polygon-count:d${depth}:n${ordinal}`;
     const countPayload = await callAggregate({
@@ -128,13 +150,11 @@ async function enumeratePolygonCandidates({
 
     if (depth >= options.maxDepth) throw makeError('aggregate_partition_depth_exhausted');
 
-    const split = splitRingForAggregate(currentRing, {
-      minimumAreaSquareMeters: options.minimumAreaSquareMeters,
-    });
+    const split = chooseSplit(currentRing, count);
     if (!split.allowed) throw makeError(split.reason || 'aggregate_polygon_split_rejected');
     if (!Array.isArray(split.parts) || split.parts.length < 2) throw makeError('aggregate_polygon_split_invalid');
 
-    let childOrdinal = ordinal * 10;
+    let childOrdinal = ordinal * 100;
     for (const part of split.parts) {
       childOrdinal += 1;
       await visit(part, depth + 1, childOrdinal, false);
