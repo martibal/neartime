@@ -3,7 +3,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { splitRingAtMidpoint } = require('./lib/polygonPartition');
+const {
+  AGGREGATE_MIN_AREA_SQUARE_METERS,
+  ringAreaSquareMeters,
+  splitRingAtMidpoint,
+  splitRingForAggregate,
+} = require('./lib/polygonPartition');
 
 function signedArea(ring) {
   let sum = 0;
@@ -131,4 +136,70 @@ test('actual Oslo isochrone-shaped concave ring splits without self-intersection
   assert.ok(result.parts.length >= 2);
   assert.ok(Math.abs(splitArea - originalArea) < 1e-10);
   for (const part of result.parts) assertSimpleRing(part);
+});
+
+test('metric area calculation is in the expected range for a small Oslo polygon', () => {
+  const ring = [
+    [10.75, 59.91],
+    [10.751, 59.91],
+    [10.751, 59.911],
+    [10.75, 59.911],
+    [10.75, 59.91],
+  ];
+
+  const area = ringAreaSquareMeters(ring);
+  assert.ok(area > 6000 && area < 6500, `unexpected area ${area}`);
+});
+
+test('aggregate split is allowed only when every emitted component clears provider minimum area', () => {
+  const ring = [
+    [10.75, 59.91],
+    [10.752, 59.91],
+    [10.752, 59.912],
+    [10.75, 59.912],
+    [10.75, 59.91],
+  ];
+
+  const result = splitRingForAggregate(ring);
+  assert.equal(result.allowed, true);
+  assert.equal(result.reason, null);
+  assert.ok(result.parts.length >= 2);
+  assert.equal(result.undersizedIndexes.length, 0);
+  for (const area of result.partAreasSquareMeters) {
+    assert.ok(area >= AGGREGATE_MIN_AREA_SQUARE_METERS);
+  }
+});
+
+test('aggregate split fails closed instead of dropping an undersized component', () => {
+  const ring = [
+    [10.75, 59.91],
+    [10.751, 59.91],
+    [10.751, 59.9103],
+    [10.75, 59.9103],
+    [10.75, 59.91],
+  ];
+
+  const originalArea = ringAreaSquareMeters(ring);
+  assert.ok(originalArea > AGGREGATE_MIN_AREA_SQUARE_METERS);
+
+  const result = splitRingForAggregate(ring);
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason, 'aggregate_partition_would_create_undersized_component');
+  assert.equal(result.parts.length, 0);
+  assert.ok(result.undersizedIndexes.length > 0);
+});
+
+test('aggregate polygon below provider minimum area fails closed before partitioning', () => {
+  const ring = [
+    [10.75, 59.91],
+    [10.7504, 59.91],
+    [10.7504, 59.9104],
+    [10.75, 59.9104],
+    [10.75, 59.91],
+  ];
+
+  const result = splitRingForAggregate(ring);
+  assert.equal(result.allowed, false);
+  assert.equal(result.reason, 'aggregate_polygon_below_minimum_area');
+  assert.equal(result.parts.length, 0);
 });
