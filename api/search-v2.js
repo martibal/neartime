@@ -7,9 +7,9 @@ const {
   resolveEntitlementSession,
 } = require('./lib/entitlements');
 const { runCoverageSearchV2, CATEGORY_TYPES_V1 } = require('./lib/coverageSearchV2');
+const { buildCoverageEnvelope } = require('./lib/coverageGeometry');
 
 const TRAVEL_MODES = new Set(['Walk', 'Drive', 'Bike']);
-const RADIUS_METERS_PER_MINUTE = Object.freeze({ Walk: 150, Bike: 600, Drive: 2500 });
 const RESULT_LIMIT = 20;
 
 function send(res, status, payload) {
@@ -23,11 +23,6 @@ function enabled(name) {
 function sanitize(value, min = 1, max = 160) {
   const text = typeof value === 'string' ? value.trim() : '';
   return text.length >= min && text.length <= max ? text : null;
-}
-
-function radiusFor(query) {
-  const raw = RADIUS_METERS_PER_MINUTE[query.travelMode] * Number(query.maxMinutes);
-  return Math.min(50000, Math.max(500, raw));
 }
 
 function validate(body) {
@@ -48,7 +43,7 @@ function validate(body) {
   return null;
 }
 
-function canonicalRequestHash(body) {
+function canonicalRequestHash(body, geometry) {
   return sha256Hex(JSON.stringify({
     query: {
       category: body.query.category,
@@ -62,6 +57,11 @@ function canonicalRequestHash(body) {
     origin: {
       latitude: Number(body.origin.latitude),
       longitude: Number(body.origin.longitude),
+    },
+    coverageGeometry: {
+      version: geometry.version,
+      radiusMeters: geometry.radiusMeters,
+      maxStraightLineKmh: geometry.maxStraightLineKmh,
     },
   }));
 }
@@ -103,6 +103,13 @@ module.exports = async function handler(req, res) {
   const validationError = validate(req.body);
   if (validationError) return send(res, 400, { error: validationError });
 
+  let geometry;
+  try {
+    geometry = buildCoverageEnvelope(req.body.query);
+  } catch (error) {
+    return send(res, 503, { error: error?.code || 'coverage_geometry_failed' });
+  }
+
   const deviceId = sanitize(req.headers['x-neartime-device-id'], 1, 128);
   const idempotencyKey = sanitize(req.headers['x-neartime-idempotency-key'], 8, 160);
   const rawSession = sanitize(req.headers['x-neartime-entitlement-session'], 8, 512);
@@ -116,7 +123,7 @@ module.exports = async function handler(req, res) {
     const session = await resolveEntitlementSession(rawSession);
     if (!session?.entitlementHash) return send(res, 401, { error: 'invalid_or_expired_entitlement_session' });
 
-    const requestHash = canonicalRequestHash(req.body);
+    const requestHash = canonicalRequestHash(req.body, geometry);
     const installHash = sha256Hex(`install:${deviceId}`);
     const decision = firstRow(await supabaseRpc('authorize_logical_search', {
       p_install_hash: installHash,
@@ -144,7 +151,7 @@ module.exports = async function handler(req, res) {
       supabaseRpc,
       origin: req.body.origin,
       query: req.body.query,
-      radiusMeters: radiusFor(req.body.query),
+      radiusMeters: geometry.radiusMeters,
       searchKey: idempotencyKey,
       fetchImpl: global.fetch,
     });
@@ -165,6 +172,7 @@ module.exports = async function handler(req, res) {
       candidateCount: result.candidateCount,
       qualifiedCount: result.places.length,
       providerCalls: result.providerCalls,
+      coverageGeometry: geometry,
       accessMode: 'paid',
     };
 
