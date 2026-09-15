@@ -1,11 +1,17 @@
 'use strict';
 
+const {
+  retrievalCostMicroUsd,
+  shouldEscalateNearby,
+} = require('./retrievalCostPlanner');
+
 const DEFAULTS = Object.freeze({
   leafTarget: 20,
   maxDepth: 5,
   maxAggregateCalls: 48,
   maxNearbyCalls: 32,
   maxFallbackCalls: 64,
+  adaptiveNearbyStageCalls: 0,
 });
 
 const RESULT_STATUS = Object.freeze({
@@ -200,9 +206,16 @@ async function enumerateLeafCells({ rootCircle, categoryTypes, aggregateSearch, 
   return leaves;
 }
 
-async function retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, hooks, budget, searchKey }) {
+async function retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, hooks, budget, searchKey, options }) {
   if (leaf.count === 0) {
-    return { verified: !leaf.unverifiableReason, reason: leaf.unverifiableReason || null, expectedIds: [], retrievedIds: [], places: [] };
+    return {
+      verified: !leaf.unverifiableReason,
+      reason: leaf.unverifiableReason || null,
+      expectedIds: [],
+      retrievedIds: [],
+      places: [],
+      economics: null,
+    };
   }
 
   requireBudget(budget.nearbyCalls, budget.maxNearbyCalls, 'nearby_call_budget_exhausted');
@@ -228,10 +241,48 @@ async function retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, h
       expectedIds: leaf.expectedIds,
       retrievedIds: [...byId.keys()],
       places: [...byId.values()],
+      economics: null,
     };
   }
 
   const missing = leaf.expectedIds.filter((id) => !byId.has(id));
+  const economics = {
+    nearbyCallsAlreadySpent: 1,
+    missingCount: missing.length,
+    currentPathMicroUsd: retrievalCostMicroUsd({ nearbyCalls: 1, missingCount: missing.length }),
+    adaptiveDecision: null,
+  };
+
+  const proposedAdaptiveCalls = Number(options.adaptiveNearbyStageCalls || 0);
+  if (!Number.isInteger(proposedAdaptiveCalls) || proposedAdaptiveCalls < 0) {
+    return {
+      verified: false,
+      reason: 'invalid_adaptive_nearby_stage_calls',
+      expectedIds: leaf.expectedIds,
+      retrievedIds: [...byId.keys()],
+      places: [...byId.values()],
+      economics,
+    };
+  }
+
+  if (missing.length > 0 && proposedAdaptiveCalls > 0) {
+    economics.adaptiveDecision = shouldEscalateNearby({
+      missingCount: missing.length,
+      additionalNearbyCalls: proposedAdaptiveCalls,
+    });
+
+    if (economics.adaptiveDecision.escalate) {
+      return {
+        verified: false,
+        reason: 'adaptive_nearby_stage_not_implemented',
+        expectedIds: leaf.expectedIds,
+        retrievedIds: [...byId.keys()],
+        places: [...byId.values()],
+        economics,
+      };
+    }
+  }
+
   for (const placeId of missing) {
     requireBudget(budget.fallbackCalls, budget.maxFallbackCalls, 'fallback_call_budget_exhausted');
     const stepKey = `${searchKey}:details:${placeId}`;
@@ -252,6 +303,7 @@ async function retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, h
     expectedIds: leaf.expectedIds,
     retrievedIds: [...byId.keys()],
     places: [...byId.values()],
+    economics,
   };
 }
 
@@ -291,21 +343,24 @@ async function runCoverageSearch({
       expectedCount: null,
       retrievedCount: 0,
       providerCalls: { ...budget },
+      retrievalEconomics: [],
     };
   }
 
   const globalPlaces = new Map();
   const expectedIds = new Set();
   const coverageFailures = [];
+  const retrievalEconomics = [];
 
   for (const leaf of leaves) {
     for (const id of leaf.expectedIds || []) expectedIds.add(id);
     try {
-      const retrieval = await retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, hooks, budget, searchKey });
+      const retrieval = await retrieveLeaf({ leaf, categoryTypes, nearbySearch, placeDetails, hooks, budget, searchKey, options });
       for (const place of retrieval.places) {
         const id = normalizePlaceId(place?.id ?? place?.name);
         if (id) globalPlaces.set(id, place);
       }
+      if (retrieval.economics) retrievalEconomics.push({ cellKey: leaf.cellKey, ...retrieval.economics });
       if (!retrieval.verified) coverageFailures.push(`${leaf.cellKey}:${retrieval.reason}`);
     } catch (error) {
       coverageFailures.push(`${leaf.cellKey}:${error?.code || error?.message || 'retrieval_failed'}`);
@@ -326,6 +381,7 @@ async function runCoverageSearch({
       expectedCount: expectedIds.size,
       retrievedCount: candidates.length,
       providerCalls: { ...budget },
+      retrievalEconomics,
     };
   }
 
@@ -338,6 +394,7 @@ async function runCoverageSearch({
     expectedCount: expectedIds.size,
     retrievedCount: candidates.length,
     providerCalls: { ...budget },
+    retrievalEconomics,
   };
 }
 
