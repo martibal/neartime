@@ -28,7 +28,24 @@ If the product is marketed as unlimited search, then NearTime can only guarantee
 
 Measured searches costing dollars each are therefore not merely expensive; they are evidence that the current search architecture is commercially invalid for a low-price consumer subscription and must be redesigned.
 
-## Invariant 3 — coverage and economics are both hard constraints
+## Invariant 3 — development and test spend must also be fail-closed
+
+NearTime must be cheap enough to develop and validate before launch without creating uncontrolled provider spend for the developer.
+
+Development, staging and manual live-probe traffic must have a separate hard provider-cost budget that is enforced before any billable external call is made. The test budget must be small enough that repeated development searches cannot accumulate into hundreds of NOK of spend simply because production has not launched yet.
+
+The development cost gate must be independent of the production customer-profit wallet. A test fixture, probe token or internal device must never inherit a large synthetic wallet that makes expensive searches appear acceptable.
+
+Paid live probes are allowed only when all of the following are true:
+
+1. the specific probe has a justified purpose that cannot be validated with mocks, recorded responses or deterministic unit/integration tests;
+2. a conservative worst-case cost for that single probe is reserved against the remaining development test budget before execution;
+3. the cumulative development spend cap for the configured period cannot be exceeded by concurrency, retries or repeated manual runs;
+4. the probe cost is representative of a search architecture that is still commercially plausible, rather than repeatedly validating a path already known to be too expensive.
+
+Once a live path is shown to be commercially invalid on cost, further paid probing of that same architecture must stop until the cost model has been redesigned. Regression testing should then use mocks, fixtures, recorded provider responses or non-billable paths wherever possible.
+
+## Invariant 4 — coverage and economics are both hard constraints
 
 NearTime's completeness requirement does not override the economic invariant, and the economic invariant does not permit silently incomplete results.
 
@@ -49,6 +66,8 @@ Before any billable provider work begins, the server must determine and atomical
 4. admitting the search cannot make the customer contribution-negative even if the customer fully exercises all remaining usage rights promised by the plan;
 5. retries, fallbacks, concurrency and provider failures are included in the reservation bound.
 
+For development/staging traffic, the same reserve-before-call rule applies against the separate development test budget rather than a production customer wallet.
+
 Only then may the first billable provider call execute.
 
 Actual usage must be committed after the search and unused reservation released. Retries, duplicate requests, concurrency, fallbacks, and provider errors must not create an unreserved path around the invariant.
@@ -65,6 +84,8 @@ For example, a low-price monthly plan cannot include a volume of live searches w
 
 No production feature that can cause billable provider traffic is complete until tests demonstrate its worst-case admission bound and fail-closed behavior at both search level and billing-period/customer level.
 
-Live probes are validation tools only. A large test wallet must never be interpreted as an acceptable production unit cost.
+No development workflow that can cause billable provider traffic is complete until it has an independently enforced cumulative test-spend cap and a per-probe worst-case reservation.
+
+Live probes are validation tools only. A large test wallet must never be interpreted as an acceptable production unit cost, and development testing must not be permitted to accumulate material spend simply because the calls are marked as tests.
 
 The production feature gate must remain closed until the search architecture, product pricing and usage entitlement together satisfy the customer-profit invariant with conservative assumptions.
