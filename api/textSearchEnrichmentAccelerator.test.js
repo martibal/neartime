@@ -8,6 +8,7 @@ const {
   SKU,
   createTextSearchEnrichmentAccelerator,
   estimateObservedEnrichmentCost,
+  maxPagesWithinSpend,
   reconcileAggregateCandidates,
 } = require('./lib/textSearchEnrichmentAccelerator');
 
@@ -61,6 +62,16 @@ test('cost estimate keeps overlap-dependent Details fallback explicit', () => {
   assert.equal(withRouting.totalMicroUsd, 120000);
 });
 
+test('spend cap converts directly into a hard maximum page count', () => {
+  assert.equal(maxPagesWithinSpend({ includeRouting: false, maxSpendMicroUsd: 0 }), 0);
+  assert.equal(maxPagesWithinSpend({ includeRouting: false, maxSpendMicroUsd: 34999 }), 0);
+  assert.equal(maxPagesWithinSpend({ includeRouting: false, maxSpendMicroUsd: 35000 }), 1);
+  assert.equal(maxPagesWithinSpend({ includeRouting: false, maxSpendMicroUsd: 70000 }), 2);
+  assert.equal(maxPagesWithinSpend({ includeRouting: false, maxSpendMicroUsd: 999999 }), 3);
+  assert.equal(maxPagesWithinSpend({ includeRouting: true, maxSpendMicroUsd: 79999 }), 1);
+  assert.equal(maxPagesWithinSpend({ includeRouting: true, maxSpendMicroUsd: 80000 }), 2);
+});
+
 test('scenario A paginates Text Search and preserves server-side filters', async () => {
   const requests = [];
   const responses = [
@@ -111,6 +122,74 @@ test('scenario A paginates Text Search and preserves server-side filters', async
   assert.equal(requests[0].headers['X-Goog-FieldMask'].includes('routingSummaries'), false);
 });
 
+test('target-aware paging stops before paying for an unnecessary second page', async () => {
+  let calls = 0;
+  const accelerator = createTextSearchEnrichmentAccelerator({
+    apiKey: 'test-key',
+    fetchImpl: async () => {
+      calls += 1;
+      return {
+        ok: true,
+        json: async () => ({
+          places: [{ id: 'a' }, { id: 'b' }, { id: 'outside' }],
+          nextPageToken: 'page-2',
+        }),
+        text: async () => '',
+      };
+    },
+  });
+
+  const result = await accelerator.searchPages({
+    textQuery: 'grocery store',
+    includedType: 'grocery_store',
+    locationBiasCircle: {
+      center: { latitude: 59.9139, longitude: 10.7522 },
+      radius: 2500,
+    },
+    targetPlaceIds: ['a', 'b'],
+    pageLimit: 3,
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(result.calls, 1);
+  assert.equal(result.targetSatisfied, true);
+  assert.equal(result.matchedTargetCount, 2);
+  assert.equal(result.targetCount, 2);
+  assert.equal(result.nextPageToken, 'page-2');
+  assert.equal(result.exhausted, false);
+});
+
+test('spend cap prevents Text Search from exceeding its pre-authorized budget', async () => {
+  let calls = 0;
+  const accelerator = createTextSearchEnrichmentAccelerator({
+    apiKey: 'test-key',
+    fetchImpl: async () => {
+      calls += 1;
+      return {
+        ok: true,
+        json: async () => ({ places: [{ id: 'a' }], nextPageToken: 'still-more' }),
+        text: async () => '',
+      };
+    },
+  });
+
+  const result = await accelerator.searchPages({
+    textQuery: 'restaurant',
+    includedType: 'restaurant',
+    locationBiasCircle: {
+      center: { latitude: 59.9139, longitude: 10.7522 },
+      radius: 5000,
+    },
+    pageLimit: 3,
+    maxSpendMicroUsd: 70000,
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(result.calls, 2);
+  assert.equal(result.stoppedBySpendCap, true);
+  assert.equal(result.exhausted, false);
+});
+
 test('scenario B aligns routing summaries to returned places and uses Atmosphere SKU', async () => {
   const accelerator = createTextSearchEnrichmentAccelerator({
     apiKey: 'test-key',
@@ -151,7 +230,7 @@ test('scenario B aligns routing summaries to returned places and uses Atmosphere
   assert.equal(result.places[1].routingSummary.legs[0].duration, '180s');
 });
 
-test('page limit is fail-closed at Google's documented maximum of three pages', async () => {
+test('page limit is fail-closed at Google\'s documented maximum of three pages', async () => {
   const accelerator = createTextSearchEnrichmentAccelerator({
     apiKey: 'test-key',
     fetchImpl: async () => ({
