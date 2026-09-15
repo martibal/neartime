@@ -3,6 +3,7 @@
 const AGGREGATE_ENDPOINT = 'https://areainsights.googleapis.com/v1:computeInsights';
 const NEARBY_ENDPOINT = 'https://places.googleapis.com/v1/places:searchNearby';
 const PLACE_DETAILS_BASE = 'https://places.googleapis.com/v1/places';
+const AGGREGATE_MAX_POLYGON_VERTICES = 7000;
 
 const SKU = Object.freeze({
   AGGREGATE: '546C-66B2-E5A6',
@@ -50,6 +51,51 @@ function validateCircle(circle) {
   return { center: { latitude, longitude }, radius };
 }
 
+function signedRingArea(ring) {
+  let sum = 0;
+  for (let index = 0; index < ring.length - 1; index += 1) {
+    const [x1, y1] = ring[index];
+    const [x2, y2] = ring[index + 1];
+    sum += (x1 * y2) - (x2 * y1);
+  }
+  return sum / 2;
+}
+
+function validatePolygon(polygon) {
+  if (!Array.isArray(polygon) || polygon.length < 4) throw new Error('invalid_polygon_ring');
+  if (polygon.length > AGGREGATE_MAX_POLYGON_VERTICES) throw new Error('aggregate_polygon_vertex_limit_exceeded');
+
+  const ring = polygon.map((point) => {
+    if (!Array.isArray(point) || point.length < 2) throw new Error('invalid_polygon_coordinate');
+    const longitude = Number(point[0]);
+    const latitude = Number(point[1]);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) throw new Error('invalid_polygon_latitude');
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new Error('invalid_polygon_longitude');
+    return [longitude, latitude];
+  });
+
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) throw new Error('polygon_must_be_closed');
+
+  const unique = new Set(ring.slice(0, -1).map(([longitude, latitude]) => `${longitude}:${latitude}`));
+  if (unique.size < 3) throw new Error('polygon_requires_three_unique_vertices');
+
+  for (let index = 1; index < ring.length; index += 1) {
+    if (ring[index][0] === ring[index - 1][0] && ring[index][1] === ring[index - 1][1]) {
+      throw new Error('polygon_has_consecutive_duplicate_vertices');
+    }
+  }
+
+  if (signedRingArea(ring) < 0) {
+    const open = ring.slice(0, -1).reverse();
+    open.push([...open[0]]);
+    return open;
+  }
+
+  return ring;
+}
+
 function validateTypes(includedTypes) {
   if (!Array.isArray(includedTypes) || includedTypes.length === 0) throw new Error('invalid_included_types');
   const types = [...new Set(includedTypes.map((value) => String(value || '').trim()).filter(Boolean))];
@@ -77,10 +123,31 @@ function createGoogleCoverageProvider({ apiKey, origin, travelMode, fetchImpl = 
   if (!Number.isFinite(routeOrigin.latitude) || !Number.isFinite(routeOrigin.longitude)) throw new Error('invalid_origin');
   const googleTravelMode = normalizeTravelMode(travelMode);
 
-  async function aggregateSearch({ circle, includedTypes, includePlaceIds }) {
-    const safeCircle = validateCircle(circle);
+  async function aggregateSearch({ circle, polygon, includedTypes, includePlaceIds }) {
+    if (Boolean(circle) === Boolean(polygon)) throw new Error('aggregate_requires_exactly_one_location_shape');
     const types = validateTypes(includedTypes);
     const insights = includePlaceIds ? ['INSIGHT_COUNT', 'INSIGHT_PLACES'] : ['INSIGHT_COUNT'];
+
+    let locationFilter;
+    if (polygon) {
+      const safePolygon = validatePolygon(polygon);
+      locationFilter = {
+        customArea: {
+          polygon: {
+            coordinates: safePolygon.map(([longitude, latitude]) => ({ latitude, longitude })),
+          },
+        },
+      };
+    } else {
+      const safeCircle = validateCircle(circle);
+      locationFilter = {
+        circle: {
+          latLng: safeCircle.center,
+          radius: safeCircle.radius,
+        },
+      };
+    }
+
     const response = await fetchImpl(AGGREGATE_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -90,12 +157,7 @@ function createGoogleCoverageProvider({ apiKey, origin, travelMode, fetchImpl = 
       body: JSON.stringify({
         insights,
         filter: {
-          locationFilter: {
-            circle: {
-              latLng: safeCircle.center,
-              radius: safeCircle.radius,
-            },
-          },
+          locationFilter,
           typeFilter: { includedTypes: types },
           operatingStatus: ['OPERATING_STATUS_OPERATIONAL'],
         },
@@ -160,6 +222,7 @@ function createGoogleCoverageProvider({ apiKey, origin, travelMode, fetchImpl = 
 
 module.exports = {
   AGGREGATE_ENDPOINT,
+  AGGREGATE_MAX_POLYGON_VERTICES,
   DETAILS_FIELD_MASK,
   NEARBY_ENDPOINT,
   NEARBY_FIELD_MASK,
@@ -167,4 +230,5 @@ module.exports = {
   SKU,
   createGoogleCoverageProvider,
   normalizeTravelMode,
+  validatePolygon,
 };
