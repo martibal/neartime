@@ -20,6 +20,7 @@ const TRAVEL_MODES = new Set(['Walk', 'Drive', 'Bike']);
 const MAX_MINUTES = new Set([5, 10, 15, 20]);
 const MINIMUM_REVIEWS = new Set([0, 100, 300, 1000]);
 const OPEN_FOR_MINUTES = new Set([0, 60, 120, 180]);
+const PRODUCT_TOP_K = 10;
 
 // The production Top-K route remains feature-gated for ordinary traffic.
 // The bounded GitHub Actions live probe may pass the disabled gate only when
@@ -179,7 +180,7 @@ module.exports = async function handler(req, res) {
       query: req.body.query,
       supabaseRpc,
       fetchImpl: global.fetch,
-      k: 20,
+      k: PRODUCT_TOP_K,
     });
 
     if (result.status !== COMPLETE_TOP_K) {
@@ -236,3 +237,4 @@ module.exports = async function handler(req, res) {
 module.exports.canUseDisabledTopKGate = canUseDisabledTopKGate;
 module.exports.LIVE_PROBE_DEVICE_ID = LIVE_PROBE_DEVICE_ID;
 module.exports.LIVE_PROBE_ENTITLEMENT_HASH = LIVE_PROBE_ENTITLEMENT_HASH;
+module.exports.PRODUCT_TOP_K = PRODUCT_TOP_K;
