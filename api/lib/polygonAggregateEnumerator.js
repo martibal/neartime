@@ -103,20 +103,30 @@ async function enumeratePolygonCandidates({
       Math.ceil(count / options.maxIdsPerPolygon),
     ));
 
-    if (desiredParts > 2) {
-      const fanout = splitRingIntoStripsForAggregate(currentRing, desiredParts, {
+    // Try the ideal fanout first, then progressively smaller fanouts. This avoids
+    // jumping straight from (for example) 7-way to binary when only the 7-way
+    // geometry violates Aggregate's minimum-area constraint.
+    for (let parts = desiredParts; parts >= 3; parts -= 1) {
+      const fanout = splitRingIntoStripsForAggregate(currentRing, parts, {
         minimumAreaSquareMeters: options.minimumAreaSquareMeters,
       });
       if (fanout.allowed && Array.isArray(fanout.parts) && fanout.parts.length >= 2) {
-        return { ...fanout, desiredParts, strategy: 'multiway' };
+        return {
+          ...fanout,
+          desiredParts,
+          selectedParts: parts,
+          strategy: parts === desiredParts ? 'multiway' : 'multiway_fallback',
+        };
       }
     }
 
+    const binary = splitRingForAggregate(currentRing, {
+      minimumAreaSquareMeters: options.minimumAreaSquareMeters,
+    });
     return {
-      ...splitRingForAggregate(currentRing, {
-        minimumAreaSquareMeters: options.minimumAreaSquareMeters,
-      }),
+      ...binary,
       desiredParts,
+      selectedParts: Array.isArray(binary.parts) ? binary.parts.length : 0,
       strategy: 'binary_fallback',
     };
   }
@@ -143,6 +153,7 @@ async function enumeratePolygonCandidates({
       outcome: null,
       strategy: null,
       desiredParts: null,
+      selectedParts: null,
       emittedParts: null,
     };
     diagnostics.push(node);
@@ -182,6 +193,7 @@ async function enumeratePolygonCandidates({
     const split = chooseSplit(currentRing, count);
     node.strategy = split.strategy || null;
     node.desiredParts = split.desiredParts ?? null;
+    node.selectedParts = split.selectedParts ?? null;
     node.emittedParts = Array.isArray(split.parts) ? split.parts.length : 0;
     node.outcome = split.allowed ? 'split' : (split.reason || 'split_rejected');
     if (!split.allowed) throw makeError(split.reason || 'aggregate_polygon_split_rejected');
