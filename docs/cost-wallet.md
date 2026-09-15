@@ -2,7 +2,17 @@
 
 ## Economic invariant
 
-No external Google Places call is allowed unless NearTime has already reserved enough funded wallet units to cover the worst-case provider cost of that logical search.
+The wallet is not merely a technical spend bucket. It exists to enforce NearTime's permanent commercial unit economics.
+
+The normative rules are defined in [`ECONOMIC_INVARIANTS.md`](ECONOMIC_INVARIANTS.md):
+
+1. A customer may never generate more provider/API cost than the net revenue allocated to that customer for the same billing period.
+2. One logical customer search may never cost more than NOK 10 equivalent in provider COGS.
+3. A search must fail closed before billable work if either bound cannot be proven in advance.
+
+Therefore, **having enough wallet balance is necessary but not sufficient**. A search is invalid even if a test or customer wallet could technically fund it when its worst-case cost exceeds the NOK 10 per-search ceiling or would violate the customer-period revenue bound.
+
+No external Google provider call is allowed unless NearTime has already reserved enough funded wallet units to cover the conservative worst-case provider cost of that logical search **and** both permanent economic invariants remain satisfied after that reservation.
 
 A subscription wallet is pseudonymous. It is keyed by a server-side HMAC derived from a verified App Store / Google Play entitlement. NearTime does not need a name, email address or password for quota accounting.
 
@@ -26,6 +36,8 @@ Raw store identifiers are not stored in the wallet tables. Only HMAC hashes are 
 
 The available balance is derived. It is never stored as a mutable balance column. Expired included allocations disappear from available capacity without carrying prior-period usage into the next billing period. Top-up credits persist until consumed.
 
+The amount allocated to provider COGS for a customer billing period must itself be derived from commercially valid net revenue. It must never be configured merely because a technical wallet can hold a larger number.
+
 ## Search authorization
 
 A search requires all of these before Google is contacted:
@@ -33,16 +45,19 @@ A search requires all of these before Google is contacted:
 1. Valid pseudonymous entitlement session.
 2. Logical-search idempotency key.
 3. Active/grace subscription wallet.
-4. Enough wallet balance to reserve the full worst-case search cost.
-5. Per-call cost limit.
-6. Per-device daily/rate limits.
-7. Per-entitlement daily/rate limits across all devices.
-8. Global daily/monthly limits.
-9. External-call switch enabled and emergency kill switch disabled.
+4. A conservative worst-case provider-cost plan for the complete logical search, including retries and fallbacks.
+5. Proof that worst-case provider COGS is at or below NOK 10 equivalent.
+6. Proof that reserving the search cannot make billing-period provider COGS exceed the net revenue allocated to that customer.
+7. Enough funded wallet balance to reserve that worst case.
+8. Per-call/provider-specific cost limit.
+9. Per-device daily/rate limits.
+10. Per-entitlement daily/rate limits across all devices.
+11. Global daily/monthly limits.
+12. External-call switch enabled and emergency kill switch disabled.
 
 The wallet row and provider policy row are locked during reservation, so parallel requests cannot overdraw the same funded capacity.
 
-The current Places search can use at most three provider calls. Three units are therefore reserved before the first call. If only one call is actually used, two units are released and only one unit is committed against wallet funding.
+If any check fails, the request must fail closed before billable provider work begins. Completeness requirements do not authorize NearTime to spend past either economic invariant.
 
 ## Idempotency
 
@@ -79,7 +94,7 @@ No product grants usage automatically merely because it exists in App Store / Pl
 
 `wallet_topup_policy` maps a verified prepaid product to top-up units. `credit_verified_topup` is idempotent by store transaction hash, preventing webhook retries from crediting the same purchase twice.
 
-Until product economics are decided, these tables can remain empty/disabled. A verified subscription can then create a wallet/session but has zero funded search balance, so Google calls remain blocked.
+Until product economics are decided and encoded, these tables can remain empty/disabled. A verified subscription can then create a wallet/session but has zero funded search balance, so Google calls remain blocked.
 
 ## Required secrets
 
@@ -96,4 +111,6 @@ Never expose any of them as `EXPO_PUBLIC_*` variables.
 
 ## Current deployment safety
 
-Applying the wallet migration does not enable Google spend. Existing service policies remain fail-closed until limits, product policies and external-call switches are deliberately configured after the commercial unit economics are fixed.
+Applying the wallet migration does not enable ordinary Google spend. Existing service policies remain fail-closed until limits, product policies and external-call switches are deliberately configured after the commercial unit economics are fixed and both permanent invariants are enforced in the production admission path.
+
+A live-probe wallet may be deliberately larger for bounded testing, but that test funding must never be interpreted as an acceptable production per-search cost. Any live search above NOK 10 equivalent is a redesign signal, not a valid commercial result.
