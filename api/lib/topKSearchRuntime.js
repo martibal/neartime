@@ -80,6 +80,9 @@ function budgetQuantities({ rankingMode, travelMode, maxMinutes, minimumReviews 
   const mode = normalizeRankingMode(rankingMode);
   const plan = estimateTopKWorstCase({ rankingMode: mode, maxMinutes, k });
   const hasMinimumReviews = Number(minimumReviews) > 0;
+  const aggregate = hasMinimumReviews && mode === RANKING_MODE.RATING
+    ? plan.maxAggregateCalls * 2
+    : plan.maxAggregateCalls;
   const details = hasMinimumReviews
     ? 100
     : mode === RANKING_MODE.RATING
@@ -93,7 +96,7 @@ function budgetQuantities({ rankingMode, travelMode, maxMinutes, minimumReviews 
         ? 500
         : plan.maxRouteElements + k;
   return Object.freeze({
-    aggregate: plan.maxAggregateCalls,
+    aggregate,
     details,
     route,
     routeSkuId: routeMatrixSkuForTravelMode(travelMode),
