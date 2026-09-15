@@ -2,7 +2,11 @@
 
 const { createGoogleIsochroneEnvelopeProvider } = require('./lib/googleIsochroneEnvelopeProvider');
 const { createGoogleCoverageProvider } = require('./lib/googleCoverageProvider');
-const { runPolygonCoveragePath } = require('./lib/polygonCoveragePath');
+const { proveTopKByRating } = require('./lib/topKRatingPlanner');
+
+function toLonLatRing(points) {
+  return points.map((point) => [Number(point.longitude), Number(point.latitude)]);
+}
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -17,50 +21,67 @@ module.exports = async function handler(req, res) {
   const travelMode = 'Walk';
   const maxMinutes = 20;
   const includedTypes = ['restaurant'];
+  const k = 20;
 
   try {
     const envelopeProvider = createGoogleIsochroneEnvelopeProvider({ apiKey, fetchImpl: global.fetch });
-    const google = createGoogleCoverageProvider({ apiKey, origin, travelMode, fetchImpl: global.fetch });
+    const envelope = await envelopeProvider.getEnvelope({ origin, travelMode, maxMinutes });
 
-    const result = await runPolygonCoveragePath({
-      envelopeProvider,
-      aggregateSearch: google.aggregateSearch,
-      origin,
-      travelMode,
-      maxMinutes,
+    if (envelope.discardedHoleCount > 0) {
+      return res.status(200).json({
+        status: 'DEGRADED',
+        reason: 'isochrone_holes_not_supported_exactly',
+        polygonCount: envelope.polygonCount,
+        discardedHoleCount: envelope.discardedHoleCount,
+        travelMode,
+        maxMinutes,
+        includedTypes,
+      });
+    }
+
+    if (envelope.polygonCount !== 1) {
+      return res.status(200).json({
+        status: 'DEGRADED',
+        reason: 'live_top_k_probe_requires_single_polygon',
+        polygonCount: envelope.polygonCount,
+        discardedHoleCount: envelope.discardedHoleCount,
+        travelMode,
+        maxMinutes,
+        includedTypes,
+      });
+    }
+
+    const polygon = toLonLatRing(envelope.polygons[0]);
+    const google = createGoogleCoverageProvider({ apiKey, origin, travelMode, fetchImpl: global.fetch });
+    const result = await proveTopKByRating({
+      polygon,
       includedTypes,
-      searchKey: 'live-polygon-e2e-oslo-over100-20260915-diagnostics',
-      enumerationOptions: {
-        maxIdsPerPolygon: 100,
-        maxDepth: 6,
-        maxAggregateCalls: 24,
-      },
+      aggregateSearch: google.aggregateSearch,
+      placeDetails: google.placeDetails,
+      k,
+      maxCandidateDetails: 100,
     });
 
     return res.status(200).json({
-      verified: result.verified,
+      status: result.status,
       reason: result.reason,
-      expectedCount: result.expectedCount,
-      retrievedCount: Array.isArray(result.placeIds) ? result.placeIds.length : 0,
+      k,
+      returned: Array.isArray(result.topK) ? result.topK.length : 0,
+      candidateCount: result.candidateCount ?? null,
+      selectedThreshold: result.selectedThreshold ?? null,
       aggregateCalls: result.aggregateCalls,
-      polygonCount: result.envelope?.polygonCount ?? null,
-      discardedHoleCount: result.envelope?.discardedHoleCount ?? null,
-      envelopeProvider: result.envelope?.provider ?? null,
-      envelopeVersion: result.envelope?.version ?? null,
+      detailCalls: result.detailCalls,
+      diagnostics: result.diagnostics,
+      proof: result.proof || null,
+      polygonCount: envelope.polygonCount,
+      discardedHoleCount: envelope.discardedHoleCount,
+      envelopeProvider: envelope.provider,
+      envelopeVersion: envelope.version,
       travelMode,
       maxMinutes,
       includedTypes,
-      partitionDiagnostics: (result.polygonResults || []).map((polygon) => ({
-        polygonIndex: polygon.polygonIndex,
-        verified: polygon.verified,
-        reason: polygon.reason,
-        rootCount: polygon.rootCount,
-        aggregateCalls: polygon.aggregateCalls,
-        leafCount: polygon.leafCount,
-        diagnostics: polygon.diagnostics || [],
-      })),
     });
   } catch (error) {
-    return res.status(500).json({ error: error?.code || error?.message || 'live_polygon_e2e_failed' });
+    return res.status(500).json({ error: error?.code || error?.message || 'live_top_k_rating_e2e_failed' });
   }
 };
