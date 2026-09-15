@@ -3,6 +3,9 @@
 const ISOCHRONE_ENDPOINT = 'https://isochrones.googleapis.com/v1/isochrones:generate';
 const PROVIDER_VERSION = 'google-isochrones-preview-v1';
 const MAX_AGGREGATE_POLYGON_VERTICES = 7000;
+const DEFAULT_MAX_ATTEMPTS = 2;
+const DEFAULT_RETRY_DELAY_MS = 200;
+const TRANSIENT_HTTP_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 
 function codedError(code, detail = '') {
   const error = new Error(detail ? `${code}:${detail}` : code);
@@ -79,9 +82,31 @@ function aggregatePolygonsFromGeoJson(geoJson) {
   return { polygons, discardedHoleCount };
 }
 
-function createGoogleIsochroneEnvelopeProvider({ apiKey, fetchImpl = global.fetch, polygonFidelity = 'MEDIUM' }) {
+function isTransientHttpStatus(status) {
+  return TRANSIENT_HTTP_STATUSES.has(Number(status));
+}
+
+function shouldRetryThrownError(error) {
+  return error?.name !== 'AbortError';
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createGoogleIsochroneEnvelopeProvider({
+  apiKey,
+  fetchImpl = global.fetch,
+  polygonFidelity = 'MEDIUM',
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  retryDelayMs = DEFAULT_RETRY_DELAY_MS,
+  sleepImpl = sleep,
+}) {
   if (typeof apiKey !== 'string' || !apiKey.trim()) throw codedError('isochrone_api_key_required');
   if (typeof fetchImpl !== 'function') throw codedError('isochrone_fetch_required');
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 2) throw codedError('isochrone_invalid_max_attempts');
+  if (!Number.isFinite(retryDelayMs) || retryDelayMs < 0 || retryDelayMs > 2000) throw codedError('isochrone_invalid_retry_delay');
+  if (typeof sleepImpl !== 'function') throw codedError('isochrone_sleep_required');
 
   return {
     async getEnvelope({ origin, travelMode, maxMinutes }) {
@@ -92,7 +117,7 @@ function createGoogleIsochroneEnvelopeProvider({ apiKey, fetchImpl = global.fetc
       if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 20) throw codedError('isochrone_invalid_minutes');
 
       const googleMode = modeToGoogle(travelMode);
-      const response = await fetchImpl(ISOCHRONE_ENDPOINT, {
+      const request = {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -107,11 +132,39 @@ function createGoogleIsochroneEnvelopeProvider({ apiKey, fetchImpl = global.fetc
           enableSmoothing: false,
           polygonFidelity,
         }),
-      });
+      };
 
-      if (!response.ok) {
+      let attempts = 0;
+      let response;
+      while (attempts < maxAttempts) {
+        attempts += 1;
+        try {
+          response = await fetchImpl(ISOCHRONE_ENDPOINT, request);
+        } catch (error) {
+          if (attempts < maxAttempts && shouldRetryThrownError(error)) {
+            if (retryDelayMs > 0) await sleepImpl(retryDelayMs);
+            continue;
+          }
+          const failure = codedError('isochrone_provider_failed', `network:${String(error?.message || error).slice(0, 180)}`);
+          failure.attempts = attempts;
+          throw failure;
+        }
+
+        if (response.ok) break;
         const detail = await response.text().catch(() => '');
-        throw codedError('isochrone_provider_failed', `${response.status}:${detail.slice(0, 200)}`);
+        if (attempts < maxAttempts && isTransientHttpStatus(response.status)) {
+          if (retryDelayMs > 0) await sleepImpl(retryDelayMs);
+          continue;
+        }
+        const failure = codedError('isochrone_provider_failed', `${response.status}:${detail.slice(0, 200)}`);
+        failure.attempts = attempts;
+        throw failure;
+      }
+
+      if (!response?.ok) {
+        const failure = codedError('isochrone_provider_failed');
+        failure.attempts = attempts;
+        throw failure;
       }
 
       const payload = await response.json();
@@ -126,6 +179,8 @@ function createGoogleIsochroneEnvelopeProvider({ apiKey, fetchImpl = global.fetc
         maxMinutes: minutes,
         routingPreference: routingPreference(travelMode),
         polygonFidelity,
+        requestAttempts: attempts,
+        retriedTransientFailure: attempts > 1,
         polygons: normalized.polygons,
         polygonCount: normalized.polygons.length,
         discardedHoleCount: normalized.discardedHoleCount,
@@ -136,10 +191,14 @@ function createGoogleIsochroneEnvelopeProvider({ apiKey, fetchImpl = global.fetc
 }
 
 module.exports = {
+  DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_RETRY_DELAY_MS,
   ISOCHRONE_ENDPOINT,
   MAX_AGGREGATE_POLYGON_VERTICES,
   PROVIDER_VERSION,
+  TRANSIENT_HTTP_STATUSES,
   aggregatePolygonsFromGeoJson,
   createGoogleIsochroneEnvelopeProvider,
+  isTransientHttpStatus,
   routingPreference,
 };
