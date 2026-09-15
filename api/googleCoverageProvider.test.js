@@ -100,7 +100,16 @@ test('Aggregate polygon request emits customArea coordinates in latitude-longitu
   assert.ok(customArea);
   assert.equal(calls[0].body.filter.locationFilter.circle, undefined);
   assert.equal(customArea.polygon.coordinates.length, 5);
-  assert.deepEqual(customArea.polygon.coordinates[0], { latitude: 59.91, longitude: 10.75 });
+  assert.deepEqual(customArea.polygon.coordinates[0], customArea.polygon.coordinates.at(-1));
+  assert.deepEqual(
+    new Set(customArea.polygon.coordinates.slice(0, -1).map(({ latitude, longitude }) => `${latitude}:${longitude}`)),
+    new Set([
+      '59.91:10.75',
+      '59.92:10.75',
+      '59.92:10.76',
+      '59.91:10.76',
+    ]),
+  );
   assert.equal(result.count, 2);
   assert.deepEqual(result.placeIds, ['places/a', 'places/b']);
 
