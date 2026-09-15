@@ -28,8 +28,8 @@ test('hard rating floor is merged conservatively', () => {
   );
 });
 
-test('unsupported hard filters fail before provider work', () => {
-  assert.equal(unsupportedHardFilterReason({ minimumReviews: 100 }), 'top_k_minimum_reviews_proof_not_ready');
+test('minimum reviews is supported while opening-hours filters still fail before provider work', () => {
+  assert.equal(unsupportedHardFilterReason({ minimumReviews: 100 }), null);
   assert.equal(unsupportedHardFilterReason({ openNow: true }), 'top_k_open_now_proof_not_ready');
   assert.equal(unsupportedHardFilterReason({ openForMinutes: 60 }), 'top_k_open_for_minutes_proof_not_ready');
   assert.equal(unsupportedHardFilterReason({ minimumReviews: 0, openNow: false, openForMinutes: 0 }), null);
@@ -52,4 +52,17 @@ test('worst-case budget includes proof and finalist enrichment before admission'
   assert.equal(travel.details, 20);
   assert.equal(travel.route, 120);
   assert.equal(travel.routeSkuId, '2E25-887A-DAD4');
+});
+
+test('minimum-reviews proof reserves a bounded 100 details and 100 routes for every ranking mode', () => {
+  for (const rankingMode of ['RATING', 'PRICE', 'TRAVEL_TIME']) {
+    const budget = budgetQuantities({
+      rankingMode,
+      travelMode: 'Walk',
+      maxMinutes: 10,
+      minimumReviews: 100,
+    });
+    assert.equal(budget.details, 100);
+    assert.equal(budget.route, 100);
+  }
 });
