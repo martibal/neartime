@@ -72,6 +72,7 @@ async function enumeratePolygonCandidates({
 
   const ring = normalizeRing(rootRing);
   const rootAreaSquareMeters = ringAreaSquareMeters(ring);
+  const diagnostics = [];
   if (rootAreaSquareMeters < options.minimumAreaSquareMeters) {
     return {
       verified: false,
@@ -81,6 +82,7 @@ async function enumeratePolygonCandidates({
       aggregateCalls: 0,
       leafCount: 0,
       rootAreaSquareMeters,
+      diagnostics,
     };
   }
 
@@ -105,15 +107,22 @@ async function enumeratePolygonCandidates({
       const fanout = splitRingIntoStripsForAggregate(currentRing, desiredParts, {
         minimumAreaSquareMeters: options.minimumAreaSquareMeters,
       });
-      if (fanout.allowed && Array.isArray(fanout.parts) && fanout.parts.length >= 2) return fanout;
+      if (fanout.allowed && Array.isArray(fanout.parts) && fanout.parts.length >= 2) {
+        return { ...fanout, desiredParts, strategy: 'multiway' };
+      }
     }
 
-    return splitRingForAggregate(currentRing, {
-      minimumAreaSquareMeters: options.minimumAreaSquareMeters,
-    });
+    return {
+      ...splitRingForAggregate(currentRing, {
+        minimumAreaSquareMeters: options.minimumAreaSquareMeters,
+      }),
+      desiredParts,
+      strategy: 'binary_fallback',
+    };
   }
 
   async function visit(currentRing, depth, ordinal, isRoot = false) {
+    const areaSquareMeters = ringAreaSquareMeters(currentRing);
     const countStepKey = `${searchKey}:polygon-count:d${depth}:n${ordinal}`;
     const countPayload = await callAggregate({
       polygon: currentRing,
@@ -125,7 +134,21 @@ async function enumeratePolygonCandidates({
     if (!Number.isInteger(count) || count < 0) throw makeError('invalid_aggregate_count');
     if (isRoot) rootCount = count;
 
+    const node = {
+      depth,
+      ordinal,
+      count,
+      areaSquareMeters: Math.round(areaSquareMeters),
+      aggregateCallsAfterCount: aggregateCalls,
+      outcome: null,
+      strategy: null,
+      desiredParts: null,
+      emittedParts: null,
+    };
+    diagnostics.push(node);
+
     if (count === 0) {
+      node.outcome = 'empty_leaf';
       leafCount += 1;
       return;
     }
@@ -141,16 +164,26 @@ async function enumeratePolygonCandidates({
       const returnedCount = Number(idsPayload?.count ?? count);
       const returnedIds = uniqueIds(idsPayload?.placeIds ?? idsPayload?.places ?? idsPayload?.placeInsights);
       if (returnedCount !== count || returnedIds.length !== count) {
+        node.outcome = 'ids_incomplete';
         throw makeError('aggregate_place_ids_incomplete');
       }
       for (const id of returnedIds) ids.add(id);
+      node.outcome = 'enumerated_leaf';
+      node.aggregateCallsAfterIds = aggregateCalls;
       leafCount += 1;
       return;
     }
 
-    if (depth >= options.maxDepth) throw makeError('aggregate_partition_depth_exhausted');
+    if (depth >= options.maxDepth) {
+      node.outcome = 'depth_exhausted';
+      throw makeError('aggregate_partition_depth_exhausted');
+    }
 
     const split = chooseSplit(currentRing, count);
+    node.strategy = split.strategy || null;
+    node.desiredParts = split.desiredParts ?? null;
+    node.emittedParts = Array.isArray(split.parts) ? split.parts.length : 0;
+    node.outcome = split.allowed ? 'split' : (split.reason || 'split_rejected');
     if (!split.allowed) throw makeError(split.reason || 'aggregate_polygon_split_rejected');
     if (!Array.isArray(split.parts) || split.parts.length < 2) throw makeError('aggregate_polygon_split_invalid');
 
@@ -172,6 +205,7 @@ async function enumeratePolygonCandidates({
       aggregateCalls,
       leafCount,
       rootAreaSquareMeters,
+      diagnostics,
     };
   }
 
@@ -185,6 +219,7 @@ async function enumeratePolygonCandidates({
       aggregateCalls,
       leafCount,
       rootAreaSquareMeters,
+      diagnostics,
     };
   }
 
@@ -196,6 +231,7 @@ async function enumeratePolygonCandidates({
     aggregateCalls,
     leafCount,
     rootAreaSquareMeters,
+    diagnostics,
   };
 }
 
