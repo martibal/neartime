@@ -54,8 +54,15 @@ test('worst-case budget includes proof and finalist enrichment before admission'
   assert.equal(travel.routeSkuId, '2E25-887A-DAD4');
 });
 
-test('minimum-reviews proof reserves a bounded 100 details and 100 routes for every ranking mode', () => {
-  for (const rankingMode of ['RATING', 'PRICE', 'TRAVEL_TIME']) {
+test('minimum-reviews proof reserves bounded details/routes and expanded rating aggregate proof', () => {
+  const rating = budgetQuantities({
+    rankingMode: 'RATING', travelMode: 'Walk', maxMinutes: 10, minimumReviews: 100,
+  });
+  assert.equal(rating.aggregate, 36);
+  assert.equal(rating.details, 100);
+  assert.equal(rating.route, 100);
+
+  for (const rankingMode of ['PRICE', 'TRAVEL_TIME']) {
     const budget = budgetQuantities({
       rankingMode,
       travelMode: 'Walk',
