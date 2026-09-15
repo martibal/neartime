@@ -1,0 +1,30 @@
+name: Live Top-K Runtime Probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run one bounded Top-K runtime search
+        env:
+          NEARTIME_TEST_DATABASE_URL: ${{ secrets.NEARTIME_TEST_DATABASE_URL }}
+          NEARTIME_LIVE_PROBE_TOKEN: ${{ secrets.NEARTIME_LIVE_PROBE_TOKEN }}
+          NEARTIME_TOPK_SEARCH_URL: https://neartime-mbalstad-1809s-projects.vercel.app/api/search-topk
+        run: node scripts/run-live-topk-runtime-probe.js
