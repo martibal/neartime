@@ -103,6 +103,31 @@ function budgetQuantities({ rankingMode, travelMode, maxMinutes, minimumReviews 
   });
 }
 
+function providerCostSpecs(quantities) {
+  return [
+    { name: 'aggregate', skuId: SKU.AGGREGATE, quantity: quantities.aggregate },
+    { name: 'details', skuId: SKU.PLACE_DETAILS_ENTERPRISE, quantity: quantities.details },
+    { name: 'route', skuId: quantities.routeSkuId, quantity: quantities.route },
+  ].filter((spec) => Number(spec.quantity) > 0);
+}
+
+async function assertProviderSearchCeiling({ quantities, supabaseRpc }) {
+  const plan = providerCostSpecs(quantities).map((spec) => ({
+    sku_id: spec.skuId,
+    quantity: Number(spec.quantity),
+  }));
+  const decision = firstRow(await supabaseRpc('check_provider_cogs_search_ceiling', {
+    p_plan: plan,
+  }));
+  if (!decision || decision.allowed !== true) {
+    const error = new Error(decision?.reason || 'provider_cost_ceiling_check_failed');
+    error.code = decision?.reason || 'provider_cost_ceiling_check_failed';
+    error.costCeiling = decision || null;
+    throw error;
+  }
+  return decision;
+}
+
 function reservationKey(searchKey, skuId) {
   return crypto.createHash('sha256').update(`topk:${searchKey}:${skuId}`).digest('hex');
 }
@@ -122,11 +147,7 @@ async function releaseReservations(reservations, supabaseRpc) {
 }
 
 async function reserveWorstCaseBudget({ entitlementHash, deviceId, searchKey, quantities, supabaseRpc }) {
-  const specs = [
-    { name: 'aggregate', skuId: SKU.AGGREGATE, quantity: quantities.aggregate },
-    { name: 'details', skuId: SKU.PLACE_DETAILS_ENTERPRISE, quantity: quantities.details },
-    { name: 'route', skuId: quantities.routeSkuId, quantity: quantities.route },
-  ].filter((spec) => Number(spec.quantity) > 0);
+  const specs = providerCostSpecs(quantities);
 
   const reservations = [];
   for (const spec of specs) {
@@ -238,6 +259,7 @@ async function runTopKSearchRuntime({
     minimumReviews,
     k,
   });
+  const costCeiling = await assertProviderSearchCeiling({ quantities, supabaseRpc });
   const reservations = await reserveWorstCaseBudget({ entitlementHash, deviceId, searchKey, quantities, supabaseRpc });
   const actual = { aggregate: 0, details: 0, route: 0, envelope: 0 };
   let settled = false;
@@ -355,7 +377,7 @@ async function runTopKSearchRuntime({
     if (proof.status !== COMPLETE_TOP_K) {
       await settleWorstCaseBudget({ reservations, actual, outcome: 'succeeded', supabaseRpc });
       settled = true;
-      return { ...proof, places: [], providerCalls: actual, budgetPlan: quantities };
+      return { ...proof, places: [], providerCalls: actual, budgetPlan: quantities, costCeiling };
     }
 
     const places = [];
@@ -374,6 +396,7 @@ async function runTopKSearchRuntime({
           proof,
           providerCalls: actual,
           budgetPlan: quantities,
+          costCeiling,
         };
       }
       const place = mapPlace({ details, route, candidate, origin, query });
@@ -388,6 +411,7 @@ async function runTopKSearchRuntime({
           proof,
           providerCalls: actual,
           budgetPlan: quantities,
+          costCeiling,
         };
       }
       if (minimumReviews > 0 && place.reviewCount < minimumReviews) {
@@ -401,6 +425,7 @@ async function runTopKSearchRuntime({
           proof,
           providerCalls: actual,
           budgetPlan: quantities,
+          costCeiling,
         };
       }
       places.push(place);
@@ -416,6 +441,7 @@ async function runTopKSearchRuntime({
       proof,
       providerCalls: actual,
       budgetPlan: quantities,
+      costCeiling,
     };
   } catch (error) {
     if (!settled) {
@@ -432,10 +458,12 @@ async function runTopKSearchRuntime({
 
 module.exports = {
   CATEGORY_TYPES,
+  assertProviderSearchCeiling,
   budgetQuantities,
   hardRatingFilter,
   mergeRatingFilter,
   normalizeRankingMode,
+  providerCostSpecs,
   reservationKey,
   runTopKSearchRuntime,
   unsupportedHardFilterReason,
