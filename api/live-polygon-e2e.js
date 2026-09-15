@@ -4,6 +4,7 @@ const { createGoogleIsochroneEnvelopeProvider } = require('./lib/googleIsochrone
 const { createGoogleCoverageProvider } = require('./lib/googleCoverageProvider');
 const { runPolygonCoveragePath } = require('./lib/polygonCoveragePath');
 
+// Preview-only live probe. Touch this file to force a redeploy after Preview env changes.
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
