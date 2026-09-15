@@ -7,21 +7,31 @@ const DEVICE = 'internal-live-topk-probe';
 const PRODUCT = 'neartime_runtime_test';
 const PROVIDER_COGS_MICRO_USD = 3000000;
 const ORIGIN = { latitude: 59.9139, longitude: 10.7522 };
-const QUERY = {
-  category: 'Cafe',
-  travelMode: 'Walk',
-  maxMinutes: 10,
-  minimumRating: 0,
-  minimumReviews: 0,
-  openNow: false,
-  openForMinutes: 0,
-  rankingMode: 'RATING',
-};
+const ALLOWED_RANKING_MODES = new Set(['RATING', 'PRICE', 'TRAVEL_TIME']);
 
 function env(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Missing ${name}`);
   return value;
+}
+
+function rankingMode() {
+  const value = (process.env.NEARTIME_TOPK_RANKING_MODE || 'RATING').trim().toUpperCase();
+  if (!ALLOWED_RANKING_MODES.has(value)) throw new Error(`Invalid NEARTIME_TOPK_RANKING_MODE: ${value}`);
+  return value;
+}
+
+function queryFor(mode) {
+  return {
+    category: 'Cafe',
+    travelMode: 'Walk',
+    maxMinutes: 10,
+    minimumRating: 0,
+    minimumReviews: 0,
+    openNow: false,
+    openForMinutes: 0,
+    rankingMode: mode,
+  };
 }
 
 function sha256(value) {
@@ -138,6 +148,8 @@ async function cleanupFixture(db, policy) {
 async function main() {
   const token = env('NEARTIME_LIVE_PROBE_TOKEN');
   const url = env('NEARTIME_TOPK_SEARCH_URL');
+  const mode = rankingMode();
+  const query = queryFor(mode);
   const db = new Client({
     connectionString: env('NEARTIME_TEST_DATABASE_URL'),
     ssl: { rejectUnauthorized: false },
@@ -154,15 +166,18 @@ async function main() {
         'content-type': 'application/json',
         'x-neartime-entitlement-session': token,
         'x-neartime-device-id': DEVICE,
-        'x-neartime-idempotency-key': `topk-live-${runId}`,
+        'x-neartime-idempotency-key': `topk-live-${mode.toLowerCase()}-${runId}`,
       },
-      body: JSON.stringify({ query: QUERY, origin: ORIGIN }),
+      body: JSON.stringify({ query, origin: ORIGIN }),
     });
     const text = await response.text();
     if (!response.ok) throw new Error(`Top-K HTTP ${response.status}: ${text.slice(0, 500)}`);
     const payload = JSON.parse(text);
     if (payload.resultStatus !== 'COMPLETE_TOP_K') {
       throw new Error(`Top-K did not complete: ${payload.resultStatus || 'unknown'} / ${payload.reason || 'no reason'}`);
+    }
+    if (payload.rankingMode !== mode) {
+      throw new Error(`Top-K ranking mode mismatch: expected ${mode}, got ${payload.rankingMode || 'missing'}`);
     }
     if (!Array.isArray(payload.places) || payload.places.length < 1 || payload.places.length > 20) {
       throw new Error('Top-K returned invalid place count.');
