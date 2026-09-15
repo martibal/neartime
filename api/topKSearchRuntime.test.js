@@ -38,14 +38,14 @@ test('unsupported hard filters fail before provider work', () => {
 test('worst-case budget includes proof and finalist enrichment before admission', () => {
   const rating = budgetQuantities({ rankingMode: 'RATING', travelMode: 'Walk', maxMinutes: 10 });
   assert.equal(rating.aggregate, 18);
-  assert.equal(rating.details, 120);
-  assert.equal(rating.route, 20);
+  assert.equal(rating.details, 100);
+  assert.equal(rating.route, 100);
   assert.equal(rating.routeSkuId, '9392-1087-2045');
 
   const price = budgetQuantities({ rankingMode: 'PRICE', travelMode: 'Walk', maxMinutes: 10 });
   assert.equal(price.aggregate, 10);
   assert.equal(price.details, 20);
-  assert.equal(price.route, 20);
+  assert.equal(price.route, 500);
 
   const travel = budgetQuantities({ rankingMode: 'TRAVEL_TIME', travelMode: 'Drive', maxMinutes: 10 });
   assert.equal(travel.aggregate, 8);
