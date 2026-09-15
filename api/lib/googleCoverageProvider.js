@@ -34,6 +34,20 @@ const DETAILS_FIELD_MASK = [
   'currentOpeningHours',
 ].join(',');
 
+const VALID_PRICE_LEVELS = new Set([
+  'PRICE_LEVEL_FREE',
+  'PRICE_LEVEL_INEXPENSIVE',
+  'PRICE_LEVEL_MODERATE',
+  'PRICE_LEVEL_EXPENSIVE',
+  'PRICE_LEVEL_VERY_EXPENSIVE',
+]);
+
+const VALID_OPERATING_STATUS = new Set([
+  'OPERATING_STATUS_OPERATIONAL',
+  'OPERATING_STATUS_TEMPORARILY_CLOSED',
+  'OPERATING_STATUS_PERMANENTLY_CLOSED',
+]);
+
 function normalizeTravelMode(value) {
   const map = { Walk: 'WALK', Drive: 'DRIVE', Bike: 'BICYCLE', WALK: 'WALK', DRIVE: 'DRIVE', BICYCLE: 'BICYCLE' };
   const mode = map[value];
@@ -103,6 +117,40 @@ function validateTypes(includedTypes) {
   return types;
 }
 
+function normalizeRatingFilter(ratingFilter) {
+  if (ratingFilter == null) return null;
+  const minRating = ratingFilter.minRating == null ? null : Number(ratingFilter.minRating);
+  const maxRating = ratingFilter.maxRating == null ? null : Number(ratingFilter.maxRating);
+  if (minRating == null && maxRating == null) throw new Error('invalid_rating_filter');
+  if (minRating != null && (!Number.isFinite(minRating) || minRating < 1 || minRating > 5)) throw new Error('invalid_min_rating');
+  if (maxRating != null && (!Number.isFinite(maxRating) || maxRating < 1 || maxRating > 5)) throw new Error('invalid_max_rating');
+  if (minRating != null && maxRating != null && minRating > maxRating) throw new Error('invalid_rating_range');
+  return {
+    ...(minRating == null ? {} : { minRating }),
+    ...(maxRating == null ? {} : { maxRating }),
+  };
+}
+
+function normalizePriceLevels(priceLevels) {
+  if (priceLevels == null) return null;
+  if (!Array.isArray(priceLevels) || priceLevels.length === 0) throw new Error('invalid_price_levels');
+  const normalized = [...new Set(priceLevels.map((value) => String(value || '').trim()).filter(Boolean))];
+  if (normalized.length === 0 || normalized.some((value) => !VALID_PRICE_LEVELS.has(value))) {
+    throw new Error('invalid_price_levels');
+  }
+  return normalized;
+}
+
+function normalizeOperatingStatus(operatingStatus) {
+  const values = operatingStatus == null ? ['OPERATING_STATUS_OPERATIONAL'] : operatingStatus;
+  if (!Array.isArray(values) || values.length === 0) throw new Error('invalid_operating_status');
+  const normalized = [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+  if (normalized.length === 0 || normalized.some((value) => !VALID_OPERATING_STATUS.has(value))) {
+    throw new Error('invalid_operating_status');
+  }
+  return normalized;
+}
+
 async function parseJsonResponse(response, label) {
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
@@ -123,9 +171,20 @@ function createGoogleCoverageProvider({ apiKey, origin, travelMode, fetchImpl = 
   if (!Number.isFinite(routeOrigin.latitude) || !Number.isFinite(routeOrigin.longitude)) throw new Error('invalid_origin');
   const googleTravelMode = normalizeTravelMode(travelMode);
 
-  async function aggregateSearch({ circle, polygon, includedTypes, includePlaceIds }) {
+  async function aggregateSearch({
+    circle,
+    polygon,
+    includedTypes,
+    includePlaceIds,
+    ratingFilter = null,
+    priceLevels = null,
+    operatingStatus = null,
+  }) {
     if (Boolean(circle) === Boolean(polygon)) throw new Error('aggregate_requires_exactly_one_location_shape');
     const types = validateTypes(includedTypes);
+    const safeRatingFilter = normalizeRatingFilter(ratingFilter);
+    const safePriceLevels = normalizePriceLevels(priceLevels);
+    const safeOperatingStatus = normalizeOperatingStatus(operatingStatus);
     const insights = includePlaceIds ? ['INSIGHT_COUNT', 'INSIGHT_PLACES'] : ['INSIGHT_COUNT'];
 
     let locationFilter;
@@ -148,20 +207,21 @@ function createGoogleCoverageProvider({ apiKey, origin, travelMode, fetchImpl = 
       };
     }
 
+    const filter = {
+      locationFilter,
+      typeFilter: { includedTypes: types },
+      operatingStatus: safeOperatingStatus,
+      ...(safeRatingFilter ? { ratingFilter: safeRatingFilter } : {}),
+      ...(safePriceLevels ? { priceLevels: safePriceLevels } : {}),
+    };
+
     const response = await fetchImpl(AGGREGATE_ENDPOINT, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'X-Goog-Api-Key': apiKey,
       },
-      body: JSON.stringify({
-        insights,
-        filter: {
-          locationFilter,
-          typeFilter: { includedTypes: types },
-          operatingStatus: ['OPERATING_STATUS_OPERATIONAL'],
-        },
-      }),
+      body: JSON.stringify({ insights, filter }),
     });
     const payload = await parseJsonResponse(response, 'google_aggregate');
     const count = Number(payload?.count);
@@ -228,7 +288,12 @@ module.exports = {
   NEARBY_FIELD_MASK,
   PLACE_DETAILS_BASE,
   SKU,
+  VALID_OPERATING_STATUS,
+  VALID_PRICE_LEVELS,
   createGoogleCoverageProvider,
+  normalizeOperatingStatus,
+  normalizePriceLevels,
+  normalizeRatingFilter,
   normalizeTravelMode,
   validatePolygon,
 };
