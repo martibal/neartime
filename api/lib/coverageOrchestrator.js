@@ -6,7 +6,7 @@ const {
 } = require('./retrievalCostPlanner');
 
 const DEFAULTS = Object.freeze({
-  leafTarget: 20,
+  leafTarget: 100,
   maxDepth: 5,
   maxAggregateCalls: 48,
   maxNearbyCalls: 32,
