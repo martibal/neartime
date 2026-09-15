@@ -35,28 +35,42 @@ async function materialize({ aggregateSearch, polygon, includedTypes, expectedCo
   return { valid: count === expectedCount && placeIds.length === expectedCount, placeIds };
 }
 
-async function exactTravelFilter({ placeIds, routeMatrixCompute, maxMinutes, routeCache, routeState, maxRouteCalls }) {
+async function exactTravelFilter({
+  placeIds,
+  routeMatrixCompute,
+  maxMinutes,
+  routeCache,
+  routeState,
+  maxRouteCalls,
+  stopAfterQualified = null,
+}) {
   const qualified = [];
-  for (const placeId of placeIds) {
+  const orderedPlaceIds = [...placeIds];
+  if (stopAfterQualified != null) orderedPlaceIds.sort((a, b) => a.localeCompare(b));
+
+  for (const placeId of orderedPlaceIds) {
     let cached = routeCache.get(placeId);
     if (!cached) {
       if (routeState.calls >= maxRouteCalls) {
-        return { ok: false, reason: 'hard_travel_route_call_budget_exhausted', qualified: [] };
+        return { ok: false, reason: 'hard_travel_route_call_budget_exhausted', qualified: [], exhausted: false };
       }
       try {
         const route = await routeMatrixCompute({ placeId });
         cached = { route, seconds: durationSecondsFromRouteResult(route) };
       } catch (error) {
-        return { ok: false, reason: error?.message || 'hard_travel_route_failed', qualified: [] };
+        return { ok: false, reason: error?.message || 'hard_travel_route_failed', qualified: [], exhausted: false };
       }
       routeState.calls += 1;
       routeCache.set(placeId, cached);
     }
     if (cached.seconds <= Number(maxMinutes) * 60) {
       qualified.push({ placeId, travelTimeSeconds: cached.seconds, route: cached.route });
+      if (stopAfterQualified != null && qualified.length >= stopAfterQualified) {
+        return { ok: true, qualified, exhausted: false };
+      }
     }
   }
-  return { ok: true, qualified };
+  return { ok: true, qualified, exhausted: true };
 }
 
 async function proveRatingTopKWithHardTravel({
@@ -66,7 +80,7 @@ async function proveRatingTopKWithHardTravel({
   placeDetails,
   routeMatrixCompute,
   maxMinutes,
-  k = 20,
+  k = 10,
   maxCandidateDetails = 100,
   maxRouteCalls = 100,
   ratingThresholds = DEFAULT_RATING_THRESHOLDS,
@@ -117,6 +131,44 @@ async function proveRatingTopKWithHardTravel({
       return { status: DEGRADED, rankingMode: RANKING_MODE.RATING, reason: 'top_k_candidate_materialization_incomplete', topK: [], candidateCount: count, selectedThreshold: minRating, aggregateCalls, detailCalls, routeCalls: routeState.calls, diagnostics };
     }
 
+    // All 5.0 candidates are equivalent on the user-selected ranking criterion.
+    // Route them in deterministic Place-ID order and stop as soon as K verified
+    // in-time winners exist. Routing the rest cannot change a valid Top-K set.
+    if (minRating === 5) {
+      const travel = await exactTravelFilter({
+        placeIds: materialized.placeIds,
+        routeMatrixCompute,
+        maxMinutes,
+        routeCache,
+        routeState,
+        maxRouteCalls,
+        stopAfterQualified: k,
+      });
+      if (!travel.ok) {
+        return { status: DEGRADED, rankingMode: RANKING_MODE.RATING, reason: travel.reason, topK: [], candidateCount: count, selectedThreshold: minRating, aggregateCalls, detailCalls, routeCalls: routeState.calls, diagnostics };
+      }
+      diagnostics.at(-1).exactWithinMaxMinutes = travel.qualified.length;
+      diagnostics.at(-1).routeProofExhausted = travel.exhausted;
+      if (travel.qualified.length >= k) {
+        const topK = travel.qualified.map((candidate) => ({ ...candidate, rating: 5, userRatingCount: null, details: null }));
+        return {
+          status: COMPLETE_TOP_K, rankingMode: RANKING_MODE.RATING, reason: null, topK,
+          candidateCount: count, exactQualifiedCount: travel.qualified.length, selectedThreshold: minRating,
+          aggregateCalls, detailCalls, routeCalls: routeState.calls, diagnostics,
+          proof: {
+            ranking: 'RATING_DESC', tiePolicy: 'RATING_TIES_EQUIVALENT', deterministicSelection: 'PLACE_ID_ASC',
+            hardTravelConstraint: true, maxMinutes: Number(maxMinutes), k, complete: true,
+            fewerThanKAvailable: false, excludedBelowRating: minRating,
+            routeProofExhausted: travel.exhausted,
+          },
+        };
+      }
+      // Fewer than K 5.0 places survived exact travel. Because the limited
+      // filter exhausted this set, it is safe to continue to the next rating
+      // threshold while reusing every route already paid for.
+      if (minRating !== 1) continue;
+    }
+
     const travel = await exactTravelFilter({
       placeIds: materialized.placeIds, routeMatrixCompute, maxMinutes, routeCache, routeState, maxRouteCalls,
     });
@@ -124,24 +176,8 @@ async function proveRatingTopKWithHardTravel({
       return { status: DEGRADED, rankingMode: RANKING_MODE.RATING, reason: travel.reason, topK: [], candidateCount: count, selectedThreshold: minRating, aggregateCalls, detailCalls, routeCalls: routeState.calls, diagnostics };
     }
     diagnostics.at(-1).exactWithinMaxMinutes = travel.qualified.length;
+    diagnostics.at(-1).routeProofExhausted = true;
     if (travel.qualified.length < k && minRating !== 1) continue;
-
-    if (minRating === 5) {
-      const topK = travel.qualified
-        .sort((a, b) => a.placeId.localeCompare(b.placeId))
-        .slice(0, k)
-        .map((candidate) => ({ ...candidate, rating: 5, userRatingCount: null, details: null }));
-      return {
-        status: COMPLETE_TOP_K, rankingMode: RANKING_MODE.RATING, reason: null, topK,
-        candidateCount: count, exactQualifiedCount: travel.qualified.length, selectedThreshold: minRating,
-        aggregateCalls, detailCalls, routeCalls: routeState.calls, diagnostics,
-        proof: {
-          ranking: 'RATING_DESC', tiePolicy: 'RATING_TIES_EQUIVALENT', deterministicSelection: 'PLACE_ID_ASC',
-          hardTravelConstraint: true, maxMinutes: Number(maxMinutes), k, complete: true,
-          fewerThanKAvailable: travel.qualified.length < k, excludedBelowRating: minRating,
-        },
-      };
-    }
 
     const candidates = [];
     for (const routed of travel.qualified) {
@@ -181,7 +217,7 @@ async function provePriceTopKWithHardTravel({
   aggregateSearch,
   routeMatrixCompute,
   maxMinutes,
-  k = 20,
+  k = 10,
   maxCandidatesPerPriceBucket = 100,
   maxRouteCalls = 500,
   priceLevels = PRICE_LEVELS_ASC,
@@ -223,16 +259,26 @@ async function provePriceTopKWithHardTravel({
       return { status: DEGRADED, rankingMode: RANKING_MODE.PRICE, reason: 'price_bucket_materialization_incomplete', topK: [], priceLevel, candidateCount: count, aggregateCalls, routeCalls: routeState.calls, diagnostics };
     }
 
+    // Every candidate in this bucket is equivalent on PRICE. Verify only as
+    // many deterministic IDs as needed to fill the remaining Top-K slots.
+    // If the bucket cannot fill them, the helper exhausts the bucket and the
+    // next price level is required. This never weakens completeness.
+    const needed = Math.max(0, k - ranked.length);
     const travel = await exactTravelFilter({
-      placeIds: materialized.placeIds, routeMatrixCompute, maxMinutes, routeCache, routeState, maxRouteCalls,
+      placeIds: materialized.placeIds,
+      routeMatrixCompute,
+      maxMinutes,
+      routeCache,
+      routeState,
+      maxRouteCalls,
+      stopAfterQualified: needed,
     });
     if (!travel.ok) {
       return { status: DEGRADED, rankingMode: RANKING_MODE.PRICE, reason: travel.reason, topK: [], priceLevel, candidateCount: count, aggregateCalls, routeCalls: routeState.calls, diagnostics };
     }
     diagnostics.at(-1).exactWithinMaxMinutes = travel.qualified.length;
-    ranked.push(...travel.qualified
-      .sort((a, b) => a.placeId.localeCompare(b.placeId))
-      .map((candidate) => ({ ...candidate, priceLevel, priceRank })));
+    diagnostics.at(-1).routeProofExhausted = travel.exhausted;
+    ranked.push(...travel.qualified.map((candidate) => ({ ...candidate, priceLevel, priceRank })));
     if (ranked.length >= k) break;
   }
 
