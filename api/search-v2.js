@@ -60,8 +60,9 @@ function canonicalRequestHash(body, geometry) {
     },
     coverageGeometry: {
       version: geometry.version,
+      authority: geometry.authority,
+      source: geometry.source,
       radiusMeters: geometry.radiusMeters,
-      maxStraightLineKmh: geometry.maxStraightLineKmh,
     },
   }));
 }
@@ -85,7 +86,7 @@ function blockedStatus(reason) {
   if (reason === 'provider_budget_exhausted' || reason === 'paid_search_quota_exhausted') return 402;
   if (reason === 'wallet_not_found' || reason === 'entitlement_inactive' || reason === 'logical_plan_not_configured') return 403;
   if (reason === 'request_in_progress' || reason === 'idempotency_conflict' || reason === 'previous_attempt_failed') return 409;
-  if (reason === 'external_calls_disabled' || reason === 'kill_switch_active' || reason === 'coverage_v2_disabled' || reason === 'coverage_geometry_not_verified') return 503;
+  if (reason === 'external_calls_disabled' || reason === 'kill_switch_active' || reason === 'coverage_v2_disabled' || reason === 'coverage_geometry_not_verified' || reason === 'coverage_geometry_route_bound_required') return 503;
   return 429;
 }
 
