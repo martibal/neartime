@@ -12,6 +12,16 @@ on:
           - RATING
           - PRICE
           - TRAVEL_TIME
+      minimum_reviews:
+        description: Minimum Google review-count floor to prove
+        required: true
+        default: '0'
+        type: choice
+        options:
+          - '0'
+          - '100'
+          - '300'
+          - '1000'
 
 permissions:
   contents: read
@@ -38,4 +48,5 @@ jobs:
           NEARTIME_LIVE_PROBE_TOKEN: ${{ secrets.NEARTIME_LIVE_PROBE_TOKEN }}
           NEARTIME_TOPK_SEARCH_URL: https://neartime-mbalstad-1809s-projects.vercel.app/api/search-topk
           NEARTIME_TOPK_RANKING_MODE: ${{ inputs.ranking_mode }}
+          NEARTIME_TOPK_MINIMUM_REVIEWS: ${{ inputs.minimum_reviews }}
         run: node scripts/run-live-topk-runtime-probe.js
