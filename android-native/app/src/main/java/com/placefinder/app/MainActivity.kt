@@ -95,7 +95,7 @@ private enum class SearchCategory(
     val wireValue: String,
     val displayName: String
 ) {
-    CAFES_COFFEE("cafes_coffee", "Cafés & coffee"),
+    CAFES_COFFEE("cafes_coffee", "CafÃ©s & coffee"),
     RESTAURANTS("restaurants", "Restaurants"),
     FAST_FOOD_TAKEAWAY("fast_food_takeaway", "Fast food & takeaway"),
     BARS_DRINKS("bars_drinks", "Bars & drinks"),
@@ -388,7 +388,7 @@ private fun NearTimeScreen() {
                                 LatLng(place.latitude, place.longitude)
                             ),
                             title = "${index + 1}. ${place.name}",
-                            snippet = "${place.categoryLabel} · ${place.walkMinutes} min walk",
+                            snippet = "${place.categoryLabel} Â· ${place.walkMinutes} min walk",
                             onClick = {
                                 selectedPlace = place
                                 false
@@ -445,9 +445,9 @@ private fun NearTimeScreen() {
 
                         Text(
                             text = if (point == null) {
-                                "Finding your GPS position…"
+                                "Finding your GPS positionâ€¦"
                             } else {
-                                "GPS active · " +
+                                "GPS active Â· " +
                                     String.format(Locale.US, "%.5f", point.latitude) +
                                     ", " +
                                     String.format(Locale.US, "%.5f", point.longitude)
@@ -583,7 +583,7 @@ private fun NearTimeScreen() {
                                 append("Start: ")
                                 append(it.title)
                                 if (it.address.isNotBlank()) {
-                                    append(" · ")
+                                    append(" Â· ")
                                     append(it.address)
                                 }
                             },
@@ -728,7 +728,7 @@ private fun NearTimeScreen() {
                 SearchState.Loading -> {
                     item {
                         Text(
-                            "Checking current places and real walking routes…"
+                            "Checking current places and real walking routesâ€¦"
                         )
                     }
                 }
@@ -940,10 +940,12 @@ private suspend fun searchBackend(
     val thisSearch = usage?.optJSONObject("thisSearch")
 
     val usageText = thisSearch?.let {
-        "This search · TomTom search " +
-            "${it.optInt("tomtomSearch", 0)} · " +
-            "walking routes ${it.optInt("tomtomRoute", 0)} · " +
-            "Google freshness ${it.optInt("googleTextSearchPro", 0)}/1"
+        val googleCalls =
+            it.optInt("googleNearbyPro", 0) +
+                it.optInt("googleNearbyEnterprise", 0)
+
+        "This search · Google place search $googleCalls/1 · " +
+            "walking routes ${it.optInt("tomtomRoute", 0)}"
     }
 
     SearchResponse(
