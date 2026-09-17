@@ -86,7 +86,7 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
-private const val BACKEND_BASE_URL = "http://127.0.0.1:8081"
+private const val BACKEND_BASE_URL = "https://neartime.vercel.app/api/native"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
 private const val DEFAULT_LONGITUDE = 10.7522
@@ -287,8 +287,8 @@ private fun NearTimeScreen() {
 
             try {
                 val origin = if (useCurrentLocation) {
-                    currentLocation ?: resolveCurrentLocation(context)
-                    ?: throw IllegalStateException("GPS position is not available yet.")
+                    resolveCurrentLocation(context)
+                        ?: throw IllegalStateException("Current GPS position is not available yet.")
                 } else {
                     customLocation?.let { GeoPoint(it.latitude, it.longitude) }
                     ?: throw IllegalStateException("Choose a start location first.")
@@ -314,8 +314,8 @@ private fun NearTimeScreen() {
                     .filter { it.walkMinutes <= maxWalkMinutes.roundToInt() }
                     .filter { !openNowOnly || it.isOpenNow == true }
                     .sortedWith(
-                        compareBy<PlaceResult> { it.walkSeconds }
-                            .thenBy { it.walkDistanceMeters }
+                        compareBy<PlaceResult> { it.walkDistanceMeters }
+                            .thenBy { it.walkSeconds }
                     )
                     .take(RESULT_LIMIT)
                     .toList()
@@ -911,14 +911,25 @@ private suspend fun searchBackend(
     openNowOnly: Boolean
 ): SearchResponse = withContext(Dispatchers.IO) {
     val json = postJson(
-        "$BACKEND_BASE_URL/spike/search",
+        BACKEND_BASE_URL,
         JSONObject()
+            .put("action", "search")
             .put("latitude", latitude)
             .put("longitude", longitude)
             .put("category", category)
             .put("maxWalkMinutes", maxWalkMinutes)
             .put("openNowOnly", openNowOnly)
     )
+
+    val resultStatus = json.optString("resultStatus")
+    if (resultStatus == "DEGRADED") {
+        throw IllegalStateException(
+            json.optString("reason")
+                .ifBlank {
+                    "Exact Top 10 could not be proven inside the 30 øre cost cap."
+                }
+        )
+    }
 
     val placesJson = json.optJSONArray("places") ?: JSONArray()
 
@@ -941,10 +952,16 @@ private suspend fun searchBackend(
 
     val usageText = thisSearch?.let {
         val discoveryCalls = it.optInt("tomtomDiscover", 0)
-        val localMatrices = it.optInt("valhallaMatrix", 0)
+        val routeCalls = it.optInt("tomtomRoute", 0)
+        val guardedCost = it.optDouble("conservativeCostNok", 0.0)
 
-        "Cost guard · paid discovery $discoveryCalls/1 · " +
-            "paid routes 0 · local walking matrix $localMatrices/1"
+        "Cloud search · discovery $discoveryCalls/1 · " +
+            "walking routes $routeCalls/24 · " +
+            String.format(
+                Locale.US,
+                "cost guard %.1f øre",
+                guardedCost * 100.0
+            )
     }
 
     SearchResponse(
@@ -960,8 +977,9 @@ private suspend fun suggestLocationsBackend(
     longitude: Double
 ): List<LocationSuggestion> = withContext(Dispatchers.IO) {
     val json = postJson(
-        "$BACKEND_BASE_URL/location/suggest",
+        BACKEND_BASE_URL,
         JSONObject()
+            .put("action", "suggest")
             .put("query", query)
             .put("latitude", latitude)
             .put("longitude", longitude)
@@ -1002,8 +1020,9 @@ private suspend fun resolveLocationBackend(
     suggestion: LocationSuggestion
 ): ResolvedLocation = withContext(Dispatchers.IO) {
     val json = postJson(
-        "$BACKEND_BASE_URL/location/resolve",
+        BACKEND_BASE_URL,
         JSONObject()
+            .put("action", "resolve")
             .put("id", suggestion.id)
             .put("type", suggestion.type)
     )
@@ -1228,48 +1247,17 @@ private suspend fun resolveCurrentLocation(
             Context.LOCATION_SERVICE
         ) as LocationManager
 
-    val providers = listOf(
+    val activeProviders = listOf(
         LocationManager.GPS_PROVIDER,
-        LocationManager.NETWORK_PROVIDER,
-        LocationManager.PASSIVE_PROVIDER
-    ).distinct()
-
-    val lastKnown = providers
-        .mapNotNull { provider ->
-            runCatching {
-                manager.getLastKnownLocation(provider)
-            }.getOrNull()
-        }
-        .maxByOrNull { location ->
-            location.time
-        }
-
-    if (
-        lastKnown != null &&
-        System.currentTimeMillis() -
-        lastKnown.time <= 10 * 60 * 1000
-    ) {
-        return GeoPoint(
-            latitude = lastKnown.latitude,
-            longitude = lastKnown.longitude
-        )
+        LocationManager.NETWORK_PROVIDER
+    ).filter { provider ->
+        runCatching {
+            manager.isProviderEnabled(provider)
+        }.getOrDefault(false)
     }
 
-    for (provider in providers) {
-        val enabled = if (
-            provider == LocationManager.PASSIVE_PROVIDER
-        ) {
-            true
-        } else {
-            runCatching {
-                manager.isProviderEnabled(provider)
-            }.getOrDefault(false)
-        }
-
-        if (!enabled) {
-            continue
-        }
-
+    // Search always requests a current fix before provider work begins.
+    for (provider in activeProviders) {
         val current =
             getCurrentLocationCompat(
                 context = context,
@@ -1282,12 +1270,31 @@ private suspend fun resolveCurrentLocation(
         }
     }
 
-    return lastKnown?.let {
-        GeoPoint(
-            latitude = it.latitude,
-            longitude = it.longitude
-        )
-    }
+    // Resilience fallback is restricted to a very recent fix.
+    val freshest = listOf(
+        LocationManager.GPS_PROVIDER,
+        LocationManager.NETWORK_PROVIDER,
+        LocationManager.PASSIVE_PROVIDER
+    )
+        .mapNotNull { provider ->
+            runCatching {
+                manager.getLastKnownLocation(provider)
+            }.getOrNull()
+        }
+        .maxByOrNull { location ->
+            location.time
+        }
+
+    return freshest
+        ?.takeIf {
+            System.currentTimeMillis() - it.time <= 30_000
+        }
+        ?.let {
+            GeoPoint(
+                latitude = it.latitude,
+                longitude = it.longitude
+            )
+        }
 }
 
 /*

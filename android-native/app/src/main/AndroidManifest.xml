@@ -9,7 +9,7 @@
         android:allowBackup="true"
         android:label="NearTime"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <meta-data

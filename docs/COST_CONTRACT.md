@@ -1,33 +1,51 @@
-# NearTime search cost contract
+# NearTime production search contract
 
-Effective architecture: 2026-09-18-discover-valhalla-v1.
+Effective architecture: 2026-09-18-global-cloud-walk-v1.
 
-This document is a build constraint, not a future optimisation target.
+These are release-blocking requirements.
 
-## Normal explicit place search
+## Customer-visible map and GPS
 
-A normal search from the Android app is allowed to perform:
+- The Android app renders Google Maps SDK live map content.
+- A search using My location requests a current device location at search time; it does not prefer a minutes-old cached position.
+- No country map, OSM extract, routing graph, Valhalla instance, Docker container or other local geographic dataset participates in production search.
 
-- exactly 0 Google Places requests;
-- at most 1 TomTom Places Search Discover request;
-- exactly 0 paid pedestrian-routing requests;
-- at most 1 request to the self-hosted Valhalla sources_to_targets endpoint.
+## International place discovery and walking measurement
 
-GPS refresh, map movement, filter changes and category selection must perform zero paid provider requests.
+- POI discovery is a live request to TomTom Places Search API on TomTom Orbis Maps.
+- Up to 100 current POI candidates are requested around the current coordinates.
+- Every candidate used for ranking is measured with TomTom hosted Routing API using pedestrian mode.
+- Results are sorted by measured pedestrian route distance in metres, then travel time as a tie-breaker.
+- At most ten places are returned.
 
-Custom start-location search is separate from the normal place-search cost contract. TomTom Suggest and Details may run only after explicit user interaction.
+NearTime never labels a straight-line estimate as walking distance.
 
-## Why routing is local
+## Top-10 proof
 
-NearTime needs real pedestrian travel time for every candidate before it can enforce the user's walking-time limit and sort the result set. Issuing one paid route request per candidate makes marginal cost scale with candidate count. The production architecture therefore computes the one-to-many pedestrian matrix on NearTime's own Valhalla instance.
+Candidates are processed in ascending straight-line distance. Walking distance can never be shorter than straight-line distance.
 
-## Regression gate
+After cloud pedestrian routes have been measured, the Top 10 is accepted only when either all relevant discovered candidates have been resolved, or the measured walking distance of the current tenth place is no greater than the lower bound of every unresolved candidate.
 
-backend-node/server.test.mjs must fail if the normal search path contains either:
+Failed route calls and unknown open-now state remain blockers. They are never silently treated as non-qualifying.
 
-- Google Places service calls; or
-- TomTom Routing API calls.
+If the proof is not established before the hard cost limit is reached, the search returns DEGRADED with no potentially incorrect Top 10.
 
-The test suite also requires both the TomTom Discover endpoint and the local Valhalla matrix endpoint to remain present.
+## NOK 0.30 hard provider-cost ceiling
 
-A provider or architecture change that increases the number of paid calls per normal search must not be merged until its paid-unit economics have been recalculated explicitly.
+The normal production search path permits at most one Places Discover call and at most 24 pedestrian Calculate Route calls. There is no paid retry path.
+
+The in-code guard deliberately uses conservative assumptions and does not deduct provider free allowances:
+
+- Places Discover guard: EUR 5.00 / 1,000;
+- Routing guard: EUR 0.75 / 1,000;
+- FX stress: NOK 13.00 / EUR.
+
+Worst case: ((5.00 + 24 x 0.75) / 1000) x 13.00 = NOK 0.299.
+
+The code refuses to make another paid provider call when the next call would cross NOK 0.30 under this stress model. Provider pricing must be revalidated before release whenever the provider changes its schedule.
+
+## Freshness and international operation
+
+Place discovery uses TomTom Orbis Places Search, an online global service. Pedestrian routes are calculated online for each search by TomTom's hosted routing service. There is no periodically downloaded country file that can become stale on the device or NearTime server.
+
+The visible map remains Google Maps SDK, so map rendering is also not tied to NearTime-hosted geographic data.

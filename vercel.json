@@ -2,19 +2,63 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "builds": [
-    { "src": "api/search.js", "use": "@vercel/node" },
-    { "src": "api/search-topk.js", "use": "@vercel/node" },
-    { "src": "api/entitlement/verify.js", "use": "@vercel/node" },
-    { "src": "api/entitlement/trip-pass.js", "use": "@vercel/node" },
-    { "src": "api/entitlement/apple-notifications.js", "use": "@vercel/node" },
-    { "src": "api/entitlement/google-notifications.js", "use": "@vercel/node" }
+    {
+      "src": "api/native.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/search.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/search-topk.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/entitlement/verify.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/entitlement/trip-pass.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/entitlement/apple-notifications.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/entitlement/google-notifications.js",
+      "use": "@vercel/node"
+    }
   ],
   "routes": [
-    { "src": "/api/search", "dest": "/api/search.js" },
-    { "src": "/api/search-topk", "dest": "/api/search-topk.js" },
-    { "src": "/api/entitlement/verify", "dest": "/api/entitlement/verify.js" },
-    { "src": "/api/entitlement/trip-pass", "dest": "/api/entitlement/trip-pass.js" },
-    { "src": "/api/entitlement/apple-notifications", "dest": "/api/entitlement/apple-notifications.js" },
-    { "src": "/api/entitlement/google-notifications", "dest": "/api/entitlement/google-notifications.js" }
+    {
+      "src": "/api/native",
+      "dest": "/api/native.js"
+    },
+    {
+      "src": "/api/search",
+      "dest": "/api/search.js"
+    },
+    {
+      "src": "/api/search-topk",
+      "dest": "/api/search-topk.js"
+    },
+    {
+      "src": "/api/entitlement/verify",
+      "dest": "/api/entitlement/verify.js"
+    },
+    {
+      "src": "/api/entitlement/trip-pass",
+      "dest": "/api/entitlement/trip-pass.js"
+    },
+    {
+      "src": "/api/entitlement/apple-notifications",
+      "dest": "/api/entitlement/apple-notifications.js"
+    },
+    {
+      "src": "/api/entitlement/google-notifications",
+      "dest": "/api/entitlement/google-notifications.js"
+    }
   ]
 }
