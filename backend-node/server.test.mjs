@@ -4,105 +4,102 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-process.env.USAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'neartime-52-'));
+process.env.USAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'neartime-cost-gate-'));
 process.env.TOMTOM_API_KEY = 'test-tomtom';
-process.env.GOOGLE_PLACES_API_KEY = 'test-google';
+process.env.VALHALLA_BASE_URL = 'http://127.0.0.1:8002';
 
 const mod = await import('./server.js');
-const expectedIds = ["cafes_coffee", "restaurants", "fast_food_takeaway", "bars_drinks", "bakeries_sweets", "groceries_supermarkets", "clothing_fashion", "electronics", "home_furniture", "shopping_centres", "other_shops", "pharmacy", "doctor_clinic", "dentist", "hospital", "spa_wellness", "gym_fitness", "swimming", "sports_facilities", "golf", "parking", "public_transport", "train_stations", "bus_stations_stops", "fuel_stations", "ev_charging", "airports", "schools", "preschool", "universities", "libraries", "parks", "outdoor_activities", "museums_galleries", "cinema", "entertainment", "attractions", "playgrounds", "hotels", "hostels_guest_houses", "camping", "hair_beauty", "laundry", "banks", "atm", "post_office", "shipping_courier", "car_repair_tyres", "car_wash", "veterinary", "pet_care", "pet_stores"];
-const legacyIds = ["fuel_ev_charging", "cinema_entertainment", "bank_atm", "post_shipping", "car_services", "pet_services"];
-const splitIds = ["fuel_stations", "ev_charging", "cinema", "entertainment", "banks", "atm", "post_office", "shipping_courier", "car_repair_tyres", "car_wash", "veterinary", "pet_care", "pet_stores"];
 
-test('backend exposes exactly the new 52 category IDs', () => {
-  assert.deepEqual(Object.keys(mod.CATEGORY_CONFIG), expectedIds);
-});
-
-test('legacy heterogeneous category IDs are gone', () => {
-  for (const id of legacyIds) {
-    assert.equal(Object.prototype.hasOwnProperty.call(mod.CATEGORY_CONFIG, id), false, id);
+test('backend exposes exactly 52 categories with discovery queries', () => {
+  const ids = Object.keys(mod.CATEGORY_CONFIG);
+  assert.equal(ids.length, 52);
+  for (const id of ids) {
+    const cfg = mod.CATEGORY_CONFIG[id];
+    assert.equal(typeof cfg.label, 'string');
+    assert.ok(cfg.label.trim().length > 0);
+    assert.equal(typeof cfg.query, 'string');
+    assert.ok(cfg.query.trim().length > 0);
   }
 });
 
-test('all split category IDs are present', () => {
-  for (const id of splitIds) {
-    assert.equal(Object.prototype.hasOwnProperty.call(mod.CATEGORY_CONFIG, id), true, id);
-  }
-});
-
-test('fuel and EV are independent one-intent categories', () => {
-  assert.deepEqual(mod.CATEGORY_CONFIG.fuel_stations.googleTypes, ['gas_station']);
-  assert.deepEqual(mod.CATEGORY_CONFIG.ev_charging.googleTypes, ['electric_vehicle_charging_station']);
-});
-
-test('bank and ATM are independent one-intent categories', () => {
-  assert.deepEqual(mod.CATEGORY_CONFIG.banks.googleTypes, ['bank']);
-  assert.deepEqual(mod.CATEGORY_CONFIG.atm.googleTypes, ['atm']);
-});
-
-test('car wash cannot crowd out car repair and tyres', () => {
-  assert.deepEqual(mod.CATEGORY_CONFIG.car_wash.googleTypes, ['car_wash']);
-  assert.deepEqual(mod.CATEGORY_CONFIG.car_repair_tyres.googleTypes, ['car_repair', 'tire_shop']);
-});
-
-test('pet veterinary, care, and stores are separated', () => {
-  assert.deepEqual(mod.CATEGORY_CONFIG.veterinary.googleTypes, ['veterinary_care']);
-  assert.deepEqual(mod.CATEGORY_CONFIG.pet_care.googleTypes, ['pet_care', 'pet_boarding_service']);
-  assert.deepEqual(mod.CATEGORY_CONFIG.pet_stores.googleTypes, ['pet_store']);
-});
-
-test('one Google Nearby call per explicit search remains enforced', () => {
+test('normal search source contains one paid discovery path and no paid routing path', () => {
   const source = fs.readFileSync('./server.js', 'utf8');
-  assert.ok(source.includes('const GOOGLE_CALLS_PER_SEARCH_CAP = 1'));
-  assert.ok(source.includes('places:searchNearby'));
-  assert.equal(source.includes('places:searchText'), false);
-  assert.equal(source.includes('/maps/orbis/places/discover'), false);
+  assert.ok(source.includes('/maps/orbis/places/discover'));
+  assert.ok(source.includes('/sources_to_targets'));
+  assert.ok(source.includes('const TOMTOM_DISCOVER_CALLS_PER_SEARCH_CAP = 1'));
+  assert.ok(source.includes('const VALHALLA_MATRIX_CALLS_PER_SEARCH_CAP = 1'));
+  assert.equal(source.includes('places.googleapis.com/v1/places'), false);
+  assert.equal(source.includes('api.tomtom.com/routing/'), false);
 });
 
-test('routing pacing and max 20 route calls remain', () => {
+test('cost contract explicitly reports zero Google Places and zero paid routing', () => {
   const source = fs.readFileSync('./server.js', 'utf8');
-  assert.ok(source.includes('const TOMTOM_ROUTE_CALLS_PER_SEARCH_CAP = 20'));
-  assert.ok(source.includes('const TOMTOM_ROUTE_MIN_INTERVAL_MS = 300'));
-  assert.ok(source.includes('await paceTomTomRoute(perSearch);'));
+  assert.ok(source.includes('paidPedestrianRoutingCallsPerExplicitSearch: 0'));
+  assert.ok(source.includes('googlePlacesCallsPerExplicitSearch: 0'));
 });
 
-test('open-now remains fail-closed', () => {
-  const cfg = mod.CATEGORY_CONFIG.bars_drinks;
-  const base = {
-    id: 'p1',
-    displayName: { text: 'Bar One' },
-    location: { latitude: 59.91, longitude: 10.75 },
-    businessStatus: 'OPERATIONAL',
-    primaryType: 'bar',
-    primaryTypeDisplayName: { text: 'Bar' },
-    types: ['bar', 'establishment']
-  };
-  assert.equal(mod.normalizeGoogleNearbyPlace(base, cfg, true), null);
-  assert.ok(mod.normalizeGoogleNearbyPlace(
-    { ...base, currentOpeningHours: { openNow: true } },
-    cfg,
-    true
-  ));
+test('search input validates walking limit and categories', () => {
+  const valid = mod.validateSearchInput({
+    latitude: 59.91,
+    longitude: 10.75,
+    category: 'restaurants',
+    maxWalkMinutes: 15,
+    openNowOnly: false
+  });
+  assert.equal(valid.maxWalkMinutes, 15);
+  assert.equal(valid.category, 'restaurants');
+  assert.throws(() => mod.validateSearchInput({
+    latitude: 59.91,
+    longitude: 10.75,
+    category: 'not_a_category',
+    maxWalkMinutes: 15
+  }), /INVALID_CATEGORY/);
 });
 
-test('closed and moved places remain fail-closed', () => {
-  const cfg = mod.CATEGORY_CONFIG.restaurants;
+test('open-now logic handles an offset-backed live interval', () => {
+  const hours = [{
+    date: '2026-09-18',
+    timeRanges: [{ start: '10:00', end: '22:00', utcOffsetSeconds: 7200 }]
+  }];
+  const during = Date.UTC(2026, 8, 18, 12, 0, 0);
+  const after = Date.UTC(2026, 8, 18, 21, 0, 0);
+  assert.equal(mod.isOpenAtEpoch(hours, during), true);
+  assert.equal(mod.isOpenAtEpoch(hours, after), false);
+});
+
+test('open-now normalization fails closed when opening hours are missing', () => {
+  const config = mod.CATEGORY_CONFIG.restaurants;
   const base = {
-    id: 'p2',
-    displayName: { text: 'Restaurant One' },
-    location: { latitude: 59.91, longitude: 10.75 },
-    businessStatus: 'OPERATIONAL',
-    primaryType: 'restaurant',
-    primaryTypeDisplayName: { text: 'Restaurant' },
-    types: ['restaurant', 'establishment']
+    id: 'poi-1',
+    type: 'poi',
+    title: 'Restaurant One',
+    position: { coordinates: [10.75, 59.91] },
+    poiTypes: [{ id: 'restaurant', name: 'Restaurant' }]
   };
-  assert.equal(mod.normalizeGoogleNearbyPlace(
-    { ...base, businessStatus: 'CLOSED_PERMANENTLY' },
-    cfg,
-    false
-  ), null);
-  assert.equal(mod.normalizeGoogleNearbyPlace(
-    { ...base, movedPlaceId: 'new-id' },
-    cfg,
-    false
-  ), null);
+  assert.equal(mod.normalizeTomTomPlace(base, config, true, Date.UTC(2026, 8, 18, 12, 0, 0)), null);
+});
+
+test('normal discovery result is source verified and keeps compatibility alias', () => {
+  const config = mod.CATEGORY_CONFIG.restaurants;
+  const place = mod.normalizeTomTomPlace({
+    id: 'poi-2',
+    type: 'poi',
+    title: 'Restaurant Two',
+    position: { coordinates: [10.75, 59.91] },
+    poiTypes: [{ id: 'restaurant', name: 'Restaurant' }],
+    address: { street: 'Testveien', houseNumber: '1', postalCode: '0001', municipality: 'Oslo' }
+  }, config, false);
+  assert.ok(place);
+  assert.equal(place.sourceVerified, true);
+  assert.equal(place.googleOperationalVerified, true);
+  assert.equal(place.isOpenNow, null);
+  assert.equal(place.address, 'Testveien 1, 0001 Oslo');
+});
+
+test('matrix response extraction supports one-source Valhalla shape', () => {
+  const row = mod._test.extractMatrixRow({
+    sources_to_targets: [[{ time: 120, distance: 0.2 }, { time: 300, distance: 0.45 }]]
+  });
+  assert.equal(row.length, 2);
+  assert.equal(row[0].time, 120);
 });

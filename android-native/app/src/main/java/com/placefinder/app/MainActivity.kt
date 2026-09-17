@@ -177,7 +177,7 @@ private data class PlaceResult(
     val longitude: Double,
     val address: String,
     val isOpenNow: Boolean?,
-    val googleOperationalVerified: Boolean,
+    val sourceVerified: Boolean,
     val walkSeconds: Int,
     val walkMinutes: Int,
     val walkDistanceMeters: Int
@@ -310,7 +310,7 @@ private fun NearTimeScreen() {
                     .asSequence()
                     .filter { it.categoryLabel.isNotBlank() }
                     .filter { it.sourceCategories.isNotEmpty() }
-                    .filter { it.googleOperationalVerified }
+                    .filter { it.sourceVerified }
                     .filter { it.walkMinutes <= maxWalkMinutes.roundToInt() }
                     .filter { !openNowOnly || it.isOpenNow == true }
                     .sortedWith(
@@ -940,12 +940,11 @@ private suspend fun searchBackend(
     val thisSearch = usage?.optJSONObject("thisSearch")
 
     val usageText = thisSearch?.let {
-        val googleCalls =
-            it.optInt("googleNearbyPro", 0) +
-                it.optInt("googleNearbyEnterprise", 0)
+        val discoveryCalls = it.optInt("tomtomDiscover", 0)
+        val localMatrices = it.optInt("valhallaMatrix", 0)
 
-        "This search \u00B7 Google place search $googleCalls/1 \u00B7 " +
-            "walking routes ${it.optInt("tomtomRoute", 0)}"
+        "Cost guard · paid discovery $discoveryCalls/1 · " +
+            "paid routes 0 · local walking matrix $localMatrices/1"
     }
 
     SearchResponse(
@@ -1089,12 +1088,14 @@ private fun parsePlace(
         return null
     }
 
-    if (
-        !obj.optBoolean(
-            "googleOperationalVerified",
-            false
-        )
-    ) {
+    val sourceVerified = when {
+        obj.has("sourceVerified") ->
+            obj.optBoolean("sourceVerified", false)
+        else ->
+            obj.optBoolean("googleOperationalVerified", false)
+    }
+
+    if (!sourceVerified) {
         return null
     }
 
@@ -1115,7 +1116,7 @@ private fun parsePlace(
             .optString("address")
             .trim(),
         isOpenNow = isOpenNow,
-        googleOperationalVerified = true,
+        sourceVerified = true,
         walkSeconds = walkSeconds,
         walkMinutes = walkMinutes,
         walkDistanceMeters = walkDistanceMeters

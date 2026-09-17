@@ -1,6 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-Set-Location "C:\neartime-server"
+$root = $PSScriptRoot
+Set-Location $root
 
 Write-Host ""
 Write-Host "=========================================="
@@ -9,9 +10,11 @@ Write-Host "=========================================="
 Write-Host ""
 
 docker compose down
+if ($LASTEXITCODE -ne 0) {
+    throw "docker compose down failed."
+}
 
-$custom = "C:\neartime-server\valhalla-data"
-
+$custom = Join-Path $root "valhalla-data"
 if (Test-Path $custom) {
     Get-ChildItem $custom -Recurse -Force |
         Where-Object {
@@ -20,8 +23,15 @@ if (Test-Path $custom) {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-docker compose pull
-docker compose up -d
+docker compose pull valhalla
+if ($LASTEXITCODE -ne 0) {
+    throw "docker compose pull failed."
+}
+
+docker compose up -d valhalla
+if ($LASTEXITCODE -ne 0) {
+    throw "docker compose up failed."
+}
 
 Write-Host ""
 Write-Host "Valhalla rebuild started."
