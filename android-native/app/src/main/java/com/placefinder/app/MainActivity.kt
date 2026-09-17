@@ -86,7 +86,7 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
-private const val BACKEND_BASE_URL = "https://neartime.vercel.app/api/native"
+private const val BACKEND_BASE_URL = "https://neartime.vercel.app/functions/v1/native-search"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
 private const val DEFAULT_LONGITUDE = 10.7522
