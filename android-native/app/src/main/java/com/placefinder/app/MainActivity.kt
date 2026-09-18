@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-1"
+private const val APP_BUILD_ID = "production-20260918-2"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -226,6 +226,7 @@ private fun NearTimeScreen() {
     var categoryExpanded by remember { mutableStateOf(false) }
     var maxWalkMinutes by remember { mutableFloatStateOf(15f) }
     var openNowOnly by remember { mutableStateOf(false) }
+    var minOpenMinutes by remember { mutableFloatStateOf(0f) }
 
     var useCurrentLocation by remember { mutableStateOf(true) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
@@ -311,7 +312,8 @@ private fun NearTimeScreen() {
                     longitude = origin.longitude,
                     category = selectedCategory.wireValue,
                     maxWalkMinutes = maxWalkMinutes.roundToInt(),
-                    openNowOnly = openNowOnly
+                    openNowOnly = openNowOnly,
+                    minOpenMinutes = if (openNowOnly) minOpenMinutes.roundToInt() else 0
                 )
 
                 val validated = response.places
@@ -703,7 +705,37 @@ private fun NearTimeScreen() {
                                 checked = openNowOnly,
                                 onCheckedChange = {
                                     openNowOnly = it
+                                    if (!it) minOpenMinutes = 0f
                                 }
+                            )
+                        }
+
+                        if (openNowOnly) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = if (minOpenMinutes.roundToInt() == 0) {
+                                    "Minimum time until closing: no minimum"
+                                } else {
+                                    "Minimum time until closing: " +
+                                        if (minOpenMinutes.roundToInt() < 60) {
+                                            "${minOpenMinutes.roundToInt()} min"
+                                        } else {
+                                            val hours = minOpenMinutes.roundToInt() / 60
+                                            val minutes = minOpenMinutes.roundToInt() % 60
+                                            if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
+                                        }
+                                },
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Slider(
+                                value = minOpenMinutes,
+                                onValueChange = { minOpenMinutes = it },
+                                valueRange = 0f..180f,
+                                steps = 5
+                            )
+                            Text(
+                                "Only places confirmed to remain open for at least this long.",
+                                style = MaterialTheme.typography.bodySmall
                             )
                         }
                     }
@@ -922,7 +954,8 @@ private suspend fun searchBackend(
     longitude: Double,
     category: String,
     maxWalkMinutes: Int,
-    openNowOnly: Boolean
+    openNowOnly: Boolean,
+    minOpenMinutes: Int
 ): SearchResponse = withContext(Dispatchers.IO) {
     val json = postJson(
         BACKEND_BASE_URL,
@@ -934,6 +967,7 @@ private suspend fun searchBackend(
             .put("category", category)
             .put("maxWalkMinutes", maxWalkMinutes)
             .put("openNowOnly", openNowOnly)
+            .put("minOpenMinutes", minOpenMinutes)
     )
 
     val resultStatus = json.optString("resultStatus")
