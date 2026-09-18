@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-5"
+private const val APP_BUILD_ID = "production-20260918-6"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -443,12 +443,8 @@ private fun NearTimeScreen() {
                         }
                     ) { Text("Allow GPS location") }
                 } else {
-                    val point = currentLocation
                     Text(
-                        text = if (point == null) "Finding your GPS position…" else
-                            "GPS active · " +
-                                String.format(Locale.US, "%.5f", point.latitude) + ", " +
-                                String.format(Locale.US, "%.5f", point.longitude),
+                        text = if (currentLocation == null) "Finding your GPS position…" else "GPS location ready",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -576,7 +572,9 @@ private fun NearTimeScreen() {
                             categoryExpanded = false
                         }
                     ) {
-                        SearchCategory.entries.forEach { category ->
+                        SearchCategory.entries
+                            .sortedBy { it.displayName.lowercase(Locale.ROOT) }
+                            .forEach { category ->
                             DropdownMenuItem(
                                 text = {
                                     Text(category.displayName)
