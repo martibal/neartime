@@ -57,6 +57,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -105,7 +106,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-13"
+private const val APP_BUILD_ID = "production-20260918-14"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -223,8 +224,12 @@ class MainActivity : ComponentActivity() {
         MapsInitializer.initialize(applicationContext)
 
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme()) {
-                NearTimeScreen()
+            var darkMode by remember { mutableStateOf(false) }
+            MaterialTheme(colorScheme = if (darkMode) darkColorScheme() else lightColorScheme()) {
+                NearTimeScreen(
+                    darkMode = darkMode,
+                    onDarkModeChange = { darkMode = it }
+                )
             }
         }
     }
@@ -232,7 +237,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NearTimeScreen() {
+private fun NearTimeScreen(
+    darkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -450,12 +458,27 @@ private fun NearTimeScreen() {
         ) {
             item {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "NearTime",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text("Find places by real walking time.")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "NearTime",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("Find places by real walking time.")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (darkMode) "Dark" else "Light")
+                        Switch(
+                            checked = darkMode,
+                            onCheckedChange = onDarkModeChange
+                        )
+                    }
+                }
             }
 
             item {
