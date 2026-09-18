@@ -110,7 +110,7 @@ async function search(_tomTomKey, raw) {
 }
 """
 pat=r"async function search\(apiKey, raw\) \{.*?\n\}\n(?=async function suggest\()"
-s,n=re.subn(pat,new_search+"\n",s,flags=re.S)
+s,n=re.subn(pat,lambda _m:new_search+"\n",s,flags=re.S)
 if n!=1: raise SystemExit(f"Expected one search() block, replaced {n}")
 s=s.replace("placeDiscovery: 'TOMTOM_ORBIS_PLACES_CLOUD',","placeDiscovery: 'GOOGLE_PLACES_NEARBY_SEARCH_NEW',")
 s=s.replace("walkingRoutes: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',","walkingRoutes: 'GOOGLE_PLACES_ROUTING_SUMMARIES_WALK',")
