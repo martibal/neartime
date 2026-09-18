@@ -36,6 +36,10 @@ s=s.replace(anchor,google+"\n"+anchor,1)
 # Remove helper functions left by earlier Google patch runs. search() itself is replaced below.
 s=re.sub(r"async function requireGooglePlacesKey\(\) \{.*?\n\}\nfunction googleDurationSeconds\(v\) \{.*?\n\}\nfunction googleOpeningState\(place\) \{.*?\n\}\n", "", s, flags=re.S)
 
+# If an earlier broken Google patch removed/duplicated the search block, restore exactly one
+# replacement target by removing every Google helper/search fragment up to suggest().
+s=re.sub(r"(?:async function requireGooglePlacesKey\(\) \{.*?\n\}\n)?(?:function googleDurationSeconds\(v\) \{.*?\n\}\n)?(?:function googleOpeningState\(place\) \{.*?\n\}\n)?async function search\([^)]*\) \{.*?\n\}\n(?=async function suggest\()", "async function search_PLACEHOLDER() {}\n", s, flags=re.S)
+
 new_search=r"""async function requireGooglePlacesKey() {
   const key = clean(Deno.env.get('GOOGLE_PLACES_API_KEY'));
   if (!key) { const e = new Error('GOOGLE_PLACES_API_KEY_NOT_CONFIGURED'); e.status = 503; throw e; }
@@ -114,8 +118,12 @@ async function search(_tomTomKey, raw) {
       worstCaseCostNok:GOOGLE_SEARCH_COST_NOK,freeTierAssumed:false}}};
 }
 """
-pat=r"async function search\([^)]*\) \{.*?\n\}\n(?=async function suggest\()"
-s,n=re.subn(pat,lambda _m:new_search+"\n",s,flags=re.S)
+if "async function search_PLACEHOLDER() {}" in s:
+    s=s.replace("async function search_PLACEHOLDER() {}",new_search,1)
+    n=1
+else:
+    pat=r"async function search\([^)]*\) \{.*?\n\}\n(?=async function suggest\()"
+    s,n=re.subn(pat,lambda _m:new_search+"\n",s,flags=re.S)
 if n!=1: raise SystemExit(f"Expected one search() block, replaced {n}")
 s=s.replace("placeDiscovery: 'TOMTOM_ORBIS_PLACES_CLOUD',","placeDiscovery: 'GOOGLE_PLACES_NEARBY_SEARCH_NEW',")
 s=s.replace("walkingRoutes: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',","walkingRoutes: 'GOOGLE_PLACES_ROUTING_SUMMARIES_WALK',")
