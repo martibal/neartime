@@ -544,6 +544,7 @@ private fun NearTimeScreen() {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+            }
 
             item {
                 ExposedDropdownMenuBox(
