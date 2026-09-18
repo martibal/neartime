@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-candidate-audit-v16';
+const BUILD_ID = '2026-09-18-open-unknown-v17';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -527,7 +527,7 @@ async function search(apiKey, raw) {
         sortedBy: 'ACTUAL_PEDESTRIAN_ROUTE_DISTANCE',
         discoverySource: 'TOMTOM_ORBIS_PLACES_CLOUD',
         routingSource: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',
-        openNowGate: input.openNowOnly ? 'TOMTOM_ORBIS_OPENING_HOURS_FAIL_CLOSED' : 'OFF',
+        openNowGate: input.openNowOnly ? 'CONFIRMED_CLOSED_EXCLUDED_UNKNOWN_PRESERVED' : 'OFF',
         cloudOnly: true,
         international: true,
       },
@@ -598,12 +598,13 @@ async function search(apiKey, raw) {
       }
 
       if (input.openNowOnly) {
-        if (candidate.isOpenNow !== true) {
-          candidateAudit.push({id:candidate.id,name:candidate.name,address:candidate.address,straightDistanceMeters:candidate.straightDistanceMeters,isOpenNow:candidate.isOpenNow,openingHoursKnown:candidate.openingHoursKnown,decision:'SKIP_NOT_OPEN_NOW'});
+        if (candidate.isOpenNow === false) {
+          candidateAudit.push({id:candidate.id,name:candidate.name,address:candidate.address,straightDistanceMeters:candidate.straightDistanceMeters,isOpenNow:false,openingHoursKnown:true,decision:'SKIP_CONFIRMED_CLOSED'});
           continue;
         }
         if (input.minOpenMinutes > 0 &&
-            (!Number.isFinite(candidate.minutesUntilClose) ||
+            candidate.isOpenNow === true &&
+          (!Number.isFinite(candidate.minutesUntilClose) ||
              candidate.minutesUntilClose < input.minOpenMinutes)) {
           candidateAudit.push({id:candidate.id,name:candidate.name,address:candidate.address,straightDistanceMeters:candidate.straightDistanceMeters,isOpenNow:candidate.isOpenNow,minutesUntilClose:candidate.minutesUntilClose,decision:'SKIP_MIN_OPEN_TIME'});
           continue;
@@ -665,7 +666,7 @@ async function search(apiKey, raw) {
       sortedBy: 'ACTUAL_PEDESTRIAN_ROUTE_DISTANCE',
       discoverySource: 'TOMTOM_ORBIS_PLACES_CLOUD',
       routingSource: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',
-      openNowGate: input.openNowOnly ? 'TOMTOM_ORBIS_OPENING_HOURS_FAIL_CLOSED' : 'OFF',
+      openNowGate: input.openNowOnly ? 'CONFIRMED_CLOSED_EXCLUDED_UNKNOWN_PRESERVED' : 'OFF',
       cloudOnly: true,
       international: true,
       discoveryCandidates: candidates.length,
