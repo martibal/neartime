@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.core.os.CancellationSignal
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -87,7 +88,8 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "cloud-only-20260918-1"
+private const val APP_BUILD_ID = "cloud-only-20260918-2"
+private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
 private const val DEFAULT_LONGITUDE = 10.7522
@@ -328,7 +330,11 @@ private fun NearTimeScreen() {
                     )
                 )
             } catch (e: Exception) {
-                searchState = SearchState.Error(e.message ?: "Search failed.")
+                Log.e(LOG_TAG, "SEARCH_FAILED build=$APP_BUILD_ID", e)
+                searchState = SearchState.Error(
+                    "$APP_BUILD_ID · ${e::class.java.simpleName}: " +
+                        (e.message ?: "Search failed.")
+                )
             }
         }
     }
@@ -1154,6 +1160,8 @@ private fun postJson(
         "Local backend is forbidden in this build."
     }
 
+    Log.i(LOG_TAG, "POST_BEGIN build=$APP_BUILD_ID host=" + URL(url).host)
+
     val connection =
         URL(url).openConnection() as HttpURLConnection
 
@@ -1170,7 +1178,9 @@ private fun postJson(
         "application/json"
     )
 
+    var phase = "WRITE_REQUEST"
     try {
+        Log.i(LOG_TAG, "POST_PHASE $phase")
         connection.outputStream.use { stream ->
             stream.write(
                 payload
@@ -1181,7 +1191,13 @@ private fun postJson(
             )
         }
 
+        phase = "READ_STATUS"
+        Log.i(LOG_TAG, "POST_PHASE $phase")
         val code = connection.responseCode
+        Log.i(LOG_TAG, "POST_STATUS code=$code")
+
+        phase = "READ_BODY"
+        Log.i(LOG_TAG, "POST_PHASE $phase")
         val stream = if (code in 200..299) {
             connection.inputStream
         } else {
@@ -1197,6 +1213,10 @@ private fun postJson(
             it.readText()
         }
 
+        Log.i(LOG_TAG, "POST_BODY_COMPLETE bytes=${text.toByteArray(StandardCharsets.UTF_8).size}")
+
+        phase = "PARSE_JSON"
+        Log.i(LOG_TAG, "POST_PHASE $phase")
         val json = if (text.isBlank()) {
             JSONObject()
         } else {
@@ -1215,7 +1235,11 @@ private fun postJson(
             )
         }
 
+        Log.i(LOG_TAG, "POST_COMPLETE code=$code")
         return json
+    } catch (e: Exception) {
+        Log.e(LOG_TAG, "POST_FAILED phase=$phase build=$APP_BUILD_ID", e)
+        throw e
     } finally {
         connection.disconnect()
     }
