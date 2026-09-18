@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NearTime Privacy Policy</title>
+<meta name="description" content="Privacy Policy for the NearTime Android application.">
+
+<style>
+:root{color-scheme:light dark;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{margin:0;background:#f7f8fa;color:#18202a;line-height:1.62}
+main{max-width:820px;margin:0 auto;padding:48px 22px 72px}
+h1{font-size:2rem;margin:0 0 4px}h2{margin-top:32px;font-size:1.2rem}
+.meta{color:#596574;margin-bottom:30px}.card{background:#fff;border:1px solid #dfe4ea;border-radius:14px;padding:24px}
+a{color:#0b57d0}li{margin:7px 0}code{font-size:.95em}
+@media(prefers-color-scheme:dark){body{background:#11161c;color:#e8edf3}.card{background:#171e26;border-color:#303a46}.meta{color:#aeb8c4}a{color:#8ab4f8}}
+</style>
+</head>
+<body><main>
+<h1>NearTime Privacy Policy</h1>
+<p class="meta">Effective and last updated: 19 September 2026</p>
+<div class="card">
+<p>This Privacy Policy explains how the NearTime mobile application accesses, uses, transmits, and retains user and device data. NearTime is a place-search utility that helps users find nearby places by walking time.</p>
+
+<h2>1. Location data</h2>
+<p>Location access is optional. If you choose <strong>My current location</strong>, NearTime may access the foreground approximate or precise location made available by Android. The app sends the selected location over HTTPS to NearTime's search service so it can find nearby places and walking routes.</p>
+<p>For the current place-search flow, the location is processed by NearTime's Supabase-hosted backend and Google Maps Platform / Places services. NearTime's application search-cost database is designed not to persist the user's search-origin latitude or longitude. Infrastructure and service providers may process or retain technical request information under their own terms and privacy policies.</p>
+<p>NearTime may also use the device/platform geocoding service to display a human-readable description of the current location.</p>
+
+<h2>2. Custom place or address searches</h2>
+<p>If you choose <strong>Use another place or address</strong>, the text you enter and a location bias may be sent through NearTime's search service to TomTom services to return location suggestions and resolve the location you select. NearTime does not intentionally persist the typed address query in its application database.</p>
+
+<h2>3. Search preferences and operational telemetry</h2>
+<p>NearTime sends search inputs such as place category, walking-time limit, open-now preference, and minimum time until closing to the search service. To operate the service, enforce API-cost limits, prevent duplicate provider calls, and diagnose failures, NearTime may retain limited operational records such as:</p>
+<ul>
+<li>random request identifiers;</li>
+<li>search category and filter settings;</li>
+<li>result count and completion status;</li>
+<li>provider call counts and estimated provider cost; and</li>
+<li>application/backend build identifiers and timestamps.</li>
+</ul>
+<p>These operational records are not designed to identify a person and are not intended to contain the user's coordinates, typed address, or place names.</p>
+
+<h2>4. Service providers</h2>
+<p>NearTime relies on third-party infrastructure and mapping/search services to provide core functionality. These currently include Supabase for backend infrastructure, Google Maps Platform / Places for nearby place and walking-route information, and TomTom for custom place/address suggestion and resolution.</p>
+<p>Google Maps Platform components may also receive technical data such as IP address, device/request metadata, service interaction information, and pseudonymous identifiers as described by Google.</p>
+
+<h2>5. How data is used and shared</h2>
+<p>NearTime uses data only to provide the requested search functionality, maintain service reliability and security, and control provider costs. NearTime does not sell personal data and does not use the app to serve advertising. Data is transmitted to service providers only as needed to provide and operate these functions, subject to their applicable terms.</p>
+
+<h2>6. Retention</h2>
+<p>Search-origin location and custom address input are intended to be processed for the requested operation rather than retained in NearTime's application database. Limited operational telemetry may be retained for as long as reasonably necessary for reliability, abuse prevention, cost control, and debugging. Service providers may apply their own retention practices.</p>
+
+<h2>7. Security</h2>
+<p>NearTime uses HTTPS for network communication with its production services. No method of electronic transmission or storage is completely secure, but the service is designed to minimise the amount of personal data retained by NearTime.</p>
+
+<h2>8. Your choices</h2>
+<ul>
+<li>You may deny location permission and use another place or address instead.</li>
+<li>You can change or revoke NearTime's location permission in Android settings.</li>
+<li>You may clear the app's local data or uninstall the app at any time.</li>
+</ul>
+<p>NearTime currently does not require or offer a user account, so there is no NearTime account to delete.</p>
+
+<h2>9. Google terms and privacy</h2>
+<p>NearTime uses Google Maps Platform. Google's processing is subject to the <a href="https://policies.google.com/privacy">Google Privacy Policy</a> and applicable Google Maps Platform terms. Use of Google Maps features is also subject to the <a href="https://maps.google.com/help/terms_maps/">Google Maps/Google Earth Additional Terms of Service</a>.</p>
+
+<h2>10. Children</h2>
+<p>NearTime is a general-purpose place-search utility and is not specifically designed as a child-directed service. The target-audience declaration in Google Play will be maintained consistently with the released app.</p>
+
+<h2>11. Changes to this policy</h2>
+<p>This policy may be updated when NearTime's functionality, providers, or legal requirements change. The effective date above will be updated when material changes are made.</p>
+
+<h2>12. Contact</h2>
+<p>Privacy and support enquiries can be sent using the verified developer contact address published for NearTime on its Google Play listing. The developer contact information shown in Google Play is the authoritative support contact for the released app.</p>
+</div>
+</main></body></html>

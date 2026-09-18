@@ -3,6 +3,10 @@
   "framework": null,
   "builds": [
     {
+      "src": "legal/*.html",
+      "use": "@vercel/static"
+    },
+    {
       "src": "api/native.js",
       "use": "@vercel/node"
     },
@@ -32,6 +36,14 @@
     }
   ],
   "routes": [
+    {
+      "src": "/privacy",
+      "dest": "/legal/privacy.html"
+    },
+    {
+      "src": "/terms",
+      "dest": "/legal/terms.html"
+    },
     {
       "src": "/api/native",
       "dest": "/api/native.js"

@@ -114,11 +114,13 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260918-26"
+private const val APP_BUILD_ID = "production-20260919-27"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
 private const val DEFAULT_LONGITUDE = 10.7522
+private const val PRIVACY_POLICY_URL = "https://neartime.vercel.app/privacy"
+private const val TERMS_OF_USE_URL = "https://neartime.vercel.app/terms"
 
 private enum class SearchCategory(
     val wireValue: String,
@@ -443,6 +445,11 @@ private fun NearTimeScreen(
                 successOverlay.response.usageText?.let {
                     Text(text = it, style = MaterialTheme.typography.bodySmall)
                 }
+                Text(
+                    text = "Place data and walking routes provided by Google Maps",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Spacer(Modifier.height(8.dp))
                 Box(
                     modifier = Modifier
@@ -550,6 +557,13 @@ private fun NearTimeScreen(
                 }
 
                 if (!hasLocationPermission) {
+                    Text(
+                        text = "NearTime uses your location only when you choose My current location. " +
+                            "It is sent securely to NearTime's search service and Google Maps Platform " +
+                            "to find nearby places and walking routes.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(6.dp))
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {
@@ -947,6 +961,43 @@ private fun NearTimeScreen(
                 }
 
                 is SearchState.Success -> Unit
+            }
+
+            item {
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Legal & privacy",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    Text(
+                        text = "Privacy policy",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable {
+                            launchExternalUri(context, PRIVACY_POLICY_URL.toUri())
+                        }
+                    )
+                    Text(
+                        text = "Terms of use",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable {
+                            launchExternalUri(context, TERMS_OF_USE_URL.toUri())
+                        }
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "No account is required. Location access is optional; you can use another place or address instead.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
             item {

@@ -6,20 +6,38 @@ NearTime is a mobile-first place search and decision app built around one simple
 
 ## Production search architecture
 
-The native app uses current device location at search time, Google Maps SDK for the customer-visible global map, TomTom Orbis Places Search for current international place discovery, and TomTom hosted pedestrian Routing API for measured walking distance and time.
+The native Android app uses a current or user-selected origin. Normal place searches are sent over HTTPS to the production Supabase Edge Function. The current production search path uses Google Places Nearby Search with Google walking routing summaries, returns up to ten qualifying places, and ranks them by measured walking distance/time.
 
-No local country map, OSM extract, Valhalla graph or desktop routing service is part of the production search path.
+TomTom is currently used for the optional **Use another place or address** suggestion/details flow. Android's platform geocoder is used only to turn the device's current coordinates into a human-readable location label.
 
-The product returns up to ten places ranked by measured pedestrian route distance. If the Top 10 cannot be proven inside the provider-cost ceiling, the request fails closed rather than returning a guessed ranking.
+No ADB reverse, local Node backend, downloaded country map, OSM extract, Valhalla graph, Docker routing service or desktop process is required by the released mobile search path.
 
-## Permanent economic invariant
+## Cost controls
 
-A normal logical place search may never exceed NOK 0.30 in provider/API COGS. The production code uses a conservative no-free-tier cost model and caps provider calls before execution.
+Provider usage is bounded by server-side search rules and monitored through the NearTime Cost Monitor. Production code must remain fail-closed when a requested provider path would violate the active cost contract.
 
-The normative contracts are docs/ECONOMIC_INVARIANTS.md and docs/COST_CONTRACT.md.
+The normative cost documents are `docs/ECONOMIC_INVARIANTS.md` and `docs/COST_CONTRACT.md`.
 
-## Mobile
+## Android
 
-Android package: com.placefinder.app.
+Package: `com.placefinder.app`.
 
-The native Android client calls the production HTTPS backend at https://neartime.vercel.app/api/native. No ADB reverse or local backend is required.
+Current native Android source:
+`android-native/app/src/main/java/com/placefinder/app/MainActivity.kt`
+
+Production search endpoint:
+`https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search`
+
+## Google Play / legal
+
+Public privacy policy:
+https://neartime.vercel.app/privacy
+
+Public terms:
+https://neartime.vercel.app/terms
+
+Release checklist:
+`docs/PLAY_STORE_RELEASE_CHECKLIST.md`
+
+Data Safety working draft:
+`docs/PLAY_DATA_SAFETY_DRAFT.md`
