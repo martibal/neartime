@@ -86,7 +86,8 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
-private const val BACKEND_BASE_URL = "https://neartime.vercel.app/functions/v1/native-search"
+private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
+private const val APP_BUILD_ID = "cloud-only-20260918-1"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
 private const val DEFAULT_LONGITUDE = 10.7522
@@ -1146,6 +1147,13 @@ private fun postJson(
     url: String,
     payload: JSONObject
 ): JSONObject {
+    require(url.startsWith("https://")) {
+        "NearTime production backend must use HTTPS."
+    }
+    require(!url.contains("127.0.0.1") && !url.contains("localhost")) {
+        "Local backend is forbidden in this build."
+    }
+
     val connection =
         URL(url).openConnection() as HttpURLConnection
 
@@ -1202,7 +1210,9 @@ private fun postJson(
                     "Backend HTTP $code"
                 }
 
-            throw IllegalStateException(error)
+            throw IllegalStateException(
+                "$APP_BUILD_ID · $error"
+            )
         }
 
         return json
