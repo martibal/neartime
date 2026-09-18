@@ -132,7 +132,7 @@ s=s.replace("capNok: SEARCH_COST_CAP_NOK,\n        maxDiscoverCalls: 1,\n       
             "capNok: SEARCH_COST_CAP_NOK,\n        maxGoogleNearbyCalls: 1,\n        worstCaseNok: GOOGLE_SEARCH_COST_NOK,")
 # Fail before deploy if patch accumulation ever returns.
 checks = {
-  "GOOGLE_SEARCH_COST_NOK": len(re.findall(r"const GOOGLE_SEARCH_COST_NOK\\s*=", s)),
+  "GOOGLE_SEARCH_COST_NOK": s.count("const GOOGLE_SEARCH_COST_NOK ="),
   "requireGooglePlacesKey": s.count("async function requireGooglePlacesKey("),
   "googleDurationSeconds": s.count("function googleDurationSeconds("),
   "googleOpeningState": s.count("function googleOpeningState("),
