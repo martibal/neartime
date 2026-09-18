@@ -72,9 +72,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -112,7 +114,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260918-25"
+private const val APP_BUILD_ID = "production-20260918-26"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -249,6 +251,7 @@ private fun NearTimeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     var selectedCategory by remember { mutableStateOf(SearchCategory.BARS_DRINKS) }
     var categoryExpanded by remember { mutableStateOf(false) }
@@ -681,16 +684,32 @@ private fun NearTimeScreen(
             }
 
             item {
-                ExposedDropdownMenuBox(
-                    expanded = categoryExpanded,
-                    onExpandedChange = { expanded ->
-                        categoryExpanded = expanded
-                        if (expanded) {
-                            categoryFilterText = ""
-                        } else {
-                            categoryFilterText = ""
+                val query = categoryFilterText.trim().lowercase(Locale.ROOT)
+                val sortedCategories = SearchCategory.entries
+                    .sortedBy { it.displayName.lowercase(Locale.ROOT) }
+
+                val filteredCategories = if (query.isBlank()) {
+                    sortedCategories
+                } else {
+                    sortedCategories
+                        .filter {
+                            it.displayName
+                                .lowercase(Locale.ROOT)
+                                .contains(query)
                         }
-                    }
+                        .sortedWith(
+                            compareBy<SearchCategory> {
+                                !it.displayName
+                                    .lowercase(Locale.ROOT)
+                                    .startsWith(query)
+                            }.thenBy {
+                                it.displayName.lowercase(Locale.ROOT)
+                            }
+                        )
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     TextField(
                         value = if (categoryExpanded) {
@@ -700,98 +719,81 @@ private fun NearTimeScreen(
                         },
                         onValueChange = { value ->
                             categoryFilterText = value
-                            if (!categoryExpanded) {
-                                categoryExpanded = true
-                            }
+                            categoryExpanded = true
                         },
                         readOnly = false,
                         singleLine = true,
                         label = { Text("Place type") },
                         placeholder = { Text("Type to filter, e.g. rest") },
                         trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(
-                                expanded = categoryExpanded
-                            )
+                            if (categoryExpanded) {
+                                Text("⌃")
+                            } else {
+                                Text("⌄")
+                            }
                         },
                         modifier = Modifier
-                            .menuAnchor(
-                                ExposedDropdownMenuAnchorType.PrimaryEditable
-                            )
                             .fillMaxWidth()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = categoryExpanded,
-                        onDismissRequest = {
-                            categoryExpanded = false
-                            categoryFilterText = ""
-                        },
-                        modifier = Modifier.height(360.dp)
-                    ) {
-                        val query = categoryFilterText.trim().lowercase(Locale.ROOT)
-                        val sortedCategories = SearchCategory.entries
-                            .sortedBy { it.displayName.lowercase(Locale.ROOT) }
-
-                        val filteredCategories = if (query.isBlank()) {
-                            sortedCategories
-                        } else {
-                            sortedCategories
-                                .filter {
-                                    it.displayName
-                                        .lowercase(Locale.ROOT)
-                                        .contains(query)
-                                }
-                                .sortedWith(
-                                    compareBy<SearchCategory> {
-                                        !it.displayName
-                                            .lowercase(Locale.ROOT)
-                                            .startsWith(query)
-                                    }.thenBy {
-                                        it.displayName.lowercase(Locale.ROOT)
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    if (!categoryExpanded) {
+                                        categoryFilterText = ""
                                     }
-                                )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(360.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(end = 14.dp)
-                                    .verticalScroll(categoryScrollState)
-                            ) {
-                                if (filteredCategories.isEmpty()) {
-                                    Text(
-                                        "No matching place type",
-                                        modifier = Modifier.padding(12.dp),
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                } else {
-                                    filteredCategories.forEach { category ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(category.displayName)
-                                            },
-                                            onClick = {
-                                                selectedCategory = category
-                                                categoryExpanded = false
-                                                categoryFilterText = ""
-                                            }
-                                        )
-                                    }
+                                    categoryExpanded = true
                                 }
                             }
+                    )
 
-                            ScrollStateScrollbar(
-                                state = categoryScrollState,
+                    if (categoryExpanded) {
+                        Spacer(Modifier.height(4.dp))
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                        ) {
+                            Box(
                                 modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .fillMaxHeight()
-                                    .width(14.dp)
-                            )
+                                    .fillMaxSize()
+                                    .padding(4.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(end = 14.dp)
+                                        .verticalScroll(categoryScrollState)
+                                ) {
+                                    if (filteredCategories.isEmpty()) {
+                                        Text(
+                                            "No matching place type",
+                                            modifier = Modifier.padding(12.dp),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    } else {
+                                        filteredCategories.forEach { category ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(category.displayName)
+                                                },
+                                                onClick = {
+                                                    selectedCategory = category
+                                                    categoryFilterText = ""
+                                                    categoryExpanded = false
+                                                    focusManager.clearFocus()
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                ScrollStateScrollbar(
+                                    state = categoryScrollState,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .fillMaxHeight()
+                                        .width(14.dp)
+                                )
+                            }
                         }
                     }
                 }
