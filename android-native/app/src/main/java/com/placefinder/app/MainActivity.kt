@@ -234,6 +234,7 @@ private fun NearTimeScreen() {
 
     var searchState by remember { mutableStateOf<SearchState>(SearchState.Idle) }
     var selectedPlace by remember { mutableStateOf<PlaceResult?>(null) }
+    var lastSearchOrigin by remember { mutableStateOf<GeoPoint?>(null) }
 
     var permissionRevision by remember { mutableIntStateOf(0) }
     val hasLocationPermission = remember(permissionRevision) {
@@ -300,6 +301,7 @@ private fun NearTimeScreen() {
                 if (useCurrentLocation) {
                     currentLocation = origin
                 }
+                lastSearchOrigin = origin
 
                 val response = searchBackend(
                     latitude = origin.latitude,
@@ -901,7 +903,7 @@ private fun PlaceCard(
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
-                    openWalkingDirections(context, place)
+                    openWalkingDirections(context, place, lastSearchOrigin)
                 }
             ) {
                 Text("Show route")
@@ -1404,14 +1406,18 @@ private fun openPlaceInGoogleMaps(
 
 private fun openWalkingDirections(
     context: Context,
-    place: PlaceResult
+    place: PlaceResult,
+    origin: GeoPoint?
 ) {
     val destination =
         "${place.latitude},${place.longitude}"
+    val originParam = origin?.let {
+        "&origin=${it.latitude},${it.longitude}"
+    } ?: ""
 
     val uri =
         "https://www.google.com/maps/dir/" +
-            "?api=1&destination=$destination" +
+            "?api=1$originParam&destination=$destination" +
             "&travelmode=walking"
 
     launchExternalUri(
