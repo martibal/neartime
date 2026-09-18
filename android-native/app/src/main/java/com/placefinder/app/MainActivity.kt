@@ -18,6 +18,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,6 +32,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -102,7 +105,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-11"
+private const val APP_BUILD_ID = "production-20260918-12"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -263,6 +266,7 @@ private fun NearTimeScreen() {
     }
 
     val cameraPositionState = rememberCameraPositionState()
+    val categoryScrollState = rememberScrollState()
     val resultListState = rememberLazyListState()
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
@@ -581,20 +585,42 @@ private fun NearTimeScreen() {
                         expanded = categoryExpanded,
                         onDismissRequest = {
                             categoryExpanded = false
-                        }
+                        },
+                        modifier = Modifier.height(420.dp)
                     ) {
                         val sortedCategories = SearchCategory.entries
                             .sortedBy { it.displayName.lowercase(Locale.ROOT) }
 
-                        sortedCategories.forEach { category ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(category.displayName)
-                                },
-                                onClick = {
-                                    selectedCategory = category
-                                    categoryExpanded = false
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(420.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(end = 14.dp)
+                                    .verticalScroll(categoryScrollState)
+                            ) {
+                                sortedCategories.forEach { category ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(category.displayName)
+                                        },
+                                        onClick = {
+                                            selectedCategory = category
+                                            categoryExpanded = false
+                                        }
+                                    )
                                 }
+                            }
+
+                            ScrollStateScrollbar(
+                                state = categoryScrollState,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .width(14.dp)
                             )
                         }
                     }
@@ -817,6 +843,61 @@ private fun NearTimeScreen() {
     }
 }
 
+
+
+@Composable
+private fun ScrollStateScrollbar(
+    state: androidx.compose.foundation.ScrollState,
+    modifier: Modifier = Modifier
+) {
+    if (state.maxValue <= 0) return
+
+    val scope = rememberCoroutineScope()
+    val positionFraction = (state.value.toFloat() / state.maxValue.toFloat())
+        .coerceIn(0f, 1f)
+
+    BoxWithConstraints(
+        modifier = modifier
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+            )
+            .pointerInput(state.maxValue) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset ->
+                        val fraction = (offset.y / size.height.toFloat())
+                            .coerceIn(0f, 1f)
+                        scope.launch {
+                            state.scrollTo((fraction * state.maxValue).roundToInt())
+                        }
+                    },
+                    onVerticalDrag = { change, _ ->
+                        change.consume()
+                        val fraction = (change.position.y / size.height.toFloat())
+                            .coerceIn(0f, 1f)
+                        scope.launch {
+                            state.scrollTo((fraction * state.maxValue).roundToInt())
+                        }
+                    }
+                )
+            }
+    ) {
+        val thumbFraction = 0.22f
+        val thumbHeight = maxHeight * thumbFraction
+        val thumbOffset = (maxHeight - thumbHeight) * positionFraction
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(thumbHeight)
+                .offset(y = thumbOffset)
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                )
+        )
+    }
+}
 
 @Composable
 private fun LazyListScrollbar(
