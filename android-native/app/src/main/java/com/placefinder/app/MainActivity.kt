@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-3"
+private const val APP_BUILD_ID = "production-20260918-4"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -322,7 +322,10 @@ private fun NearTimeScreen() {
                     .filter { it.sourceCategories.isNotEmpty() }
                     .filter { it.sourceVerified }
                     .filter { it.walkMinutes <= maxWalkMinutes.roundToInt() }
-                    .filter { !openNowOnly || it.isOpenNow == true }
+                    // Backend owns opening-hours semantics. When Open now is enabled,
+                    // confirmed-closed places are already excluded there; unknown hours
+                    // must not be silently treated as closed by the Android client.
+                    .filter { !openNowOnly || it.isOpenNow != false }
                     .sortedWith(
                         compareBy<PlaceResult> { it.walkDistanceMeters }
                             .thenBy { it.walkSeconds }
