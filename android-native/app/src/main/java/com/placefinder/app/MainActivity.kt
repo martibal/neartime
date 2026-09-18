@@ -106,7 +106,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-15"
+private const val APP_BUILD_ID = "production-20260918-16"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -697,90 +697,106 @@ private fun NearTimeScreen(
             }
 
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "MAXIMUM WALKING TIME",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        Text("Walking radius", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = "Maximum walking time: " +
-                                "${maxWalkMinutes.roundToInt()} min",
+                            "${maxWalkMinutes.roundToInt()} min",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Slider(
+                        value = maxWalkMinutes,
+                        onValueChange = { maxWalkMinutes = it },
+                        valueRange = 5f..30f,
+                        steps = 24
+                    )
+                }
+            }
+
+            item {
+                HorizontalDivider()
+            }
+
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "OPEN NOW",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Exclude places confirmed closed",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        Switch(
+                            checked = openNowOnly,
+                            onCheckedChange = {
+                                openNowOnly = it
+                                if (!it) minOpenMinutes = 0f
+                            }
+                        )
+                    }
+
+                    if (openNowOnly) {
+                        Spacer(Modifier.height(18.dp))
+                        Text(
+                            "MINIMUM TIME UNTIL CLOSING",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (minOpenMinutes.roundToInt() == 0) {
+                                "No minimum"
+                            } else if (minOpenMinutes.roundToInt() < 60) {
+                                "${minOpenMinutes.roundToInt()} min"
+                            } else {
+                                val hours = minOpenMinutes.roundToInt() / 60
+                                val minutes = minOpenMinutes.roundToInt() % 60
+                                if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
-
                         Slider(
-                            value = maxWalkMinutes,
-                            onValueChange = {
-                                maxWalkMinutes = it
-                            },
-                            valueRange = 5f..30f,
-                            steps = 24
+                            value = minOpenMinutes,
+                            onValueChange = { minOpenMinutes = it },
+                            valueRange = 0f..180f,
+                            steps = 5
                         )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement =
-                                Arrangement.SpaceBetween
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(0.80f)
-                            ) {
-                                Text(
-                                    "Open now",
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    "Excludes places confirmed closed. Places without opening-hours data remain visible and are marked unavailable.",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-
-                            Switch(
-                                checked = openNowOnly,
-                                onCheckedChange = {
-                                    openNowOnly = it
-                                    if (!it) minOpenMinutes = 0f
-                                }
-                            )
-                        }
-
-                        if (openNowOnly) {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = if (minOpenMinutes.roundToInt() == 0) {
-                                    "Minimum time until closing: no minimum"
-                                } else {
-                                    "Minimum time until closing: " +
-                                        if (minOpenMinutes.roundToInt() < 60) {
-                                            "${minOpenMinutes.roundToInt()} min"
-                                        } else {
-                                            val hours = minOpenMinutes.roundToInt() / 60
-                                            val minutes = minOpenMinutes.roundToInt() % 60
-                                            if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
-                                        }
-                                },
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Slider(
-                                value = minOpenMinutes,
-                                onValueChange = { minOpenMinutes = it },
-                                valueRange = 0f..180f,
-                                steps = 5
-                            )
-                            Text(
-                                "Only places confirmed to remain open for at least this long.",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
                     }
                 }
             }
 
             item {
+                Spacer(Modifier.height(18.dp))
+            }
+
+            item {
                 Button(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp),
                     enabled = searchState !is SearchState.Loading &&
                         if (useCurrentLocation) {
                             hasLocationPermission
