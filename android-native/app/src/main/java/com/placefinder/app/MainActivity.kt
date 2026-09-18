@@ -72,9 +72,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -90,6 +93,7 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -112,7 +116,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260918-23"
+private const val APP_BUILD_ID = "production-20260918-24"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -249,6 +253,8 @@ private fun NearTimeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val categoryFilterFocusRequester = remember { FocusRequester() }
 
     var selectedCategory by remember { mutableStateOf(SearchCategory.BARS_DRINKS) }
     var categoryExpanded by remember { mutableStateOf(false) }
@@ -287,6 +293,16 @@ private fun NearTimeScreen(
 
     LaunchedEffect(categoryFilterText) {
         categoryScrollState.scrollTo(0)
+    }
+
+    LaunchedEffect(categoryExpanded) {
+        if (categoryExpanded) {
+            delay(120)
+            categoryFilterFocusRequester.requestFocus()
+            keyboardController?.show()
+        } else {
+            keyboardController?.hide()
+        }
     }
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
@@ -747,7 +763,9 @@ private fun NearTimeScreen(
                             OutlinedTextField(
                                 value = categoryFilterText,
                                 onValueChange = { categoryFilterText = it },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(categoryFilterFocusRequester),
                                 singleLine = true,
                                 label = { Text("Find place type") },
                                 placeholder = { Text("e.g. rest, pharmacy, hotel") }
