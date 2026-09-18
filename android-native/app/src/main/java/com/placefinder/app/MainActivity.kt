@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-2"
+private const val APP_BUILD_ID = "production-20260918-3"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -415,195 +415,123 @@ private fun NearTimeScreen() {
             item {
                 Text("Start from", fontWeight = FontWeight.SemiBold)
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = useCurrentLocation,
-                        onClick = {
-                            useCurrentLocation = true
-                            locationError = null
-                        },
-                        label = { Text("My location") }
-                    )
+                FilterChip(
+                    selected = useCurrentLocation,
+                    onClick = {
+                        useCurrentLocation = true
+                        customLocation = null
+                        customLocationText = ""
+                        locationSuggestions = emptyList()
+                        locationError = null
+                    },
+                    label = { Text("My current location") }
+                )
 
-                    FilterChip(
-                        selected = !useCurrentLocation,
+                if (!hasLocationPermission) {
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = {
-                            useCurrentLocation = false
-                            locationError = null
-                        },
-                        label = { Text("Choose place") }
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    ) { Text("Allow GPS location") }
+                } else {
+                    val point = currentLocation
+                    Text(
+                        text = if (point == null) "Finding your GPS position…" else
+                            "GPS active · " +
+                                String.format(Locale.US, "%.5f", point.latitude) + ", " +
+                                String.format(Locale.US, "%.5f", point.longitude),
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
 
-                if (useCurrentLocation) {
-                    Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(6.dp))
+                Text("Or use a place or address", fontWeight = FontWeight.SemiBold)
 
-                    if (!hasLocationPermission) {
-                        OutlinedButton(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
+                OutlinedTextField(
+                    value = customLocationText,
+                    onValueChange = {
+                        customLocationText = it
+                        customLocation = null
+                        useCurrentLocation = it.isBlank()
+                        locationSuggestions = emptyList()
+                        locationError = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Place or address") },
+                    placeholder = { Text("e.g. hotel name or address") }
+                )
+
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !locationSearchBusy && customLocationText.trim().length >= 3,
+                    onClick = {
+                        scope.launch {
+                            locationSearchBusy = true
+                            locationError = null
+                            try {
+                                val bias = currentLocation ?: GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
+                                locationSuggestions = suggestLocationsBackend(
+                                    customLocationText.trim(), bias.latitude, bias.longitude
                                 )
-                            }
-                        ) {
-                            Text("Allow GPS location")
-                        }
-                    } else {
-                        val point = currentLocation
-
-                        Text(
-                            text = if (point == null) {
-                                "Finding your GPS position…"
-                            } else {
-                                "GPS active · " +
-                                    String.format(Locale.US, "%.5f", point.latitude) +
-                                    ", " +
-                                    String.format(Locale.US, "%.5f", point.longitude)
-                            },
-                            style = MaterialTheme.typography.bodySmall
-                        )
-
-                        OutlinedButton(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { refreshGps() }
-                        ) {
-                            Text("Refresh GPS")
+                                if (locationSuggestions.isEmpty()) {
+                                    locationError = "No matching start location found."
+                                }
+                            } catch (e: Exception) {
+                                locationError = e.message ?: "Location search failed."
+                            } finally { locationSearchBusy = false }
                         }
                     }
-                } else {
-                    Spacer(Modifier.height(6.dp))
+                ) {
+                    if (locationSearchBusy) {
+                        CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+                    } else Text("Find place or address")
+                }
 
-                    OutlinedTextField(
-                        value = customLocationText,
-                        onValueChange = {
-                            customLocationText = it
-                            customLocation = null
-                            locationSuggestions = emptyList()
-                            locationError = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Address or place") },
-                        placeholder = { Text("e.g. Oslo Central Station") }
-                    )
-
-                    OutlinedButton(
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !locationSearchBusy &&
-                            customLocationText.trim().length >= 3,
-                        onClick = {
+                locationSuggestions.forEach { suggestion ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable {
                             scope.launch {
                                 locationSearchBusy = true
                                 locationError = null
-
                                 try {
-                                    val bias = currentLocation ?: GeoPoint(
-                                        DEFAULT_LATITUDE,
-                                        DEFAULT_LONGITUDE
+                                    val resolved = resolveLocationBackend(suggestion)
+                                    customLocation = resolved
+                                    customLocationText = resolved.title
+                                    useCurrentLocation = false
+                                    locationSuggestions = emptyList()
+                                    cameraPositionState.animate(
+                                        CameraUpdateFactory.newLatLngZoom(
+                                            LatLng(resolved.latitude, resolved.longitude), 14.5f
+                                        )
                                     )
-
-                                    locationSuggestions = suggestLocationsBackend(
-                                        query = customLocationText.trim(),
-                                        latitude = bias.latitude,
-                                        longitude = bias.longitude
-                                    )
-
-                                    if (locationSuggestions.isEmpty()) {
-                                        locationError =
-                                            "No matching start location found."
-                                    }
                                 } catch (e: Exception) {
-                                    locationError =
-                                        e.message ?: "Location search failed."
-                                } finally {
-                                    locationSearchBusy = false
-                                }
+                                    locationError = e.message ?: "Could not resolve location."
+                                } finally { locationSearchBusy = false }
                             }
                         }
                     ) {
-                        if (locationSearchBusy) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.height(18.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Find start location")
-                        }
-                    }
-
-                    locationSuggestions.forEach { suggestion ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    scope.launch {
-                                        locationSearchBusy = true
-                                        locationError = null
-
-                                        try {
-                                            val resolved =
-                                                resolveLocationBackend(suggestion)
-
-                                            customLocation = resolved
-                                            customLocationText = resolved.title
-                                            locationSuggestions = emptyList()
-
-                                            cameraPositionState.animate(
-                                                CameraUpdateFactory.newLatLngZoom(
-                                                    LatLng(
-                                                        resolved.latitude,
-                                                        resolved.longitude
-                                                    ),
-                                                    14.5f
-                                                )
-                                            )
-                                        } catch (e: Exception) {
-                                            locationError =
-                                                e.message
-                                                    ?: "Could not resolve location."
-                                        } finally {
-                                            locationSearchBusy = false
-                                        }
-                                    }
-                                }
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(10.dp)
-                            ) {
-                                Text(
-                                    suggestion.title,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-
-                                if (suggestion.subtitle.isNotBlank()) {
-                                    Text(
-                                        suggestion.subtitle,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(suggestion.title, fontWeight = FontWeight.SemiBold)
+                            if (suggestion.subtitle.isNotBlank()) {
+                                Text(suggestion.subtitle, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
+                }
 
-                    customLocation?.let {
-                        Text(
-                            text = buildString {
-                                append("Start: ")
-                                append(it.title)
-                                if (it.address.isNotBlank()) {
-                                    append(" · ")
-                                    append(it.address)
-                                }
-                            },
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
+                customLocation?.let {
+                    Text(
+                        "Using: " + it.title +
+                            if (it.address.isNotBlank()) " · " + it.address else "",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
 
                 locationError?.let {
@@ -613,7 +541,6 @@ private fun NearTimeScreen() {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-            }
 
             item {
                 ExposedDropdownMenuBox(
