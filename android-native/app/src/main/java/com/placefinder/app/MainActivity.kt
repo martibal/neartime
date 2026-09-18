@@ -16,15 +16,23 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -53,12 +61,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.net.toUri
@@ -91,7 +102,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-9"
+private const val APP_BUILD_ID = "production-20260918-10"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -252,6 +263,8 @@ private fun NearTimeScreen() {
     }
 
     val cameraPositionState = rememberCameraPositionState()
+    val categoryListState = rememberLazyListState()
+    val resultListState = rememberLazyListState()
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
         if (hasLocationPermission) {
@@ -571,17 +584,43 @@ private fun NearTimeScreen() {
                             categoryExpanded = false
                         }
                     ) {
-                        SearchCategory.entries
+                        val sortedCategories = SearchCategory.entries
                             .sortedBy { it.displayName.lowercase(Locale.ROOT) }
-                            .forEach { category ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(category.displayName)
-                                },
-                                onClick = {
-                                    selectedCategory = category
-                                    categoryExpanded = false
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(420.dp)
+                        ) {
+                            LazyColumn(
+                                state = categoryListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(end = 14.dp)
+                            ) {
+                                itemsIndexed(
+                                    items = sortedCategories,
+                                    key = { _, category -> category.wireValue }
+                                ) { _, category ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(category.displayName)
+                                        },
+                                        onClick = {
+                                            selectedCategory = category
+                                            categoryExpanded = false
+                                        }
+                                    )
                                 }
+                            }
+
+                            LazyListScrollbar(
+                                state = categoryListState,
+                                itemCount = sortedCategories.size,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .width(14.dp)
                             )
                         }
                     }
@@ -742,31 +781,56 @@ private fun NearTimeScreen() {
                         }
                     }
 
-                    itemsIndexed(
-                        items = state.response.places,
-                        key = { _, place -> place.id }
-                    ) { index, place ->
-                        PlaceCard(
-                            rank = index + 1,
-                            place = place,
-                            searchOrigin = lastSearchOrigin,
-                            selected = selectedPlace?.id == place.id,
-                            onSelect = {
-                                selectedPlace = place
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(620.dp)
+                        ) {
+                            LazyColumn(
+                                state = resultListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(end = 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                itemsIndexed(
+                                    items = state.response.places,
+                                    key = { _, place -> place.id }
+                                ) { index, place ->
+                                    PlaceCard(
+                                        rank = index + 1,
+                                        place = place,
+                                        searchOrigin = lastSearchOrigin,
+                                        selected = selectedPlace?.id == place.id,
+                                        onSelect = {
+                                            selectedPlace = place
 
-                                scope.launch {
-                                    cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngZoom(
-                                            LatLng(
-                                                place.latitude,
-                                                place.longitude
-                                            ),
-                                            16f
-                                        )
+                                            scope.launch {
+                                                cameraPositionState.animate(
+                                                    CameraUpdateFactory.newLatLngZoom(
+                                                        LatLng(
+                                                            place.latitude,
+                                                            place.longitude
+                                                        ),
+                                                        16f
+                                                    )
+                                                )
+                                            }
+                                        }
                                     )
                                 }
                             }
-                        )
+
+                            LazyListScrollbar(
+                                state = resultListState,
+                                itemCount = state.response.places.size,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .width(14.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -776,6 +840,80 @@ private fun NearTimeScreen() {
             }
         }
 
+    }
+}
+
+
+@Composable
+private fun LazyListScrollbar(
+    state: LazyListState,
+    itemCount: Int,
+    modifier: Modifier = Modifier
+) {
+    if (itemCount <= 1) return
+
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val firstVisibleIndex by remember(state) {
+        derivedStateOf { state.firstVisibleItemIndex }
+    }
+    val visibleCount by remember(state) {
+        derivedStateOf { state.layoutInfo.visibleItemsInfo.size.coerceAtLeast(1) }
+    }
+
+    val thumbFraction = (visibleCount.toFloat() / itemCount.toFloat())
+        .coerceIn(0.12f, 1f)
+    val maxFirst = (itemCount - visibleCount).coerceAtLeast(1)
+    val positionFraction = (firstVisibleIndex.toFloat() / maxFirst.toFloat())
+        .coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+            )
+            .pointerInput(itemCount, visibleCount) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset ->
+                        val track = size.height.toFloat()
+                        val thumb = track * thumbFraction
+                        val usable = (track - thumb).coerceAtLeast(1f)
+                        val fraction = ((offset.y - thumb / 2f) / usable)
+                            .coerceIn(0f, 1f)
+                        val target = (fraction * maxFirst).roundToInt()
+                        scope.launch { state.scrollToItem(target) }
+                    },
+                    onVerticalDrag = { change, _ ->
+                        change.consume()
+                        val track = size.height.toFloat()
+                        val thumb = track * thumbFraction
+                        val usable = (track - thumb).coerceAtLeast(1f)
+                        val fraction = ((change.position.y - thumb / 2f) / usable)
+                            .coerceIn(0f, 1f)
+                        val target = (fraction * maxFirst).roundToInt()
+                        scope.launch { state.scrollToItem(target) }
+                    }
+                )
+            }
+    ) {
+        val trackHeight = 1f
+        val yFraction = positionFraction * (1f - thumbFraction)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(thumbFraction)
+                .offset(y = with(density) {
+                    // 620dp/420dp parent heights are resolved by layout; this
+                    // offset is refined by drag while the list itself remains
+                    // the source of truth for scroll position.
+                    (yFraction * 620f).dp
+                })
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                )
+        )
     }
 }
 
