@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
@@ -106,7 +107,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-17"
+private const val APP_BUILD_ID = "production-20260918-18"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -252,6 +253,7 @@ private fun NearTimeScreen(
 
     var useCurrentLocation by remember { mutableStateOf(true) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    var currentLocationLabel by remember { mutableStateOf<String?>(null) }
     var customLocation by remember { mutableStateOf<ResolvedLocation?>(null) }
     var customLocationText by remember { mutableStateOf("") }
     var locationSuggestions by remember { mutableStateOf<List<LocationSuggestion>>(emptyList()) }
@@ -280,6 +282,18 @@ private fun NearTimeScreen(
     LaunchedEffect(hasLocationPermission, permissionRevision) {
         if (hasLocationPermission) {
             currentLocation = resolveCurrentLocation(context)
+        } else {
+            currentLocation = null
+            currentLocationLabel = null
+        }
+    }
+
+    LaunchedEffect(currentLocation?.latitude, currentLocation?.longitude) {
+        val gps = currentLocation
+        currentLocationLabel = if (gps == null) {
+            null
+        } else {
+            reverseGeocodeLocationLabel(context, gps)
         }
     }
 
@@ -506,22 +520,18 @@ private fun NearTimeScreen(
                 }
 
                 if (useCurrentLocation && hasLocationPermission) {
-                    currentLocation?.let { gps ->
-                        Text(
-                            text = "● Using live GPS · " +
-                                String.format(
-                                    Locale.US,
-                                    "%.4f, %.4f",
-                                    gps.latitude,
-                                    gps.longitude
-                                ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } ?: Text(
-                        text = "Locating live GPS position…",
+                    Text(
+                        text = when {
+                            currentLocation == null ->
+                                "Locating your current position…"
+                            !currentLocationLabel.isNullOrBlank() ->
+                                "● Using your location · $currentLocationLabel"
+                            else ->
+                                "● Using your current GPS location"
+                        },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
                     )
                 }
 
@@ -1600,6 +1610,44 @@ private suspend fun getCurrentLocationCompat(
             }
         }
     }
+}
+
+@Suppress("DEPRECATION")
+private suspend fun reverseGeocodeLocationLabel(
+    context: Context,
+    point: GeoPoint
+): String? = withContext(Dispatchers.IO) {
+    if (!Geocoder.isPresent()) {
+        return@withContext null
+    }
+
+    runCatching {
+        val result = Geocoder(context, Locale.getDefault())
+            .getFromLocation(point.latitude, point.longitude, 1)
+            ?.firstOrNull()
+            ?: return@runCatching null
+
+        val street = listOfNotNull(
+            result.thoroughfare?.trim()?.takeIf { it.isNotEmpty() },
+            result.subThoroughfare?.trim()?.takeIf { it.isNotEmpty() }
+        ).joinToString(" ")
+
+        val area = sequenceOf(
+            result.subLocality,
+            result.locality,
+            result.subAdminArea,
+            result.adminArea
+        )
+            .mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+            .firstOrNull()
+
+        when {
+            street.isNotBlank() && !area.isNullOrBlank() -> "$street, $area"
+            street.isNotBlank() -> street
+            !area.isNullOrBlank() -> area
+            else -> result.featureName?.trim()?.takeIf { it.isNotEmpty() }
+        }
+    }.getOrNull()
 }
 
 private fun openPlaceInGoogleMaps(
