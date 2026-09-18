@@ -107,7 +107,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-18"
+private const val APP_BUILD_ID = "production-20260918-19"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -1632,20 +1632,26 @@ private suspend fun reverseGeocodeLocationLabel(
             result.subThoroughfare?.trim()?.takeIf { it.isNotEmpty() }
         ).joinToString(" ")
 
-        val area = sequenceOf(
-            result.subLocality,
-            result.locality,
-            result.subAdminArea,
-            result.adminArea
-        )
-            .mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
-            .firstOrNull()
+        val postalCity = listOfNotNull(
+            result.postalCode?.trim()?.takeIf { it.isNotEmpty() },
+            result.locality?.trim()?.takeIf { it.isNotEmpty() }
+        ).joinToString(" ")
+
+        val city = result.locality?.trim()?.takeIf { it.isNotEmpty() }
 
         when {
-            street.isNotBlank() && !area.isNullOrBlank() -> "$street, $area"
-            street.isNotBlank() -> street
-            !area.isNullOrBlank() -> area
-            else -> result.featureName?.trim()?.takeIf { it.isNotEmpty() }
+            street.isNotBlank() && postalCity.isNotBlank() ->
+                "$street, $postalCity"
+            street.isNotBlank() && !city.isNullOrBlank() ->
+                "$street, $city"
+            street.isNotBlank() ->
+                street
+            postalCity.isNotBlank() ->
+                postalCity
+            !city.isNullOrBlank() ->
+                city
+            else ->
+                result.featureName?.trim()?.takeIf { it.isNotEmpty() }
         }
     }.getOrNull()
 }
