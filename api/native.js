@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-search-area-v13';
+const BUILD_ID = '2026-09-18-bad-poi-denylist-v14';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -36,6 +36,11 @@ const WORST_CASE_SEARCH_COST_NOK =
 if (WORST_CASE_SEARCH_COST_NOK > SEARCH_COST_CAP_NOK) {
   throw new Error('SEARCH_COST_CONTRACT_BROKEN');
 }
+
+const BAD_POI_IDS = new Set([
+  // Known corrupt TomTom Orbis identity/location record.
+  'bsMa2GuMVXs7_ksSj239kw',
+]);
 
 const CATEGORY_QUERY = Object.freeze({
   cafes_coffee: 'cafe',
@@ -261,6 +266,7 @@ function normalizeDiscoverPlace(item, input) {
   if (clean(item && item.type) !== 'poi') return null;
   const id = clean(item && item.id);
   const name = clean(item && item.title);
+  if (id && BAD_POI_IDS.has(id)) return null;
   const coordinates = item && item.position && item.position.coordinates;
   if (!id || !name || !Array.isArray(coordinates) || coordinates.length < 2) return null;
 
