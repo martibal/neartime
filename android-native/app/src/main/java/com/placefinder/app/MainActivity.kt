@@ -93,6 +93,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -111,7 +112,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260918-21"
+private const val APP_BUILD_ID = "production-20260918-22"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -1569,54 +1570,70 @@ private suspend fun resolveCurrentLocation(
             Context.LOCATION_SERVICE
         ) as LocationManager
 
-    val activeProviders = listOf(
-        LocationManager.GPS_PROVIDER,
-        LocationManager.NETWORK_PROVIDER
-    ).filter { provider ->
-        runCatching {
-            manager.isProviderEnabled(provider)
-        }.getOrDefault(false)
+    fun freshestKnown(maxAgeMs: Long): GeoPoint? {
+        val freshest = listOf(
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.GPS_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        )
+            .mapNotNull { provider ->
+                runCatching {
+                    manager.getLastKnownLocation(provider)
+                }.getOrNull()
+            }
+            .filter { location ->
+                val age = System.currentTimeMillis() - location.time
+                age in 0..maxAgeMs
+            }
+            .maxByOrNull { location ->
+                location.time
+            }
+
+        return freshest?.let {
+            GeoPoint(
+                latitude = it.latitude,
+                longitude = it.longitude
+            )
+        }
     }
 
-    // Search always requests a current fix before provider work begins.
-    for (provider in activeProviders) {
-        val current =
+    // A fix from the last few seconds is already a current position and avoids
+    // forcing a new satellite lock every time the user presses Search.
+    freshestKnown(maxAgeMs = 15_000)?.let {
+        return it
+    }
+
+    // Physical phones can wait a long time for a cold GPS lock indoors.
+    // Try the usually faster network provider first, then GPS, both bounded.
+    val providerTimeouts = listOf(
+        LocationManager.NETWORK_PROVIDER to 2_000L,
+        LocationManager.GPS_PROVIDER to 3_500L
+    )
+
+    for ((provider, timeoutMs) in providerTimeouts) {
+        val enabled = runCatching {
+            manager.isProviderEnabled(provider)
+        }.getOrDefault(false)
+
+        if (!enabled) {
+            continue
+        }
+
+        val current = withTimeoutOrNull(timeoutMs) {
             getCurrentLocationCompat(
                 context = context,
                 manager = manager,
                 provider = provider
             )
+        }
 
         if (current != null) {
             return current
         }
     }
 
-    // Resilience fallback is restricted to a very recent fix.
-    val freshest = listOf(
-        LocationManager.GPS_PROVIDER,
-        LocationManager.NETWORK_PROVIDER,
-        LocationManager.PASSIVE_PROVIDER
-    )
-        .mapNotNull { provider ->
-            runCatching {
-                manager.getLastKnownLocation(provider)
-            }.getOrNull()
-        }
-        .maxByOrNull { location ->
-            location.time
-        }
-
-    return freshest
-        ?.takeIf {
-            System.currentTimeMillis() - it.time <= 30_000
-        }
-        ?.let {
-            GeoPoint(
-                latitude = it.latitude,
-                longitude = it.longitude
-            )
-        }
+    // Last-resort resilience: still never use a minutes-old cached position.
+    return freshestKnown(maxAgeMs = 30_000)
 }
 
 /*
