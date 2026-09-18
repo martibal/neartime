@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "cloud-only-20260918-5-searchtrace"
+private const val APP_BUILD_ID = "cloud-only-20260918-6-finaltrace"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -335,6 +335,7 @@ private fun NearTimeScreen() {
                     .take(RESULT_LIMIT)
                     .toList()
 
+                Log.i(LOG_TAG, "SEARCH_COMPLETE build=$APP_BUILD_ID places=${validated.size}")
                 searchState = SearchState.Success(
                     response.copy(
                         places = validated,
@@ -931,6 +932,7 @@ private suspend fun searchBackend(
     maxWalkMinutes: Int,
     openNowOnly: Boolean
 ): SearchResponse = withContext(Dispatchers.IO) {
+    Log.i(LOG_TAG, "BACKEND_PAYLOAD_BEGIN build=$APP_BUILD_ID")
     val json = postJson(
         BACKEND_BASE_URL,
         JSONObject()
@@ -943,6 +945,7 @@ private suspend fun searchBackend(
             .put("openNowOnly", openNowOnly)
     )
 
+    Log.i(LOG_TAG, "BACKEND_JSON_RECEIVED build=$APP_BUILD_ID")
     val resultStatus = json.optString("resultStatus")
     if (resultStatus == "DEGRADED") {
         throw IllegalStateException(
