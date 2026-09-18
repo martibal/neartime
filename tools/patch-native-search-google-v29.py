@@ -28,10 +28,13 @@ const GOOGLE_CATEGORY_TYPES = Object.freeze({
   pet_care:['pet_care'], pet_stores:['pet_store']
 });
 """
-if "GOOGLE_CATEGORY_TYPES" in s:
-    s=re.sub(r"const GOOGLE_CATEGORY_TYPES = Object\.freeze\(\{.*?\n\}\);",google.strip(),s,count=1,flags=re.S)
-else:
-    s=s.replace(anchor,google+"\n"+anchor)
+# Remove every Google block left by earlier patch runs, then insert exactly one.
+s=re.sub(r"const GOOGLE_SEARCH_COST_NOK = 0\.40;\s*", "", s)
+s=re.sub(r"const GOOGLE_CATEGORY_TYPES = Object\.freeze\(\{.*?\n\}\);\s*", "", s, flags=re.S)
+s=s.replace(anchor,google+"\n"+anchor,1)
+
+# Remove helper functions left by earlier Google patch runs. search() itself is replaced below.
+s=re.sub(r"async function requireGooglePlacesKey\(\) \{.*?\n\}\nfunction googleDurationSeconds\(v\) \{.*?\n\}\nfunction googleOpeningState\(place\) \{.*?\n\}\n", "", s, flags=re.S)
 
 new_search=r"""async function requireGooglePlacesKey() {
   const key = clean(Deno.env.get('GOOGLE_PLACES_API_KEY'));
