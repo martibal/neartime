@@ -1117,17 +1117,38 @@ private suspend fun searchBackend(
     val thisSearch = usage?.optJSONObject("thisSearch")
 
     val usageText = thisSearch?.let {
-        val discoveryCalls = it.optInt("tomtomDiscover", 0)
-        val routeCalls = it.optInt("tomtomRoute", 0)
+        val googleNearbyCalls = it.optInt("googleNearbyCalls", -1)
+        val googleRoutingPlaces = it.optInt("googleRoutingSummaryPlaces", -1)
         val guardedCost = it.optDouble("conservativeCostNok", 0.0)
 
-        "Cloud search · discovery $discoveryCalls/1 · " +
-            "walking routes $routeCalls/24 · " +
-            String.format(
-                Locale.US,
-                "cost guard %.1f øre",
-                guardedCost * 100.0
-            )
+        if (googleNearbyCalls >= 0) {
+            buildString {
+                append("Google cloud · Places ")
+                append(googleNearbyCalls)
+                append("/1")
+                if (googleRoutingPlaces >= 0) {
+                    append(" · walking routes ")
+                    append(googleRoutingPlaces)
+                }
+                append(
+                    String.format(
+                        Locale.US,
+                        " · cost guard %.1f øre",
+                        guardedCost * 100.0
+                    )
+                )
+            }
+        } else {
+            val discoveryCalls = it.optInt("tomtomDiscover", 0)
+            val routeCalls = it.optInt("tomtomRoute", 0)
+            "Cloud search · discovery $discoveryCalls/1 · " +
+                "walking routes $routeCalls/24 · " +
+                String.format(
+                    Locale.US,
+                    "cost guard %.1f øre",
+                    guardedCost * 100.0
+                )
+        }
     }
 
     SearchResponse(
