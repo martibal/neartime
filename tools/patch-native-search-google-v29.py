@@ -3,7 +3,7 @@ import re
 
 p=Path("supabase/functions/native-search/index.ts")
 s=p.read_text(encoding="utf-8")
-s=re.sub(r"const BUILD_ID = '[^']+';","const BUILD_ID = '2026-09-18-google-walk-v31';",s,count=1)
+s=re.sub(r"const BUILD_ID = '[^']+';","const BUILD_ID = '2026-09-18-google-walk-v32';",s,count=1)
 s=re.sub(r"const SEARCH_COST_CAP_NOK = [0-9.]+;","const SEARCH_COST_CAP_NOK = 0.40;",s,count=1)
 anchor="const BAD_POI_IDS = new Set(["
 google="""const GOOGLE_SEARCH_COST_NOK = 0.40;
@@ -113,7 +113,7 @@ async function search(_tomTomKey, raw) {
       routingSource:'GOOGLE_PLACES_ROUTING_SUMMARIES_WALK',
       openNowGate:input.openNowOnly?'CONFIRMED_CLOSED_EXCLUDED_UNKNOWN_PRESERVED':'OFF',
       cloudOnly:true,international:true,discoveryCandidates:places.length,candidateLimit:20,googleReturnedNames:places.map(p=>clean(p.displayName && p.displayName.text)).filter(Boolean),
-      proof:top.length>=RESULT_LIMIT?'TEN_QUALIFYING_FROM_DISTANCE_RANKED_GOOGLE_SET':(places.length<20?'GOOGLE_RETURNED_FEWER_THAN_CANDIDATE_LIMIT':'GOOGLE_CANDIDATE_LIMIT_REACHED_NOT_PROVEN_EXHAUSTIVE')},
+      proof:top.length>=RESULT_LIMIT?'TEN_QUALIFYING_FROM_DISTANCE_RANKED_GOOGLE_SET':(places.length<20?'GOOGLE_RETURNED_FEWER_THAN_CANDIDATE_LIMIT':'GOOGLE_CANDIDATE_LIMIT_REACHED_NOT_PROVEN_EXHAUSTIVE'),googleTypeFilter:'INCLUDED_TYPES'},
     usage:{thisSearch:{googleNearbyCalls:1,googleRoutingSummaryPlaces:places.length,tomtomDiscover:0,tomtomRoute:0,
       conservativeCostNok:GOOGLE_SEARCH_COST_NOK,costCapNok:SEARCH_COST_CAP_NOK,
       worstCaseCostNok:GOOGLE_SEARCH_COST_NOK,freeTierAssumed:false}}};
