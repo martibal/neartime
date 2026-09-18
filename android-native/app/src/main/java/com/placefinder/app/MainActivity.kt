@@ -112,7 +112,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260918-22"
+private const val APP_BUILD_ID = "production-20260918-23"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -252,6 +252,7 @@ private fun NearTimeScreen(
 
     var selectedCategory by remember { mutableStateOf(SearchCategory.BARS_DRINKS) }
     var categoryExpanded by remember { mutableStateOf(false) }
+    var categoryFilterText by remember { mutableStateOf("") }
     var maxWalkMinutes by remember { mutableFloatStateOf(15f) }
     var openNowOnly by remember { mutableStateOf(true) }
     var minOpenMinutes by remember { mutableFloatStateOf(0f) }
@@ -283,6 +284,10 @@ private fun NearTimeScreen(
     val cameraPositionState = rememberCameraPositionState()
     val categoryScrollState = rememberScrollState()
     val resultListState = rememberLazyListState()
+
+    LaunchedEffect(categoryFilterText) {
+        categoryScrollState.scrollTo(0)
+    }
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
         if (hasLocationPermission) {
@@ -680,6 +685,9 @@ private fun NearTimeScreen(
                     expanded = categoryExpanded,
                     onExpandedChange = {
                         categoryExpanded = !categoryExpanded
+                        if (!categoryExpanded) {
+                            categoryFilterText = ""
+                        }
                     }
                 ) {
                     TextField(
@@ -703,43 +711,91 @@ private fun NearTimeScreen(
                         expanded = categoryExpanded,
                         onDismissRequest = {
                             categoryExpanded = false
+                            categoryFilterText = ""
                         },
                         modifier = Modifier.height(420.dp)
                     ) {
+                        val query = categoryFilterText.trim().lowercase(Locale.ROOT)
                         val sortedCategories = SearchCategory.entries
                             .sortedBy { it.displayName.lowercase(Locale.ROOT) }
+                        val filteredCategories = if (query.isBlank()) {
+                            sortedCategories
+                        } else {
+                            sortedCategories
+                                .filter {
+                                    it.displayName
+                                        .lowercase(Locale.ROOT)
+                                        .contains(query)
+                                }
+                                .sortedWith(
+                                    compareBy<SearchCategory> {
+                                        !it.displayName
+                                            .lowercase(Locale.ROOT)
+                                            .startsWith(query)
+                                    }.thenBy {
+                                        it.displayName.lowercase(Locale.ROOT)
+                                    }
+                                )
+                        }
 
-                        Box(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(420.dp)
+                                .padding(horizontal = 8.dp)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(end = 14.dp)
-                                    .verticalScroll(categoryScrollState)
-                            ) {
-                                sortedCategories.forEach { category ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(category.displayName)
-                                        },
-                                        onClick = {
-                                            selectedCategory = category
-                                            categoryExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-
-                            ScrollStateScrollbar(
-                                state = categoryScrollState,
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .fillMaxHeight()
-                                    .width(14.dp)
+                            OutlinedTextField(
+                                value = categoryFilterText,
+                                onValueChange = { categoryFilterText = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("Find place type") },
+                                placeholder = { Text("e.g. rest, pharmacy, hotel") }
                             )
+
+                            Spacer(Modifier.height(6.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(end = 14.dp)
+                                        .verticalScroll(categoryScrollState)
+                                ) {
+                                    if (filteredCategories.isEmpty()) {
+                                        Text(
+                                            "No matching place type",
+                                            modifier = Modifier.padding(12.dp),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    } else {
+                                        filteredCategories.forEach { category ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(category.displayName)
+                                                },
+                                                onClick = {
+                                                    selectedCategory = category
+                                                    categoryExpanded = false
+                                                    categoryFilterText = ""
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                ScrollStateScrollbar(
+                                    state = categoryScrollState,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .fillMaxHeight()
+                                        .width(14.dp)
+                                )
+                            }
                         }
                     }
                 }
