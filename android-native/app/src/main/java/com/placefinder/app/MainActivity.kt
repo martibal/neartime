@@ -106,7 +106,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-14"
+private const val APP_BUILD_ID = "production-20260918-15"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -472,57 +472,10 @@ private fun NearTimeScreen(
                         Text("Find places by real walking time.")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (darkMode) "Dark" else "Light")
+                        Text(if (darkMode) "☾" else "☀")
                         Switch(
                             checked = darkMode,
                             onCheckedChange = onDarkModeChange
-                        )
-                    }
-                }
-            }
-
-            item {
-                GoogleMap(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp),
-                    cameraPositionState = cameraPositionState,
-                    properties = MapProperties(
-                        isMyLocationEnabled = hasLocationPermission
-                    ),
-                    uiSettings = MapUiSettings(
-                        myLocationButtonEnabled = hasLocationPermission,
-                        zoomControlsEnabled = false,
-                        compassEnabled = true
-                    )
-                ) {
-                    if (!useCurrentLocation) {
-                        customLocation?.let {
-                            Marker(
-                                state = MarkerState(
-                                    LatLng(it.latitude, it.longitude)
-                                ),
-                                title = it.title,
-                                snippet = "Start location"
-                            )
-                        }
-                    }
-
-                    val places = (searchState as? SearchState.Success)
-                        ?.response
-                        ?.places
-                        .orEmpty()
-                    places.forEachIndexed { index, place ->
-                        Marker(
-                            state = MarkerState(
-                                LatLng(place.latitude, place.longitude)
-                            ),
-                            title = "${index + 1}. ${place.name}",
-                            snippet = "${place.categoryLabel} · ${place.walkMinutes} min walk",
-                            onClick = {
-                                selectedPlace = place
-                                false
-                            }
                         )
                     }
                 }
@@ -555,15 +508,32 @@ private fun NearTimeScreen(
                             )
                         }
                     ) { Text("Allow GPS location") }
-                } else {
-                    Text(
-                        text = if (currentLocation == null) "Finding your GPS position…" else "GPS location ready",
-                        style = MaterialTheme.typography.bodySmall
-                    )
                 }
 
                 Spacer(Modifier.height(6.dp))
-                Text("Or use a place or address", fontWeight = FontWeight.SemiBold)
+                if (useCurrentLocation) {
+                    OutlinedButton(
+                        onClick = { useCurrentLocation = false }
+                    ) {
+                        Text("Use another place or address")
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Place or address", fontWeight = FontWeight.SemiBold)
+                        OutlinedButton(
+                            onClick = {
+                                useCurrentLocation = true
+                                customLocation = null
+                                customLocationText = ""
+                                locationSuggestions = emptyList()
+                                locationError = null
+                            }
+                        ) { Text("Use current location") }
+                    }
 
                 OutlinedTextField(
                     value = customLocationText,
@@ -652,6 +622,7 @@ private fun NearTimeScreen(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
+                }
                 }
             }
 
