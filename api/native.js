@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-global-cloud-walk-v1';
+const BUILD_ID = '2026-09-18-discovery-v2';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -38,31 +38,31 @@ if (WORST_CASE_SEARCH_COST_NOK > SEARCH_COST_CAP_NOK) {
 }
 
 const CATEGORY_QUERY = Object.freeze({
-  cafes_coffee: 'cafe coffee',
+  cafes_coffee: 'cafe',
   restaurants: 'restaurant',
-  fast_food_takeaway: 'fast food takeaway',
-  bars_drinks: 'bar pub drinks',
-  bakeries_sweets: 'bakery pastry sweets dessert',
-  groceries_supermarkets: 'supermarket grocery',
-  clothing_fashion: 'clothing fashion',
-  electronics: 'electronics store',
-  home_furniture: 'furniture home goods',
-  shopping_centres: 'shopping centre mall',
-  other_shops: 'shop store',
+  fast_food_takeaway: 'fast food',
+  bars_drinks: 'bar',
+  bakeries_sweets: 'bakery',
+  groceries_supermarkets: 'supermarket',
+  clothing_fashion: 'clothing',
+  electronics: 'electronics',
+  home_furniture: 'furniture',
+  shopping_centres: 'shopping centre',
+  other_shops: 'shop',
   pharmacy: 'pharmacy',
-  doctor_clinic: 'doctor clinic medical',
+  doctor_clinic: 'doctor',
   dentist: 'dentist',
   hospital: 'hospital',
-  spa_wellness: 'spa wellness',
-  gym_fitness: 'gym fitness',
+  spa_wellness: 'spa',
+  gym_fitness: 'gym',
   swimming: 'swimming pool',
   sports_facilities: 'sports facility',
   golf: 'golf',
   parking: 'parking',
   public_transport: 'public transport',
   train_stations: 'train station',
-  bus_stations_stops: 'bus stop station',
-  fuel_stations: 'fuel station gas station',
+  bus_stations_stops: 'bus stop',
+  fuel_stations: 'fuel station',
   ev_charging: 'EV charging',
   airports: 'airport',
   schools: 'school',
@@ -70,25 +70,25 @@ const CATEGORY_QUERY = Object.freeze({
   universities: 'university',
   libraries: 'library',
   parks: 'park',
-  outdoor_activities: 'outdoor activity hiking',
-  museums_galleries: 'museum gallery',
-  cinema: 'cinema movie theater',
+  outdoor_activities: 'hiking',
+  museums_galleries: 'museum',
+  cinema: 'cinema',
   entertainment: 'entertainment',
   attractions: 'tourist attraction',
   playgrounds: 'playground',
   hotels: 'hotel',
-  hostels_guest_houses: 'hostel guest house',
-  camping: 'camping campground',
-  hair_beauty: 'hair salon beauty',
+  hostels_guest_houses: 'hostel',
+  camping: 'camping',
+  hair_beauty: 'hair salon',
   laundry: 'laundry',
   banks: 'bank',
   atm: 'ATM',
   post_office: 'post office',
-  shipping_courier: 'shipping courier',
-  car_repair_tyres: 'car repair tyre tire',
+  shipping_courier: 'courier',
+  car_repair_tyres: 'car repair',
   car_wash: 'car wash',
-  veterinary: 'veterinary vet',
-  pet_care: 'pet care boarding',
+  veterinary: 'veterinary',
+  pet_care: 'pet care',
   pet_stores: 'pet store',
 });
 
@@ -485,6 +485,35 @@ async function search(apiKey, raw) {
   const usage = { tomtomDiscover: 0, tomtomRoute: 0 };
   const candidates = await discoverPlaces(apiKey, input, usage);
 
+  if (candidates.length === 0) {
+    return {
+      resultStatus: 'DEGRADED',
+      reason: 'DISCOVERY_RETURNED_NO_CANDIDATES',
+      places: [],
+      summary: {
+        requested: RESULT_LIMIT,
+        returned: 0,
+        exhaustedCandidates: false,
+        discoveryCandidates: 0,
+        sortedBy: 'ACTUAL_PEDESTRIAN_ROUTE_DISTANCE',
+        discoverySource: 'TOMTOM_ORBIS_PLACES_CLOUD',
+        routingSource: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',
+        openNowGate: input.openNowOnly ? 'TOMTOM_ORBIS_OPENING_HOURS_FAIL_CLOSED' : 'OFF',
+        cloudOnly: true,
+        international: true,
+      },
+      usage: {
+        thisSearch: {
+          ...usage,
+          conservativeCostNok: costNok(usage.tomtomDiscover, usage.tomtomRoute),
+          costCapNok: SEARCH_COST_CAP_NOK,
+          worstCaseCostNok: WORST_CASE_SEARCH_COST_NOK,
+          freeTierAssumed: false,
+        },
+      },
+    };
+  }
+
   const routed = [];
   const failedLowerBounds = [];
   let nextIndex = 0;
@@ -573,6 +602,7 @@ async function search(apiKey, raw) {
       openNowGate: input.openNowOnly ? 'TOMTOM_ORBIS_OPENING_HOURS_FAIL_CLOSED' : 'OFF',
       cloudOnly: true,
       international: true,
+      discoveryCandidates: candidates.length,
     },
     usage: {
       thisSearch: {
