@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-origin-sanity-v11';
+const BUILD_ID = '2026-09-18-poi-identity-v12';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -374,6 +374,27 @@ async function discoverPlaces(apiKey, input, usage) {
     });
 }
 
+async function verifyPoiIdentity(apiKey, place) {
+  const response = await fetchJson(
+    'https://api.tomtom.com/maps/orbis/places/details/pois/' + encodeURIComponent(place.id),
+    { method:'GET', headers:{
+      'TomTom-Api-Key':apiKey,'TomTom-Api-Version':'3','Tracking-Id':crypto.randomUUID(),
+      'Attributes':'id,type,title,position.coordinates,address(country,countryCodeIso2,municipality,postalCode,street,houseNumber)',
+      'Accept':'application/json','Accept-Language':'en'
+    }}, 'TOMTOM_POI_DETAILS'
+  );
+  const coordinates=response?.position?.coordinates;
+  if(!Array.isArray(coordinates)||coordinates.length<2) return null;
+  const lon=num(coordinates[0]), lat=num(coordinates[1]);
+  if(lat===null||lon===null) return null;
+  if(haversineMeters(place.latitude,place.longitude,lat,lon)>75) return null;
+  const detailsId=clean(response?.id);
+  if(detailsId&&detailsId!==place.id) return null;
+  return {...place,name:clean(response?.title)||place.name,latitude:lat,longitude:lon,
+    address:addressText(response?.address)||place.address,
+    countryCodeIso2:clean(response?.address?.countryCodeIso2)||place.countryCodeIso2};
+}
+
 function routingHost(place) {
   return String(place && place.countryCodeIso2 || '').toUpperCase() === 'KR'
     ? 'kr-api.tomtom.com'
@@ -592,7 +613,13 @@ async function search(apiKey, raw) {
              candidate.minutesUntilClose < input.minOpenMinutes)) continue;
       }
 
-      batch.push(candidate);
+      const verifiedCandidate = await verifyPoiIdentity(apiKey, candidate);
+      if (!verifiedCandidate) continue;
+      verifiedCandidate.straightDistanceMeters = Math.max(0, Math.round(haversineMeters(
+        input.latitude, input.longitude, verifiedCandidate.latitude, verifiedCandidate.longitude
+      )));
+      if (verifiedCandidate.straightDistanceMeters > input.maxWalkMinutes * (5000 / 60)) continue;
+      batch.push(verifiedCandidate);
     }
 
     if (batch.length > 0) {
