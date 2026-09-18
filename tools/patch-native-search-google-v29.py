@@ -65,7 +65,7 @@ async function search(_tomTomKey, raw) {
       'Accept-Language':'en'
     },
     body:JSON.stringify({
-      includedTypes,
+      includedPrimaryTypes: includedTypes,
       maxResultCount:20,
       rankPreference:'DISTANCE',
       locationRestriction:{circle:{center:{latitude:input.latitude,longitude:input.longitude},radius:discoverRadiusMeters(input.maxWalkMinutes)}},
