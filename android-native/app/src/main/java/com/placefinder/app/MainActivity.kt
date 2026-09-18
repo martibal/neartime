@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-4"
+private const val APP_BUILD_ID = "production-20260918-5"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -627,7 +627,7 @@ private fun NearTimeScreen() {
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    "Only places confirmed open by the live place source.",
+                                    "Excludes places confirmed closed. Places without opening-hours data remain visible and are marked unavailable.",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -725,15 +725,14 @@ private fun NearTimeScreen() {
                 is SearchState.Success -> {
                     item {
                         Text(
-                            text = "${state.response.places.size} verified places",
+                            text = "${state.response.places.size} places within walking limit",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
 
                         if (state.response.exhaustedCandidates) {
                             Text(
-                                "Fewer than 10 passed every live-source, " +
-                                    "type, walking-time and freshness check.",
+                                "Fewer than 10 places could be established within the walking-time limit.",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
