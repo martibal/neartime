@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-walk-window-proof-v4';
+const BUILD_ID = '2026-09-18-up-to-10-proof-v5';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -469,9 +469,9 @@ function proofState(options) {
 
   if (top.length < RESULT_LIMIT) {
     return {
-      proven:
-        nextIndex >= candidates.length &&
-        !Number.isFinite(lowerBound),
+      // "Up to 10": fewer than ten is complete when every unresolved
+      // candidate that could still fit the walking-time window is exhausted.
+      proven: !Number.isFinite(lowerBound),
       top,
       lowerBound,
     };
@@ -519,34 +519,6 @@ async function search(apiKey, raw) {
     };
   }
 
-  if (candidates.length < RESULT_LIMIT) {
-    return {
-      resultStatus: 'DEGRADED',
-      reason: 'DISCOVERY_INSUFFICIENT_CANDIDATES',
-      places: [],
-      summary: {
-        requested: RESULT_LIMIT,
-        returned: 0,
-        exhaustedCandidates: false,
-        discoveryCandidates: candidates.length,
-        sortedBy: 'ACTUAL_PEDESTRIAN_ROUTE_DISTANCE',
-        discoverySource: 'TOMTOM_ORBIS_PLACES_CLOUD',
-        routingSource: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',
-        openNowGate: input.openNowOnly ? 'TOMTOM_ORBIS_OPENING_HOURS_FAIL_CLOSED' : 'OFF',
-        cloudOnly: true,
-        international: true,
-      },
-      usage: {
-        thisSearch: {
-          ...usage,
-          conservativeCostNok: costNok(usage.tomtomDiscover, usage.tomtomRoute),
-          costCapNok: SEARCH_COST_CAP_NOK,
-          worstCaseCostNok: WORST_CASE_SEARCH_COST_NOK,
-          freeTierAssumed: false,
-        },
-      },
-    };
-  }
 
   const routed = [];
   const failedLowerBounds = [];
