@@ -72,12 +72,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -93,7 +90,6 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -116,7 +112,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260918-24"
+private const val APP_BUILD_ID = "production-20260918-25"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -253,8 +249,6 @@ private fun NearTimeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val categoryFilterFocusRequester = remember { FocusRequester() }
 
     var selectedCategory by remember { mutableStateOf(SearchCategory.BARS_DRINKS) }
     var categoryExpanded by remember { mutableStateOf(false) }
@@ -293,16 +287,6 @@ private fun NearTimeScreen(
 
     LaunchedEffect(categoryFilterText) {
         categoryScrollState.scrollTo(0)
-    }
-
-    LaunchedEffect(categoryExpanded) {
-        if (categoryExpanded) {
-            delay(120)
-            categoryFilterFocusRequester.requestFocus()
-            keyboardController?.show()
-        } else {
-            keyboardController?.hide()
-        }
     }
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
@@ -699,18 +683,31 @@ private fun NearTimeScreen(
             item {
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,
-                    onExpandedChange = {
-                        categoryExpanded = !categoryExpanded
-                        if (!categoryExpanded) {
+                    onExpandedChange = { expanded ->
+                        categoryExpanded = expanded
+                        if (expanded) {
+                            categoryFilterText = ""
+                        } else {
                             categoryFilterText = ""
                         }
                     }
                 ) {
                     TextField(
-                        value = selectedCategory.displayName,
-                        onValueChange = {},
-                        readOnly = true,
+                        value = if (categoryExpanded) {
+                            categoryFilterText
+                        } else {
+                            selectedCategory.displayName
+                        },
+                        onValueChange = { value ->
+                            categoryFilterText = value
+                            if (!categoryExpanded) {
+                                categoryExpanded = true
+                            }
+                        },
+                        readOnly = false,
+                        singleLine = true,
                         label = { Text("Place type") },
+                        placeholder = { Text("Type to filter, e.g. rest") },
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(
                                 expanded = categoryExpanded
@@ -718,7 +715,7 @@ private fun NearTimeScreen(
                         },
                         modifier = Modifier
                             .menuAnchor(
-                                ExposedDropdownMenuAnchorType.PrimaryNotEditable
+                                ExposedDropdownMenuAnchorType.PrimaryEditable
                             )
                             .fillMaxWidth()
                     )
@@ -729,11 +726,12 @@ private fun NearTimeScreen(
                             categoryExpanded = false
                             categoryFilterText = ""
                         },
-                        modifier = Modifier.height(420.dp)
+                        modifier = Modifier.height(360.dp)
                     ) {
                         val query = categoryFilterText.trim().lowercase(Locale.ROOT)
                         val sortedCategories = SearchCategory.entries
                             .sortedBy { it.displayName.lowercase(Locale.ROOT) }
+
                         val filteredCategories = if (query.isBlank()) {
                             sortedCategories
                         } else {
@@ -754,66 +752,46 @@ private fun NearTimeScreen(
                                 )
                         }
 
-                        Column(
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(420.dp)
-                                .padding(horizontal = 8.dp)
+                                .height(360.dp)
                         ) {
-                            OutlinedTextField(
-                                value = categoryFilterText,
-                                onValueChange = { categoryFilterText = it },
+                            Column(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(categoryFilterFocusRequester),
-                                singleLine = true,
-                                label = { Text("Find place type") },
-                                placeholder = { Text("e.g. rest, pharmacy, hotel") }
-                            )
-
-                            Spacer(Modifier.height(6.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
+                                    .fillMaxSize()
+                                    .padding(end = 14.dp)
+                                    .verticalScroll(categoryScrollState)
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(end = 14.dp)
-                                        .verticalScroll(categoryScrollState)
-                                ) {
-                                    if (filteredCategories.isEmpty()) {
-                                        Text(
-                                            "No matching place type",
-                                            modifier = Modifier.padding(12.dp),
-                                            style = MaterialTheme.typography.bodyMedium
+                                if (filteredCategories.isEmpty()) {
+                                    Text(
+                                        "No matching place type",
+                                        modifier = Modifier.padding(12.dp),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                } else {
+                                    filteredCategories.forEach { category ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(category.displayName)
+                                            },
+                                            onClick = {
+                                                selectedCategory = category
+                                                categoryExpanded = false
+                                                categoryFilterText = ""
+                                            }
                                         )
-                                    } else {
-                                        filteredCategories.forEach { category ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(category.displayName)
-                                                },
-                                                onClick = {
-                                                    selectedCategory = category
-                                                    categoryExpanded = false
-                                                    categoryFilterText = ""
-                                                }
-                                            )
-                                        }
                                     }
                                 }
-
-                                ScrollStateScrollbar(
-                                    state = categoryScrollState,
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .fillMaxHeight()
-                                        .width(14.dp)
-                                )
                             }
+
+                            ScrollStateScrollbar(
+                                state = categoryScrollState,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .width(14.dp)
+                            )
                         }
                     }
                 }
