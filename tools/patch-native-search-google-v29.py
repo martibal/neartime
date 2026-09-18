@@ -133,10 +133,10 @@ s=s.replace("capNok: SEARCH_COST_CAP_NOK,\n        maxDiscoverCalls: 1,\n       
 # Fail before deploy if patch accumulation ever returns.
 checks = {
   "GOOGLE_SEARCH_COST_NOK": len(re.findall(r"const GOOGLE_SEARCH_COST_NOK\\s*=", s)),
-  "requireGooglePlacesKey": len(re.findall(r"async function requireGooglePlacesKey\\(", s)),
-  "googleDurationSeconds": len(re.findall(r"function googleDurationSeconds\\(", s)),
-  "googleOpeningState": len(re.findall(r"function googleOpeningState\\(", s)),
-  "search": len(re.findall(r"async function search\\(", s)),
+  "requireGooglePlacesKey": s.count("async function requireGooglePlacesKey("),
+  "googleDurationSeconds": s.count("function googleDurationSeconds("),
+  "googleOpeningState": s.count("function googleOpeningState("),
+  "search": s.count("async function search("),
 }
 bad = {k:v for k,v in checks.items() if v != 1}
 if bad: raise SystemExit(f"Duplicate/missing declarations after patch: {bad}")
