@@ -3,7 +3,7 @@ import re
 
 p=Path("supabase/functions/native-search/index.ts")
 s=p.read_text(encoding="utf-8")
-s=re.sub(r"const BUILD_ID = '[^']+';","const BUILD_ID = '2026-09-18-google-walk-v30';",s,count=1)
+s=re.sub(r"const BUILD_ID = '[^']+';","const BUILD_ID = '2026-09-18-google-walk-v31';",s,count=1)
 s=re.sub(r"const SEARCH_COST_CAP_NOK = [0-9.]+;","const SEARCH_COST_CAP_NOK = 0.40;",s,count=1)
 anchor="const BAD_POI_IDS = new Set(["
 google="""const GOOGLE_SEARCH_COST_NOK = 0.40;
@@ -72,7 +72,7 @@ async function search(_tomTomKey, raw) {
       'Accept-Language':'en'
     },
     body:JSON.stringify({
-      includedPrimaryTypes: includedTypes,
+      includedTypes: includedTypes,
       maxResultCount:20,
       rankPreference:'DISTANCE',
       locationRestriction:{circle:{center:{latitude:input.latitude,longitude:input.longitude},radius:discoverRadiusMeters(input.maxWalkMinutes)}},
@@ -106,13 +106,14 @@ async function search(_tomTomKey, raw) {
   }
   out.sort((a,b)=>a.walkDistanceMeters-b.walkDistanceMeters || a.walkSeconds-b.walkSeconds || a.name.localeCompare(b.name));
   const top=out.slice(0,RESULT_LIMIT);
-  return {resultStatus:'COMPLETE_TOP10',places:top,
-    summary:{requested:RESULT_LIMIT,returned:top.length,exhaustedCandidates:top.length<RESULT_LIMIT,
+  const completeness = top.length >= RESULT_LIMIT ? 'COMPLETE_TOP10' : (places.length < 20 ? 'EXHAUSTED_GOOGLE_CANDIDATES' : 'PARTIAL_CANDIDATE_LIMIT');
+  return {resultStatus:completeness,places:top,
+    summary:{requested:RESULT_LIMIT,returned:top.length,exhaustedCandidates:places.length<20,
       sortedBy:'GOOGLE_WALK_ROUTE_DISTANCE',discoverySource:'GOOGLE_PLACES_NEARBY_SEARCH_NEW',
       routingSource:'GOOGLE_PLACES_ROUTING_SUMMARIES_WALK',
       openNowGate:input.openNowOnly?'CONFIRMED_CLOSED_EXCLUDED_UNKNOWN_PRESERVED':'OFF',
       cloudOnly:true,international:true,discoveryCandidates:places.length,candidateLimit:20,googleReturnedNames:places.map(p=>clean(p.displayName && p.displayName.text)).filter(Boolean),
-      proof:'GOOGLE_DISTANCE_RANKED_20_THEN_WALK_DISTANCE_SORT'},
+      proof:top.length>=RESULT_LIMIT?'TEN_QUALIFYING_FROM_DISTANCE_RANKED_GOOGLE_SET':(places.length<20?'GOOGLE_RETURNED_FEWER_THAN_CANDIDATE_LIMIT':'GOOGLE_CANDIDATE_LIMIT_REACHED_NOT_PROVEN_EXHAUSTIVE')},
     usage:{thisSearch:{googleNearbyCalls:1,googleRoutingSummaryPlaces:places.length,tomtomDiscover:0,tomtomRoute:0,
       conservativeCostNok:GOOGLE_SEARCH_COST_NOK,costCapNok:SEARCH_COST_CAP_NOK,
       worstCaseCostNok:GOOGLE_SEARCH_COST_NOK,freeTierAssumed:false}}};
@@ -129,6 +130,17 @@ s=s.replace("placeDiscovery: 'TOMTOM_ORBIS_PLACES_CLOUD',","placeDiscovery: 'GOO
 s=s.replace("walkingRoutes: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',","walkingRoutes: 'GOOGLE_PLACES_ROUTING_SUMMARIES_WALK',")
 s=s.replace("capNok: SEARCH_COST_CAP_NOK,\n        maxDiscoverCalls: 1,\n        maxRouteCalls: MAX_ROUTE_CALLS,\n        worstCaseNok: WORST_CASE_SEARCH_COST_NOK,",
             "capNok: SEARCH_COST_CAP_NOK,\n        maxGoogleNearbyCalls: 1,\n        worstCaseNok: GOOGLE_SEARCH_COST_NOK,")
+# Fail before deploy if patch accumulation ever returns.
+checks = {
+  "GOOGLE_SEARCH_COST_NOK": len(re.findall(r"const GOOGLE_SEARCH_COST_NOK\\s*=", s)),
+  "requireGooglePlacesKey": len(re.findall(r"async function requireGooglePlacesKey\\(", s)),
+  "googleDurationSeconds": len(re.findall(r"function googleDurationSeconds\\(", s)),
+  "googleOpeningState": len(re.findall(r"function googleOpeningState\\(", s)),
+  "search": len(re.findall(r"async function search\\(", s)),
+}
+bad = {k:v for k,v in checks.items() if v != 1}
+if bad: raise SystemExit(f"Duplicate/missing declarations after patch: {bad}")
+
 p.write_text(s,encoding="utf-8")
 print("PATCHED",p)
 print("BUILD",re.search(r"const BUILD_ID = '([^']+)'",s).group(1))
