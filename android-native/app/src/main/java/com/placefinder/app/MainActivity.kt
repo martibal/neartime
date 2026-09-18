@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "cloud-only-20260918-6-finaltrace"
+private const val APP_BUILD_ID = "production-20260918-1"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -293,8 +293,6 @@ private fun NearTimeScreen() {
             selectedPlace = null
 
             try {
-                Log.i(LOG_TAG, "SEARCH_BEGIN build=$APP_BUILD_ID useCurrentLocation=$useCurrentLocation")
-                Log.i(LOG_TAG, "RESOLVE_LOCATION_BEGIN build=$APP_BUILD_ID")
                 val origin = if (useCurrentLocation) {
                     resolveCurrentLocation(context)
                         ?: throw IllegalStateException("Current GPS position is not available yet.")
@@ -302,17 +300,12 @@ private fun NearTimeScreen() {
                     customLocation?.let { GeoPoint(it.latitude, it.longitude) }
                     ?: throw IllegalStateException("Choose a start location first.")
                 }
-                Log.i(
-                    LOG_TAG,
-                    "RESOLVE_LOCATION_COMPLETE build=$APP_BUILD_ID lat=${origin.latitude} lon=${origin.longitude}"
-                )
 
                 if (useCurrentLocation) {
                     currentLocation = origin
                 }
                 lastSearchOrigin = origin
 
-                Log.i(LOG_TAG, "BACKEND_BEGIN build=$APP_BUILD_ID")
                 val response = searchBackend(
                     latitude = origin.latitude,
                     longitude = origin.longitude,
@@ -335,7 +328,6 @@ private fun NearTimeScreen() {
                     .take(RESULT_LIMIT)
                     .toList()
 
-                Log.i(LOG_TAG, "SEARCH_COMPLETE build=$APP_BUILD_ID places=${validated.size}")
                 searchState = SearchState.Success(
                     response.copy(
                         places = validated,
@@ -932,7 +924,6 @@ private suspend fun searchBackend(
     maxWalkMinutes: Int,
     openNowOnly: Boolean
 ): SearchResponse = withContext(Dispatchers.IO) {
-    Log.i(LOG_TAG, "BACKEND_PAYLOAD_BEGIN build=$APP_BUILD_ID")
     val json = postJson(
         BACKEND_BASE_URL,
         JSONObject()
@@ -945,7 +936,6 @@ private suspend fun searchBackend(
             .put("openNowOnly", openNowOnly)
     )
 
-    Log.i(LOG_TAG, "BACKEND_JSON_RECEIVED build=$APP_BUILD_ID")
     val resultStatus = json.optString("resultStatus")
     if (resultStatus == "DEGRADED") {
         throw IllegalStateException(
