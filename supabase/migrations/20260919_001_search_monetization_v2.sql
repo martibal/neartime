@@ -43,3 +43,12 @@ values
   ('ios','neartime_search_pack_20',20,true)
 on conflict (platform, product_id) do update
 set searches = excluded.searches, enabled = true, updated_at = now();
+
+-- Trial quota must match the five-search launch policy. Older schema versions
+-- capped successful_searches at 3 even after max_attempts was raised to 5.
+alter table public.logical_search_trial_state
+  drop constraint if exists logical_search_trial_state_successful_searches_check;
+
+alter table public.logical_search_trial_state
+  add constraint logical_search_trial_state_successful_searches_check
+  check (successful_searches >= 0 and successful_searches <= 5);
