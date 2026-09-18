@@ -79,16 +79,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "cloud-only-20260918-2"
+private const val APP_BUILD_ID = "cloud-only-20260918-3"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -925,6 +927,7 @@ private suspend fun searchBackend(
         BACKEND_BASE_URL,
         JSONObject()
             .put("action", "search")
+            .put("requestId", UUID.randomUUID().toString())
             .put("latitude", latitude)
             .put("longitude", longitude)
             .put("category", category)
@@ -1157,6 +1160,21 @@ private fun postJson(
     url: String,
     payload: JSONObject
 ): JSONObject {
+    val requestId = payload.optString("requestId").ifBlank { null }
+    return try {
+        postJsonOnce(url, payload, requestId)
+    } catch (e: IOException) {
+        Log.w(LOG_TAG, "POST_RETRY build=$APP_BUILD_ID requestId=${requestId ?: "none"}", e)
+        Thread.sleep(250)
+        postJsonOnce(url, payload, requestId)
+    }
+}
+
+private fun postJsonOnce(
+    url: String,
+    payload: JSONObject,
+    requestId: String?
+): JSONObject {
     require(url.startsWith("https://")) {
         "NearTime production backend must use HTTPS."
     }
@@ -1181,6 +1199,9 @@ private fun postJson(
         "Accept",
         "application/json"
     )
+    requestId?.let {
+        connection.setRequestProperty("Idempotency-Key", it)
+    }
 
     var phase = "WRITE_REQUEST"
     try {
