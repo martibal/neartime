@@ -3,12 +3,12 @@ import re
 
 p=Path("supabase/functions/native-search/index.ts")
 s=p.read_text(encoding="utf-8")
-s=s.replace("const BUILD_ID = '2026-09-18-discovery-rollback-v27';","const BUILD_ID = '2026-09-18-google-walk-v29';")
+s=s.replace("const BUILD_ID = '2026-09-18-discovery-rollback-v27';","const BUILD_ID = '2026-09-18-google-walk-v30';")
 s=s.replace("const SEARCH_COST_CAP_NOK = 0.30;","const SEARCH_COST_CAP_NOK = 0.40;")
 anchor="const BAD_POI_IDS = new Set(["
 google="""const GOOGLE_SEARCH_COST_NOK = 0.40;
 const GOOGLE_CATEGORY_TYPES = Object.freeze({
-  cafes_coffee:['cafe','coffee_shop'], restaurants:['restaurant','fast_food_restaurant'],
+  cafes_coffee:['cafe','coffee_shop'], restaurants:['restaurant'],
   fast_food_takeaway:['fast_food_restaurant'], bars_drinks:['bar','pub'], bakeries_sweets:['bakery'],
   groceries_supermarkets:['supermarket','grocery_store'], clothing_fashion:['clothing_store'],
   electronics:['electronics_store'], home_furniture:['furniture_store','home_goods_store'],
@@ -102,7 +102,7 @@ async function search(_tomTomKey, raw) {
       sortedBy:'GOOGLE_WALK_ROUTE_DISTANCE',discoverySource:'GOOGLE_PLACES_NEARBY_SEARCH_NEW',
       routingSource:'GOOGLE_PLACES_ROUTING_SUMMARIES_WALK',
       openNowGate:input.openNowOnly?'CONFIRMED_CLOSED_EXCLUDED_UNKNOWN_PRESERVED':'OFF',
-      cloudOnly:true,international:true,discoveryCandidates:places.length,candidateLimit:20,
+      cloudOnly:true,international:true,discoveryCandidates:places.length,candidateLimit:20,googleReturnedNames:places.map(p=>clean(p.displayName && p.displayName.text)).filter(Boolean),
       proof:'GOOGLE_DISTANCE_RANKED_20_THEN_WALK_DISTANCE_SORT'},
     usage:{thisSearch:{googleNearbyCalls:1,googleRoutingSummaryPlaces:places.length,tomtomDiscover:0,tomtomRoute:0,
       conservativeCostNok:GOOGLE_SEARCH_COST_NOK,costCapNok:SEARCH_COST_CAP_NOK,
