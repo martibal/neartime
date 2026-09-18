@@ -102,7 +102,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-10"
+private const val APP_BUILD_ID = "production-20260918-11"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -263,7 +263,6 @@ private fun NearTimeScreen() {
     }
 
     val cameraPositionState = rememberCameraPositionState()
-    val categoryListState = rememberLazyListState()
     val resultListState = rememberLazyListState()
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
@@ -587,40 +586,15 @@ private fun NearTimeScreen() {
                         val sortedCategories = SearchCategory.entries
                             .sortedBy { it.displayName.lowercase(Locale.ROOT) }
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(420.dp)
-                        ) {
-                            LazyColumn(
-                                state = categoryListState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(end = 14.dp)
-                            ) {
-                                itemsIndexed(
-                                    items = sortedCategories,
-                                    key = { _, category -> category.wireValue }
-                                ) { _, category ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(category.displayName)
-                                        },
-                                        onClick = {
-                                            selectedCategory = category
-                                            categoryExpanded = false
-                                        }
-                                    )
+                        sortedCategories.forEach { category ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(category.displayName)
+                                },
+                                onClick = {
+                                    selectedCategory = category
+                                    categoryExpanded = false
                                 }
-                            }
-
-                            LazyListScrollbar(
-                                state = categoryListState,
-                                itemCount = sortedCategories.size,
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .fillMaxHeight()
-                                    .width(14.dp)
                             )
                         }
                     }
