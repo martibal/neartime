@@ -23,6 +23,10 @@
       "use": "@vercel/node"
     },
     {
+      "src": "api/entitlement/topup.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "api/entitlement/trip-pass.js",
       "use": "@vercel/node"
     },
@@ -59,6 +63,10 @@
     {
       "src": "/api/entitlement/verify",
       "dest": "/api/entitlement/verify.js"
+    },
+    {
+      "src": "/api/entitlement/topup",
+      "dest": "/api/entitlement/topup.js"
     },
     {
       "src": "/api/entitlement/trip-pass",

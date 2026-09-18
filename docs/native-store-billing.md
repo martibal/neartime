@@ -1,23 +1,21 @@
-# NearTime native store billing
+# NearTime native Google Play billing
 
-NearTime uses `expo-iap` for App Store / Google Play checkout inside the custom Expo development client and production builds.
+Current Android monetization model:
 
-## Product mapping
+- 5 free logical searches per anonymous installation.
+- `neartime_monthly`: auto-renewing subscription, target Norwegian price 39 NOK/month, 30 searches per billing period.
+- `neartime_search_pack_20`: consumable one-time product, target Norwegian price 19 NOK, 20 extra searches.
+- Extra-search packs require an active/grace monthly subscription.
+- Extra searches persist until used and are consumed only after the monthly allowance reaches zero.
 
-- `neartime_trip_3d`: one-time in-app purchase (consumable), 29 NOK, 5 logical searches, 3-day activation window.
-- `neartime_monthly`: subscription, 39 NOK, 9 logical searches per billing period.
-- `neartime_trip_7d`: one-time in-app purchase (consumable), 49 NOK, 11 logical searches, 7-day activation window.
-
-Store product IDs must match these canonical IDs exactly on both platforms.
+The native Kotlin app uses Google Play Billing Library 9.1.0. Google Play remains the source of truth for checkout price and purchase state.
 
 ## Security boundary
 
-The client may open native checkout and receive a store purchase object, but it cannot grant access. The purchase is sent to NearTime's backend for verification. Only a server-issued opaque entitlement session unlocks paid search.
+The client cannot grant paid searches itself. Google Play purchase tokens are verified on NearTime's backend before an entitlement session or top-up is granted. The Supabase search gate authorizes quota before the Google Places provider call. Technical/provider failures release the reservation and do not consume a logical search.
 
-Transactions are finished only after successful backend verification. Trip Pass transactions remain unfinished until the dedicated one-time purchase verifier is implemented, preventing client-only activation.
+Subscription purchases are acknowledged only after server verification. Search-pack purchases are consumed after server verification and idempotent credit, allowing the same product to be purchased again.
 
-## Expo build requirements
+## Testing before Play products exist
 
-`expo-iap` is a native module and therefore requires a custom development build; it is not available in Expo Go. The Expo SDK 57 / React Native 0.86 stack is the validated OpenIAP baseline. Native builds must be regenerated after this dependency/config-plugin change.
-
-No Google Places live probe is required to validate the billing integration itself.
+A sideloaded debug build can test the five-search free allowance, live used/remaining counters, server blocking after the fifth successful search, and the paywall/restore UI. Actual checkout requires the Google Play products and a Play-distributed eligible test build/tester.

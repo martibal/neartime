@@ -22,8 +22,8 @@ android {
         applicationId = "com.placefinder.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 8
-        versionName = "1.0.8-production"
+        versionCode = 9
+        versionName = "1.0.9-production"
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
@@ -45,6 +45,7 @@ dependencies {
 
     implementation("com.google.maps.android:maps-compose:6.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.android.billingclient:billing-ktx:9.1.0")
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

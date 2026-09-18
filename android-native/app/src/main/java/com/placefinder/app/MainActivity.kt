@@ -51,6 +51,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -62,6 +63,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -114,7 +116,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-27"
+private const val APP_BUILD_ID = "production-20260919-28"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -214,10 +216,25 @@ private data class PlaceResult(
     val walkDistanceMeters: Int
 )
 
+private data class SearchQuotaStatus(
+    val accessMode: String,
+    val accountStatus: String,
+    val trialIncluded: Int,
+    val trialUsed: Int,
+    val trialRemaining: Int,
+    val monthlyIncluded: Int,
+    val monthlyUsed: Int,
+    val monthlyRemaining: Int,
+    val extraRemaining: Int,
+    val totalAvailable: Int,
+    val billingPeriodEnd: String?
+)
+
 private data class SearchResponse(
     val places: List<PlaceResult>,
     val exhaustedCandidates: Boolean,
-    val usageText: String?
+    val usageText: String?,
+    val quotaStatus: SearchQuotaStatus?
 )
 
 private sealed interface SearchState {
@@ -228,20 +245,32 @@ private sealed interface SearchState {
 }
 
 class MainActivity : ComponentActivity() {
+    private lateinit var billingManager: NearTimeBillingManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         MapsInitializer.initialize(applicationContext)
+        billingManager = NearTimeBillingManager(this)
 
         setContent {
             var darkMode by remember { mutableStateOf(false) }
+            val billingUiState by billingManager.state.collectAsState()
+
             MaterialTheme(colorScheme = if (darkMode) darkColorScheme() else lightColorScheme()) {
                 NearTimeScreen(
                     darkMode = darkMode,
-                    onDarkModeChange = { darkMode = it }
+                    onDarkModeChange = { darkMode = it },
+                    billingManager = billingManager,
+                    billingUiState = billingUiState
                 )
             }
         }
+    }
+
+    override fun onDestroy() {
+        billingManager.close()
+        super.onDestroy()
     }
 }
 
@@ -249,11 +278,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun NearTimeScreen(
     darkMode: Boolean,
-    onDarkModeChange: (Boolean) -> Unit
+    onDarkModeChange: (Boolean) -> Unit,
+    billingManager: NearTimeBillingManager,
+    billingUiState: BillingUiState
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val installHash = remember { getOrCreateInstallHash(context) }
+
+    var quotaStatus by remember { mutableStateOf<SearchQuotaStatus?>(null) }
+    var quotaError by remember { mutableStateOf<String?>(null) }
 
     var selectedCategory by remember { mutableStateOf(SearchCategory.BARS_DRINKS) }
     var categoryExpanded by remember { mutableStateOf(false) }
@@ -292,6 +327,23 @@ private fun NearTimeScreen(
 
     LaunchedEffect(categoryFilterText) {
         categoryScrollState.scrollTo(0)
+    }
+
+    LaunchedEffect(
+        installHash,
+        billingUiState.entitlementSession,
+        billingUiState.revision
+    ) {
+        quotaError = null
+        try {
+            quotaStatus = fetchQuotaStatus(
+                installHash = installHash,
+                entitlementSession = billingUiState.entitlementSession
+            )
+        } catch (e: Exception) {
+            quotaStatus = null
+            quotaError = e.message ?: "Could not load search allowance."
+        }
     }
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
@@ -352,6 +404,22 @@ private fun NearTimeScreen(
 
     fun runPlaceSearch() {
         scope.launch {
+            val allowance = quotaStatus
+            if (allowance == null) {
+                searchState = SearchState.Error("Search allowance is still loading.")
+                return@launch
+            }
+            if (allowance.totalAvailable <= 0) {
+                searchState = SearchState.Error(
+                    if (allowance.accessMode == "trial") {
+                        "Your 5 free searches are used. Subscribe to continue."
+                    } else {
+                        "No searches remaining. Buy 20 extra searches to continue."
+                    }
+                )
+                return@launch
+            }
+
             searchState = SearchState.Loading
             selectedPlace = null
 
@@ -375,8 +443,15 @@ private fun NearTimeScreen(
                     category = selectedCategory.wireValue,
                     maxWalkMinutes = maxWalkMinutes.roundToInt(),
                     openNowOnly = openNowOnly,
-                    minOpenMinutes = if (openNowOnly) minOpenMinutes.roundToInt() else 0
+                    minOpenMinutes = if (openNowOnly) minOpenMinutes.roundToInt() else 0,
+                    installHash = installHash,
+                    entitlementSession = billingUiState.entitlementSession
                 )
+
+                response.quotaStatus?.let {
+                    quotaStatus = it
+                    quotaError = null
+                }
 
                 val validated = response.places
                     .asSequence()
@@ -403,6 +478,13 @@ private fun NearTimeScreen(
                 )
             } catch (e: Exception) {
                 Log.e(LOG_TAG, "SEARCH_FAILED build=$APP_BUILD_ID", e)
+                runCatching {
+                    fetchQuotaStatus(
+                        installHash = installHash,
+                        entitlementSession = billingUiState.entitlementSession
+                    )
+                }.getOrNull()?.let { quotaStatus = it }
+
                 searchState = SearchState.Error(
                     "$APP_BUILD_ID · ${e::class.java.simpleName}: " +
                         (e.message ?: "Search failed.")
@@ -525,6 +607,16 @@ private fun NearTimeScreen(
                 }
             }
 
+            item {
+                SearchUsageCard(
+                    quota = quotaStatus,
+                    quotaError = quotaError,
+                    billing = billingUiState,
+                    onSubscribe = { billingManager.launchSubscription() },
+                    onBuyExtra = { billingManager.launchExtraSearchPack() },
+                    onRestore = { billingManager.restorePurchases(showMessage = true) }
+                )
+            }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -915,6 +1007,7 @@ private fun NearTimeScreen(
                         .fillMaxWidth()
                         .height(58.dp),
                     enabled = searchState !is SearchState.Loading &&
+                        (quotaStatus?.totalAvailable ?: 0) > 0 &&
                         if (useCurrentLocation) {
                             hasLocationPermission
                         } else {
@@ -930,7 +1023,13 @@ private fun NearTimeScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Find up to 10 places")
+                        Text(
+                            when {
+                                quotaStatus == null -> "Loading search allowance…"
+                                quotaStatus?.totalAvailable == 0 -> "No searches remaining"
+                                else -> "Find up to 10 places"
+                            }
+                        )
                     }
                 }
             }
@@ -1010,6 +1109,123 @@ private fun NearTimeScreen(
 
 
 
+@Composable
+private fun SearchUsageCard(
+    quota: SearchQuotaStatus?,
+    quotaError: String?,
+    billing: BillingUiState,
+    onSubscribe: () -> Unit,
+    onBuyExtra: () -> Unit,
+    onRestore: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "SEARCHES",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (quota == null) {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = quotaError ?: "Loading your search allowance…",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                return@Column
+            }
+
+            if (quota.accessMode == "trial") {
+                Text(
+                    text = quota.trialRemaining.toString() + " free searches remaining",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = quota.trialUsed.toString() + " of " + quota.trialIncluded.toString() + " used",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                if (quota.trialRemaining <= 0) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "30 searches every month · " + billing.monthlyPrice + "/month · auto-renews until cancelled in Google Play.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !billing.busy,
+                        onClick = onSubscribe
+                    ) {
+                        Text("Subscribe · " + billing.monthlyPrice + "/month")
+                    }
+                }
+            } else {
+                Text(
+                    text = quota.totalAvailable.toString() + " searches available",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Monthly · " + quota.monthlyUsed.toString() + " of " +
+                        quota.monthlyIncluded.toString() + " used · " +
+                        quota.monthlyRemaining.toString() + " remaining",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                quota.billingPeriodEnd?.take(10)?.let { date ->
+                    Text(
+                        text = "Monthly allowance resets " + date,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Text(
+                    text = "Extra searches · " + quota.extraRemaining.toString() + " remaining",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                if (quota.monthlyRemaining <= 0) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = "Extra packs require an active subscription and remain available until used.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !billing.busy,
+                        onClick = onBuyExtra
+                    ) {
+                        Text("Get 20 extra searches · " + billing.extraPrice)
+                    }
+                }
+            }
+
+            billing.message?.let { message ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (billing.isError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !billing.busy,
+                onClick = onRestore
+            ) {
+                Text("Restore Google Play purchases")
+            }
+        }
+    }
+}
 @Composable
 private fun ScrollStateScrollbar(
     state: androidx.compose.foundation.ScrollState,
@@ -1281,7 +1497,9 @@ private suspend fun searchBackend(
     category: String,
     maxWalkMinutes: Int,
     openNowOnly: Boolean,
-    minOpenMinutes: Int
+    minOpenMinutes: Int,
+    installHash: String,
+    entitlementSession: String?
 ): SearchResponse = withContext(Dispatchers.IO) {
     val json = postJson(
         BACKEND_BASE_URL,
@@ -1294,6 +1512,12 @@ private suspend fun searchBackend(
             .put("maxWalkMinutes", maxWalkMinutes)
             .put("openNowOnly", openNowOnly)
             .put("minOpenMinutes", minOpenMinutes)
+            .put("installHash", installHash)
+            .apply {
+                if (!entitlementSession.isNullOrBlank()) {
+                    put("entitlementSession", entitlementSession)
+                }
+            }
     )
 
     val resultStatus = json.optString("resultStatus")
@@ -1363,7 +1587,45 @@ private suspend fun searchBackend(
     SearchResponse(
         places = places,
         exhaustedCandidates = exhausted,
-        usageText = usageText
+        usageText = usageText,
+        quotaStatus = parseQuotaStatus(json.optJSONObject("quota"))
+    )
+}
+
+private suspend fun fetchQuotaStatus(
+    installHash: String,
+    entitlementSession: String?
+): SearchQuotaStatus = withContext(Dispatchers.IO) {
+    val payload = JSONObject()
+        .put("action", "usage")
+        .put("installHash", installHash)
+        .apply {
+            if (!entitlementSession.isNullOrBlank()) {
+                put("entitlementSession", entitlementSession)
+            }
+        }
+
+    val json = postJson(BACKEND_BASE_URL, payload)
+    parseQuotaStatus(json.optJSONObject("quota"))
+        ?: throw IllegalStateException("Search allowance response is invalid.")
+}
+
+private fun parseQuotaStatus(obj: JSONObject?): SearchQuotaStatus? {
+    if (obj == null) return null
+
+    return SearchQuotaStatus(
+        accessMode = obj.optString("access_mode", "trial"),
+        accountStatus = obj.optString("account_status", "active"),
+        trialIncluded = obj.optInt("trial_included", 0),
+        trialUsed = obj.optInt("trial_used", 0),
+        trialRemaining = obj.optInt("trial_remaining", 0),
+        monthlyIncluded = obj.optInt("monthly_included", 0),
+        monthlyUsed = obj.optInt("monthly_used", 0),
+        monthlyRemaining = obj.optInt("monthly_remaining", 0),
+        extraRemaining = obj.optInt("extra_remaining", 0),
+        totalAvailable = obj.optInt("total_available", 0),
+        billingPeriodEnd = obj.optString("billing_period_end")
+            .takeIf { it.isNotBlank() && it != "null" }
     )
 }
 

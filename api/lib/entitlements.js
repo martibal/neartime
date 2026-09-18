@@ -254,6 +254,35 @@ async function verifyGoogleSubscription(purchaseToken) {
   };
 }
 
+async function verifyGoogleOneTimeProduct(productId, purchaseToken) {
+  if (!/^[A-Za-z0-9._-]{3,128}$/.test(String(productId ?? ''))) {
+    throw new Error('invalid_product_id');
+  }
+  if (typeof purchaseToken !== 'string' || purchaseToken.length < 10 || purchaseToken.length > 4096) {
+    throw new Error('invalid_purchase_token');
+  }
+
+  const accessToken = await googleAccessToken();
+  const packageName = requiredEnv('GOOGLE_PLAY_PACKAGE_NAME');
+  const url = 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/' +
+    encodeURIComponent(packageName) + '/purchases/products/' +
+    encodeURIComponent(productId) + '/tokens/' + encodeURIComponent(purchaseToken);
+  const response = await fetch(url, { headers: { authorization: 'Bearer ' + accessToken } });
+  if (!response.ok) throw new Error('google_one_time_product_verify_failed_' + response.status);
+
+  const purchase = await response.json();
+  if (Number(purchase.purchaseState) !== 0) {
+    throw new Error('google_one_time_product_not_purchased');
+  }
+
+  return {
+    platform: 'android',
+    productId,
+    purchaseToken,
+    purchaseTimeMillis: Number(purchase.purchaseTimeMillis ?? 0),
+    acknowledged: Number(purchase.acknowledgementState ?? 0) === 1,
+  };
+}
 async function syncVerifiedEntitlement(verified) {
   const payload = await supabaseRpc('upsert_verified_entitlement', {
     p_platform: verified.platform,
@@ -294,6 +323,7 @@ module.exports = {
   verifyAppleSubscription,
   verifyAppleNotification,
   verifyGoogleSubscription,
+  verifyGoogleOneTimeProduct,
   syncVerifiedEntitlement,
   verifyGooglePubSubAuthorization,
   appleStatusToWallet,
