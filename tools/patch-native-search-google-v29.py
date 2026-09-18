@@ -28,7 +28,9 @@ const GOOGLE_CATEGORY_TYPES = Object.freeze({
   pet_care:['pet_care'], pet_stores:['pet_store']
 });
 """
-if "GOOGLE_CATEGORY_TYPES" not in s:
+if "GOOGLE_CATEGORY_TYPES" in s:
+    s=re.sub(r"const GOOGLE_CATEGORY_TYPES = Object\.freeze\(\{.*?\n\}\);",google.strip(),s,count=1,flags=re.S)
+else:
     s=s.replace(anchor,google+"\n"+anchor)
 
 new_search=r"""async function requireGooglePlacesKey() {
