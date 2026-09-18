@@ -107,7 +107,9 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-19"
+private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
+private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
+private const val APP_BUILD_ID = "production-20260918-20"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -592,8 +594,13 @@ private fun NearTimeScreen(
                             locationError = null
                             try {
                                 val bias = currentLocation ?: GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
+                                val quotaEventId = UUID.randomUUID()
                                 locationSuggestions = suggestLocationsBackend(
                                     customLocationText.trim(), bias.latitude, bias.longitude
+                                )
+                                recordClientQuotaUsage(
+                                    service = "tomtom_places_suggest",
+                                    eventId = quotaEventId
                                 )
                                 if (locationSuggestions.isEmpty()) {
                                     locationError = "No matching start location found."
@@ -616,7 +623,12 @@ private fun NearTimeScreen(
                                 locationSearchBusy = true
                                 locationError = null
                                 try {
+                                    val quotaEventId = UUID.randomUUID()
                                     val resolved = resolveLocationBackend(suggestion)
+                                    recordClientQuotaUsage(
+                                        service = "tomtom_places_details",
+                                        eventId = quotaEventId
+                                    )
                                     customLocation = resolved
                                     customLocationText = resolved.title
                                     useCurrentLocation = false
@@ -1715,6 +1727,42 @@ private fun launchExternalUri(
     } catch (_: ActivityNotFoundException) {
         // No compatible map/browser app.
         // Deliberately no paid API fallback.
+    }
+}
+
+private suspend fun recordClientQuotaUsage(
+    service: String,
+    eventId: UUID
+) = withContext(Dispatchers.IO) {
+    runCatching {
+        val payload = JSONObject()
+            .put("p_service", service)
+            .put("p_units", 1)
+            .put("p_event_id", eventId.toString())
+
+        val request = Request.Builder()
+            .url(SUPABASE_QUOTA_RPC_URL)
+            .post(
+                payload
+                    .toString()
+                    .toByteArray(StandardCharsets.UTF_8)
+                    .toRequestBody(JSON_MEDIA_TYPE)
+            )
+            .header("apikey", SUPABASE_PUBLISHABLE_KEY)
+            .header("Authorization", "Bearer $SUPABASE_PUBLISHABLE_KEY")
+            .header("Content-Type", "application/json")
+            .build()
+
+        HTTP_CLIENT.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                Log.w(
+                    LOG_TAG,
+                    "QUOTA_TELEMETRY_FAILED build=$APP_BUILD_ID code=${response.code}"
+                )
+            }
+        }
+    }.onFailure {
+        Log.w(LOG_TAG, "QUOTA_TELEMETRY_FAILED build=$APP_BUILD_ID", it)
     }
 }
 
