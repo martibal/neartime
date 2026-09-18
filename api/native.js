@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-opening-hours-v7';
+const BUILD_ID = '2026-09-18-opening-hours-v8';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -318,7 +318,7 @@ async function discoverPlaces(apiKey, input, usage) {
     'poiTypes(id,name,parentId)',
   ];
   if (input.openNowOnly) {
-    attributes.push('openingHours(date,timeRanges(start,end,utcOffsetSeconds))');
+    attributes.push('openingHours');
   }
 
   const response = await fetchJson(
