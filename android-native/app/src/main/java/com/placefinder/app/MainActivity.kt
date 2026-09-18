@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "cloud-only-20260918-4-okhttp"
+private const val APP_BUILD_ID = "cloud-only-20260918-5-searchtrace"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -293,6 +293,8 @@ private fun NearTimeScreen() {
             selectedPlace = null
 
             try {
+                Log.i(LOG_TAG, "SEARCH_BEGIN build=$APP_BUILD_ID useCurrentLocation=$useCurrentLocation")
+                Log.i(LOG_TAG, "RESOLVE_LOCATION_BEGIN build=$APP_BUILD_ID")
                 val origin = if (useCurrentLocation) {
                     resolveCurrentLocation(context)
                         ?: throw IllegalStateException("Current GPS position is not available yet.")
@@ -300,12 +302,17 @@ private fun NearTimeScreen() {
                     customLocation?.let { GeoPoint(it.latitude, it.longitude) }
                     ?: throw IllegalStateException("Choose a start location first.")
                 }
+                Log.i(
+                    LOG_TAG,
+                    "RESOLVE_LOCATION_COMPLETE build=$APP_BUILD_ID lat=${origin.latitude} lon=${origin.longitude}"
+                )
 
                 if (useCurrentLocation) {
                     currentLocation = origin
                 }
                 lastSearchOrigin = origin
 
+                Log.i(LOG_TAG, "BACKEND_BEGIN build=$APP_BUILD_ID")
                 val response = searchBackend(
                     latitude = origin.latitude,
                     longitude = origin.longitude,
