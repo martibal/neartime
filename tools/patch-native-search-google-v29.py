@@ -6,7 +6,7 @@ s=p.read_text(encoding="utf-8")
 s=s.replace("const BUILD_ID = '2026-09-18-discovery-rollback-v27';","const BUILD_ID = '2026-09-18-google-walk-v29';")
 s=s.replace("const SEARCH_COST_CAP_NOK = 0.30;","const SEARCH_COST_CAP_NOK = 0.40;")
 anchor="const BAD_POI_IDS = new Set(["
-google="""const GOOGLE_SEARCH_COST_NOK = 0.38;
+google="""const GOOGLE_SEARCH_COST_NOK = 0.40;
 const GOOGLE_CATEGORY_TYPES = Object.freeze({
   cafes_coffee:['cafe','coffee_shop'], restaurants:['restaurant','fast_food_restaurant'],
   fast_food_takeaway:['fast_food_restaurant'], bars_drinks:['bar','pub'], bakeries_sweets:['bakery'],
