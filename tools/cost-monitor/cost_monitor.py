@@ -28,6 +28,8 @@ class Monitor(tk.Tk):
         quota=ttk.LabelFrame(self,text="Free quota this month",padding=8)
         quota.pack(fill="x",padx=12,pady=(6,2))
         self.quota_frame=quota
+        self.quota_note=tk.StringVar(value="")
+        ttk.Label(self,textvariable=self.quota_note,padding=(14,1)).pack(anchor="w")
         cols=("time","category","minutes","results","discover","routes","cost","status")
         self.tree=ttk.Treeview(self,columns=cols,show="headings")
         headings=("Time","Category","Min","Results","Discover","Routes","Cost NOK","Status")
@@ -57,6 +59,7 @@ class Monitor(tk.Tk):
             self.vars["routes"].set(str(t.get("route_calls",0)))
             self.vars["status"].set("Live · refresh every 3 seconds")
             quotas=d.get("free_quotas",[]) or []
+            self.quota_note.set(str(d.get("quota_note","")))
             for child in self.quota_frame.winfo_children():
                 child.destroy()
             if quotas:
