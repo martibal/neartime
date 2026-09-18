@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-cost-category-v10';
+const BUILD_ID = '2026-09-18-origin-sanity-v11';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -414,10 +414,17 @@ async function routeOne(apiKey, input, place, usage) {
     if (seconds === null || meters === null || seconds < 0 || meters < 0) {
       return { ok: false, place, reason: 'ROUTE_RESULT_INVALID' };
     }
+    const directMeters = haversineMeters(
+      input.latitude, input.longitude, place.latitude, place.longitude
+    );
+    if (meters + 25 < directMeters) {
+      return { ok: false, place, reason: 'ROUTE_ENDPOINT_SANITY_FAILED' };
+    }
     return {
       ok: true,
       place: {
         ...place,
+        straightDistanceMeters: Math.max(0, Math.round(directMeters)),
         walkSeconds: Math.round(seconds),
         walkMinutes: Math.max(1, Math.ceil(seconds / 60)),
         walkDistanceMeters: Math.round(meters),
@@ -569,9 +576,11 @@ async function search(apiKey, raw) {
       const candidate = candidates[nextIndex];
       nextIndex += 1;
 
-      // Walking distance can never be shorter than straight-line distance.
-      // At a conservative 5 km/h, candidates beyond this lower-bound radius
-      // cannot satisfy the user's maximum walking-time filter and need no paid route.
+      // Recompute the endpoint distance from the exact search origin and POI
+      // coordinates; do not trust discovery distance metadata for this gate.
+      candidate.straightDistanceMeters = Math.max(0, Math.round(haversineMeters(
+        input.latitude, input.longitude, candidate.latitude, candidate.longitude
+      )));
       if (candidate.straightDistanceMeters > input.maxWalkMinutes * (5000 / 60)) {
         continue;
       }
