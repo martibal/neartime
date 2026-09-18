@@ -18,16 +18,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -94,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-8"
+private const val APP_BUILD_ID = "production-20260918-9"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -255,7 +252,6 @@ private fun NearTimeScreen() {
     }
 
     val cameraPositionState = rememberCameraPositionState()
-    val pageListState = rememberLazyListState()
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
         if (hasLocationPermission) {
@@ -354,16 +350,11 @@ private fun NearTimeScreen() {
     }
 
     Scaffold { innerPadding ->
-        Box(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-        ) {
-        LazyColumn(
-            state = pageListState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 16.dp, end = 64.dp),
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
@@ -785,37 +776,6 @@ private fun NearTimeScreen() {
             }
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            OutlinedButton(
-                modifier = Modifier.width(50.dp),
-                enabled = pageListState.canScrollBackward,
-                onClick = {
-                    scope.launch {
-                        val target = (pageListState.firstVisibleItemIndex - 3).coerceAtLeast(0)
-                        pageListState.animateScrollToItem(target)
-                    }
-                }
-            ) { Text("▲") }
-
-            OutlinedButton(
-                modifier = Modifier.width(50.dp),
-                enabled = pageListState.canScrollForward,
-                onClick = {
-                    scope.launch {
-                        val lastIndex = (pageListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                        val target = (pageListState.firstVisibleItemIndex + 3).coerceAtMost(lastIndex)
-                        pageListState.animateScrollToItem(target)
-                    }
-                }
-            ) { Text("▼") }
-        }
-        }
     }
 }
 
