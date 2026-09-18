@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-bad-poi-denylist-v14';
+const BUILD_ID = '2026-09-18-discovery-audit-v15';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -278,6 +278,9 @@ function normalizeDiscoverPlace(item, input) {
   const sourceCategories = types
     .map(function (t) { return clean(t && t.id) || clean(t && t.name); })
     .filter(Boolean);
+  const sourceCategoryDetails = types.map(function (t) {
+    return { id:clean(t&&t.id), name:clean(t&&t.name), parentId:clean(t&&t.parentId) };
+  }).filter(function (t) { return t.id || t.name; });
   if (sourceCategories.length === 0) sourceCategories.push(input.category);
 
   const openingState = openingStateNow(item && item.openingHours);
@@ -292,6 +295,7 @@ function normalizeDiscoverPlace(item, input) {
       types.map(function (t) { return clean(t && t.name); }).find(Boolean) ||
       CATEGORY_QUERY[input.category],
     sourceCategories,
+    sourceCategoryDetails,
     latitude,
     longitude,
     address: addressText(item && item.address),
@@ -655,6 +659,19 @@ async function search(apiKey, raw) {
       cloudOnly: true,
       international: true,
       discoveryCandidates: candidates.length,
+      discoveryAudit: {
+        query: CATEGORY_QUERY[input.category],
+        taxonomy: Object.entries(candidates.reduce(function (acc,p) {
+          for (const t of (p.sourceCategoryDetails || [])) {
+            const key=[t.id||'',t.name||'',t.parentId||''].join('|');
+            acc[key]=(acc[key]||0)+1;
+          }
+          return acc;
+        },{})).map(function (entry) {
+          const parts=entry[0].split('|');
+          return {id:parts[0]||null,name:parts[1]||null,parentId:parts[2]||null,count:entry[1]};
+        }).sort(function(a,b){return b.count-a.count;}),
+      },
     },
     usage: {
       thisSearch: {
