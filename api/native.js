@@ -15,11 +15,11 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-discovery-v2';
+const BUILD_ID = '2026-09-18-adaptive-proof-v3';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
-const ROUTE_BATCH_SIZE = 4;
+const ROUTE_BATCH_SIZE = 1;
 const SEARCH_COST_CAP_NOK = 0.30;
 
 const COST_GUARD = Object.freeze({
@@ -575,7 +575,7 @@ async function search(apiKey, raw) {
     });
 
     if (!proof.proven && batch.length > 0 && nextIndex < candidates.length) {
-      await new Promise(function (resolve) { setTimeout(resolve, 250); });
+      await new Promise(function (resolve) { setTimeout(resolve, 210); });
     }
   }
 
