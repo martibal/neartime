@@ -91,7 +91,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-6"
+private const val APP_BUILD_ID = "production-20260918-7"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -225,7 +225,7 @@ private fun NearTimeScreen() {
     var selectedCategory by remember { mutableStateOf(SearchCategory.BARS_DRINKS) }
     var categoryExpanded by remember { mutableStateOf(false) }
     var maxWalkMinutes by remember { mutableFloatStateOf(15f) }
-    var openNowOnly by remember { mutableStateOf(false) }
+    var openNowOnly by remember { mutableStateOf(true) }
     var minOpenMinutes by remember { mutableFloatStateOf(0f) }
 
     var useCurrentLocation by remember { mutableStateOf(true) }
