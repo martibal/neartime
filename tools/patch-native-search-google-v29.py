@@ -3,8 +3,8 @@ import re
 
 p=Path("supabase/functions/native-search/index.ts")
 s=p.read_text(encoding="utf-8")
-s=s.replace("const BUILD_ID = '2026-09-18-discovery-rollback-v27';","const BUILD_ID = '2026-09-18-google-walk-v30';")
-s=s.replace("const SEARCH_COST_CAP_NOK = 0.30;","const SEARCH_COST_CAP_NOK = 0.40;")
+s=re.sub(r"const BUILD_ID = '[^']+';","const BUILD_ID = '2026-09-18-google-walk-v30';",s,count=1)
+s=re.sub(r"const SEARCH_COST_CAP_NOK = [0-9.]+;","const SEARCH_COST_CAP_NOK = 0.40;",s,count=1)
 anchor="const BAD_POI_IDS = new Set(["
 google="""const GOOGLE_SEARCH_COST_NOK = 0.40;
 const GOOGLE_CATEGORY_TYPES = Object.freeze({
@@ -109,7 +109,7 @@ async function search(_tomTomKey, raw) {
       worstCaseCostNok:GOOGLE_SEARCH_COST_NOK,freeTierAssumed:false}}};
 }
 """
-pat=r"async function search\(apiKey, raw\) \{.*?\n\}\n(?=async function suggest\()"
+pat=r"async function search\([^)]*\) \{.*?\n\}\n(?=async function suggest\()"
 s,n=re.subn(pat,lambda _m:new_search+"\n",s,flags=re.S)
 if n!=1: raise SystemExit(f"Expected one search() block, replaced {n}")
 s=s.replace("placeDiscovery: 'TOMTOM_ORBIS_PLACES_CLOUD',","placeDiscovery: 'GOOGLE_PLACES_NEARBY_SEARCH_NEW',")
