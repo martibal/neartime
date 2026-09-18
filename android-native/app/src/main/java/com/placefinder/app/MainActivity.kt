@@ -787,6 +787,7 @@ private fun NearTimeScreen() {
                         PlaceCard(
                             rank = index + 1,
                             place = place,
+                            searchOrigin = lastSearchOrigin,
                             selected = selectedPlace?.id == place.id,
                             onSelect = {
                                 selectedPlace = place
@@ -819,6 +820,7 @@ private fun NearTimeScreen() {
 private fun PlaceCard(
     rank: Int,
     place: PlaceResult,
+    searchOrigin: GeoPoint?,
     selected: Boolean,
     onSelect: () -> Unit
 ) {
@@ -903,7 +905,7 @@ private fun PlaceCard(
             Button(
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
-                    openWalkingDirections(context, place, lastSearchOrigin)
+                    openWalkingDirections(context, place, searchOrigin)
                 }
             ) {
                 Text("Show route")
