@@ -77,20 +77,21 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.TimeUnit
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.Locale
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "cloud-only-20260918-3"
+private const val APP_BUILD_ID = "cloud-only-20260918-4-okhttp"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -1156,6 +1157,16 @@ private fun parsePlace(
     )
 }
 
+private val HTTP_CLIENT = OkHttpClient.Builder()
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .readTimeout(35, TimeUnit.SECONDS)
+    .writeTimeout(10, TimeUnit.SECONDS)
+    .retryOnConnectionFailure(true)
+    .build()
+
+private val JSON_MEDIA_TYPE =
+    "application/json; charset=utf-8".toMediaType()
+
 private fun postJson(
     url: String,
     payload: JSONObject
@@ -1164,7 +1175,11 @@ private fun postJson(
     return try {
         postJsonOnce(url, payload, requestId)
     } catch (e: IOException) {
-        Log.w(LOG_TAG, "POST_RETRY build=$APP_BUILD_ID requestId=${requestId ?: "none"}", e)
+        Log.w(
+            LOG_TAG,
+            "POST_RETRY build=$APP_BUILD_ID requestId=${requestId ?: "none"}",
+            e
+        )
         Thread.sleep(250)
         postJsonOnce(url, payload, requestId)
     }
@@ -1182,91 +1197,65 @@ private fun postJsonOnce(
         "Local backend is forbidden in this build."
     }
 
-    Log.i(LOG_TAG, "POST_BEGIN build=$APP_BUILD_ID host=" + URL(url).host)
+    val host = url.toUri().host ?: "unknown"
+    Log.i(LOG_TAG, "POST_BEGIN build=$APP_BUILD_ID host=$host")
 
-    val connection =
-        URL(url).openConnection() as HttpURLConnection
+    val body = payload
+        .toString()
+        .toByteArray(StandardCharsets.UTF_8)
+        .toRequestBody(JSON_MEDIA_TYPE)
 
-    connection.requestMethod = "POST"
-    connection.connectTimeout = 10_000
-    connection.readTimeout = 35_000
-    connection.doOutput = true
-    connection.setRequestProperty(
-        "Content-Type",
-        "application/json; charset=utf-8"
-    )
-    connection.setRequestProperty(
-        "Accept",
-        "application/json"
-    )
+    val requestBuilder = Request.Builder()
+        .url(url)
+        .post(body)
+        .header("Accept", "application/json")
+        .header("Connection", "close")
+
     requestId?.let {
-        connection.setRequestProperty("Idempotency-Key", it)
+        requestBuilder.header("Idempotency-Key", it)
     }
 
-    var phase = "WRITE_REQUEST"
+    var phase = "EXECUTE"
     try {
         Log.i(LOG_TAG, "POST_PHASE $phase")
-        connection.outputStream.use { stream ->
-            stream.write(
-                payload
-                    .toString()
-                    .toByteArray(
-                        StandardCharsets.UTF_8
-                    )
+        HTTP_CLIENT.newCall(requestBuilder.build()).execute().use { response ->
+            val code = response.code
+            Log.i(LOG_TAG, "POST_STATUS code=$code")
+
+            phase = "READ_BODY"
+            Log.i(LOG_TAG, "POST_PHASE $phase")
+            val text = response.body?.string().orEmpty()
+            Log.i(
+                LOG_TAG,
+                "POST_BODY_COMPLETE bytes=${
+                    text.toByteArray(StandardCharsets.UTF_8).size
+                }"
             )
+
+            phase = "PARSE_JSON"
+            Log.i(LOG_TAG, "POST_PHASE $phase")
+            val json = if (text.isBlank()) JSONObject() else JSONObject(text)
+
+            if (!response.isSuccessful) {
+                val error = json
+                    .optString("error")
+                    .ifBlank { "Backend HTTP $code" }
+
+                throw IllegalStateException(
+                    "$APP_BUILD_ID · $error"
+                )
+            }
+
+            Log.i(LOG_TAG, "POST_COMPLETE code=$code")
+            return json
         }
-
-        phase = "READ_STATUS"
-        Log.i(LOG_TAG, "POST_PHASE $phase")
-        val code = connection.responseCode
-        Log.i(LOG_TAG, "POST_STATUS code=$code")
-
-        phase = "READ_BODY"
-        Log.i(LOG_TAG, "POST_PHASE $phase")
-        val stream = if (code in 200..299) {
-            connection.inputStream
-        } else {
-            connection.errorStream
-        }
-
-        val text = BufferedReader(
-            InputStreamReader(
-                stream,
-                StandardCharsets.UTF_8
-            )
-        ).use {
-            it.readText()
-        }
-
-        Log.i(LOG_TAG, "POST_BODY_COMPLETE bytes=${text.toByteArray(StandardCharsets.UTF_8).size}")
-
-        phase = "PARSE_JSON"
-        Log.i(LOG_TAG, "POST_PHASE $phase")
-        val json = if (text.isBlank()) {
-            JSONObject()
-        } else {
-            JSONObject(text)
-        }
-
-        if (code !in 200..299) {
-            val error = json
-                .optString("error")
-                .ifBlank {
-                    "Backend HTTP $code"
-                }
-
-            throw IllegalStateException(
-                "$APP_BUILD_ID · $error"
-            )
-        }
-
-        Log.i(LOG_TAG, "POST_COMPLETE code=$code")
-        return json
     } catch (e: Exception) {
-        Log.e(LOG_TAG, "POST_FAILED phase=$phase build=$APP_BUILD_ID", e)
+        Log.e(
+            LOG_TAG,
+            "POST_FAILED phase=$phase build=$APP_BUILD_ID",
+            e
+        )
         throw e
-    } finally {
-        connection.disconnect()
     }
 }
 
