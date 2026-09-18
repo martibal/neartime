@@ -116,7 +116,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-29"
+private const val APP_BUILD_ID = "production-20260919-30"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -210,6 +210,16 @@ private data class PlaceResult(
     val longitude: Double,
     val address: String,
     val isOpenNow: Boolean?,
+    val minutesUntilClose: Int?,
+    val rating: Double?,
+    val userRatingCount: Int?,
+    val priceLevel: String?,
+    val priceRangeText: String?,
+    val nationalPhoneNumber: String?,
+    val websiteUri: String?,
+    val googleMapsUri: String?,
+    val providerAttributions: List<String>,
+    val businessStatus: String?,
     val sourceVerified: Boolean,
     val walkSeconds: Int,
     val walkMinutes: Int,
@@ -462,7 +472,7 @@ private fun NearTimeScreen(
                     // Backend owns opening-hours semantics. When Open now is enabled,
                     // confirmed-closed places are already excluded there; unknown hours
                     // must not be silently treated as closed by the Android client.
-                    .filter { !openNowOnly || it.isOpenNow != false }
+                    .filter { !openNowOnly || it.isOpenNow == true }
                     .sortedWith(
                         compareBy<PlaceResult> { it.walkDistanceMeters }
                             .thenBy { it.walkSeconds }
@@ -1411,12 +1421,13 @@ private fun PlaceCard(
         Column(
             modifier = Modifier.padding(14.dp)
         ) {
-            Row(                modifier = Modifier.fillMaxWidth(),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(0.78f)
+                    modifier = Modifier.fillMaxWidth(0.76f)
                 ) {
                     Text(
                         text = "$rank. ${place.name}",
@@ -1431,15 +1442,44 @@ private fun PlaceCard(
                     )
                 }
 
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "${place.walkMinutes} min",
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${place.walkDistanceMeters} m",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            val ratingLine = buildString {
+                place.rating?.let {
+                    append(String.format(Locale.US, "%.1f ★", it))
+                }
+                place.userRatingCount?.let {
+                    if (isNotEmpty()) append(" · ")
+                    append("$it reviews")
+                }
+                val price = place.priceRangeText ?: place.priceLevel
+                if (!price.isNullOrBlank()) {
+                    if (isNotEmpty()) append(" · ")
+                    append(price)
+                }
+            }
+
+            if (ratingLine.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "${place.walkMinutes} min",
-                    fontWeight = FontWeight.Bold
+                    text = ratingLine,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
-            Text("${place.walkDistanceMeters} m walking")
-
             if (place.address.isNotBlank()) {
+                Spacer(Modifier.height(3.dp))
                 Text(
                     text = place.address,
                     style = MaterialTheme.typography.bodySmall
@@ -1447,20 +1487,59 @@ private fun PlaceCard(
             }
 
             val openText = when (place.isOpenNow) {
-                true -> "Open now"
+                true -> {
+                    place.minutesUntilClose?.let {
+                        "Open now · closes in ${formatMinutesCompact(it)}"
+                    } ?: "Open now"
+                }
                 false -> "Closed now"
-                null -> "Opening status unavailable"
+                null -> "Opening hours unavailable"
             }
 
             Text(
                 text = openText,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = if (place.isOpenNow == true) FontWeight.SemiBold else FontWeight.Normal
             )
+
+            if (place.businessStatus == "CLOSED_TEMPORARILY") {
+                Text(
+                    text = "Temporarily closed",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            if (!place.nationalPhoneNumber.isNullOrBlank()) {
+                Text(
+                    text = place.nationalPhoneNumber,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            if (!place.websiteUri.isNullOrBlank()) {
+                Text(
+                    text = "Website",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.clickable {
+                        launchExternalUri(context, place.websiteUri.toUri())
+                    }
+                )
+            }
+
+            if (place.providerAttributions.isNotEmpty()) {
+                Text(
+                    text = "Additional data: " + place.providerAttributions.joinToString(", "),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
 
             if (selected) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Selected on map",
+                    text = "Selected",
                     style = MaterialTheme.typography.labelMedium
                 )
             }
@@ -1469,24 +1548,40 @@ private fun PlaceCard(
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
 
-            OutlinedButton(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    openPlaceInGoogleMaps(context, place)
-                }
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Open in Maps")
-            }
+                OutlinedButton(
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        openPlaceInGoogleMaps(context, place)
+                    }
+                ) {
+                    Text("Open in Maps")
+                }
 
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = {
-                    openWalkingDirections(context, place, searchOrigin)
+                Button(
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        openWalkingDirections(context, place, searchOrigin)
+                    }
+                ) {
+                    Text("Show route")
                 }
-            ) {
-                Text("Show route")
             }
         }
+    }
+}
+
+private fun formatMinutesCompact(minutes: Int): String {
+    val safe = minutes.coerceAtLeast(0)
+    val hours = safe / 60
+    val mins = safe % 60
+    return when {
+        hours <= 0 -> "$mins min"
+        mins == 0 -> "$hours h"
+        else -> "$hours h $mins min"
     }
 }
 
@@ -1740,35 +1835,19 @@ private fun parsePlace(
         return null
     }
 
-    val latitude = obj.optDoubleOrNull("latitude")
-        ?: return null
+    val latitude = obj.optDoubleOrNull("latitude") ?: return null
+    val longitude = obj.optDoubleOrNull("longitude") ?: return null
+    val walkSeconds = obj.optIntOrNull("walkSeconds") ?: return null
+    val walkMinutes = obj.optIntOrNull("walkMinutes") ?: return null
+    val walkDistanceMeters = obj.optIntOrNull("walkDistanceMeters") ?: return null
 
-    val longitude = obj.optDoubleOrNull("longitude")
-        ?: return null
-
-    val walkSeconds = obj.optIntOrNull("walkSeconds")
-        ?: return null
-
-    val walkMinutes = obj.optIntOrNull("walkMinutes")
-        ?: return null
-
-    val walkDistanceMeters =
-        obj.optIntOrNull("walkDistanceMeters")
-            ?: return null
-
-    if (
-        walkSeconds < 0 ||
-        walkMinutes < 0 ||
-        walkDistanceMeters < 0
-    ) {
+    if (walkSeconds < 0 || walkMinutes < 0 || walkDistanceMeters < 0) {
         return null
     }
 
     val sourceVerified = when {
-        obj.has("sourceVerified") ->
-            obj.optBoolean("sourceVerified", false)
-        else ->
-            obj.optBoolean("googleOperationalVerified", false)
+        obj.has("sourceVerified") -> obj.optBoolean("sourceVerified", false)
+        else -> obj.optBoolean("googleOperationalVerified", false)
     }
 
     if (!sourceVerified) {
@@ -1781,6 +1860,12 @@ private fun parsePlace(
         else -> obj.optBoolean("isOpenNow")
     }
 
+    val rating = obj.optDoubleOrNull("rating")
+        ?.takeIf { it in 0.0..5.0 }
+
+    val ratingCount = obj.optIntOrNull("userRatingCount")
+        ?.takeIf { it >= 0 }
+
     return PlaceResult(
         id = id,
         name = name,
@@ -1788,10 +1873,20 @@ private fun parsePlace(
         sourceCategories = categories,
         latitude = latitude,
         longitude = longitude,
-        address = obj
-            .optString("address")
-            .trim(),
+        address = obj.optString("address").trim(),
         isOpenNow = isOpenNow,
+        minutesUntilClose = obj.optIntOrNull("minutesUntilClose")?.takeIf { it >= 0 },
+        rating = rating,
+        userRatingCount = ratingCount,
+        priceLevel = obj.optString("priceLevel").trim().takeIf { it.isNotEmpty() },
+        priceRangeText = obj.optString("priceRangeText").trim().takeIf { it.isNotEmpty() },
+        nationalPhoneNumber = obj.optString("nationalPhoneNumber").trim().takeIf { it.isNotEmpty() },
+        websiteUri = obj.optString("websiteUri").trim()
+            .takeIf { it.startsWith("https://") || it.startsWith("http://") },
+        googleMapsUri = obj.optString("googleMapsUri").trim()
+            .takeIf { it.startsWith("https://") || it.startsWith("http://") },
+        providerAttributions = obj.optJSONArray("providerAttributions")?.toStringList().orEmpty(),
+        businessStatus = obj.optString("businessStatus").trim().takeIf { it.isNotEmpty() },
         sourceVerified = true,
         walkSeconds = walkSeconds,
         walkMinutes = walkMinutes,
@@ -2102,6 +2197,15 @@ private fun openPlaceInGoogleMaps(
     context: Context,
     place: PlaceResult
 ) {
+    val directGoogleUri = place.googleMapsUri
+    if (!directGoogleUri.isNullOrBlank()) {
+        launchExternalUri(
+            context = context,
+            uri = directGoogleUri.toUri()
+        )
+        return
+    }
+
     val query = URLEncoder.encode(
         "${place.name}, ${place.address}",
         StandardCharsets.UTF_8.toString()
