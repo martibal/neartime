@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-up-to-10-proof-v5';
+const BUILD_ID = '2026-09-18-open-now-proof-v6';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -459,14 +459,8 @@ function proofState(options) {
     }
   }
 
-  if (openNowOnly) {
-    for (const candidate of candidates) {
-      if (candidate.isOpenNow === null) {
-        lowerBound = Math.min(lowerBound, candidate.straightDistanceMeters);
-      }
-    }
-  }
-
+  // Unknown opening hours fail closed during candidate selection. They are not
+  // unresolved routing candidates and therefore must not keep proof open forever.
   if (top.length < RESULT_LIMIT) {
     return {
       // "Up to 10": fewer than ten is complete when every unresolved
@@ -629,9 +623,14 @@ async function search(apiKey, raw) {
   };
 
   if (!proof.proven) {
+    const capReached =
+      usage.tomtomRoute >= MAX_ROUTE_CALLS ||
+      costNok(usage.tomtomDiscover, usage.tomtomRoute + 1) > SEARCH_COST_CAP_NOK;
     return {
       resultStatus: 'DEGRADED',
-      reason: 'TOP10_NOT_PROVABLE_WITHIN_30_ORE_CAP',
+      reason: capReached
+        ? 'TOP10_NOT_PROVABLE_WITHIN_30_ORE_CAP'
+        : 'RESULT_SET_NOT_PROVABLE',
       places: [],
       summary: {
         ...shared.summary,
