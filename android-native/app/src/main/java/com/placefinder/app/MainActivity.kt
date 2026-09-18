@@ -116,7 +116,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-28"
+private const val APP_BUILD_ID = "production-20260919-29"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -751,11 +751,10 @@ private fun NearTimeScreen(
                                     customLocationText = resolved.title
                                     useCurrentLocation = false
                                     locationSuggestions = emptyList()
-                                    cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngZoom(
-                                            LatLng(resolved.latitude, resolved.longitude), 14.5f
-                                        )
-                                    )
+                                    // activeOrigin already drives the map camera through
+                                    // LaunchedEffect. Starting a second animation here
+                                    // cancels the first one and used to surface
+                                    // "Animation cancelled" as a user-visible error.
                                 } catch (e: Exception) {
                                     locationError = e.message ?: "Could not resolve location."
                                 } finally { locationSearchBusy = false }
