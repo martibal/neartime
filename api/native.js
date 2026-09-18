@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-open-now-proof-v6';
+const BUILD_ID = '2026-09-18-opening-hours-v7';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -230,21 +230,27 @@ function wallClockToUtc(dateValue, timeValue, offsetSeconds) {
   ) - offset * 1000;
 }
 
-function openStateNow(openingHours, nowMs) {
+function openingStateNow(openingHours, nowMs) {
   const now = nowMs === undefined ? Date.now() : nowMs;
-  if (!Array.isArray(openingHours) || openingHours.length === 0) return null;
+  if (!Array.isArray(openingHours) || openingHours.length === 0) {
+    return { isOpenNow: null, closesAtMs: null, minutesUntilClose: null };
+  }
   let sawValidRange = false;
   for (const day of openingHours) {
     if (!day || !Array.isArray(day.timeRanges)) continue;
     for (const range of day.timeRanges) {
       const start = wallClockToUtc(day.date, range && range.start, range && range.utcOffsetSeconds);
-      const end = wallClockToUtc(day.date, range && range.end, range && range.utcOffsetSeconds);
+      let end = wallClockToUtc(day.date, range && range.end, range && range.utcOffsetSeconds);
       if (start === null || end === null) continue;
+      if (end <= start) end += 24 * 60 * 60 * 1000;
       sawValidRange = true;
-      if (now >= start && now < end) return true;
+      if (now >= start && now < end) {
+        return { isOpenNow: true, closesAtMs: end,
+          minutesUntilClose: Math.floor((end - now) / 60000) };
+      }
     }
   }
-  return sawValidRange ? false : null;
+  return { isOpenNow: sawValidRange ? false : null, closesAtMs: null, minutesUntilClose: null };
 }
 
 function normalizeDiscoverPlace(item, input) {
@@ -264,7 +270,7 @@ function normalizeDiscoverPlace(item, input) {
     .filter(Boolean);
   if (sourceCategories.length === 0) sourceCategories.push(input.category);
 
-  const openingState = openStateNow(item && item.openingHours);
+  const openingState = openingStateNow(item && item.openingHours);
   const straightDistanceMeters =
     num(item && item.distanceInMeters) ??
     haversineMeters(input.latitude, input.longitude, latitude, longitude);
@@ -280,7 +286,10 @@ function normalizeDiscoverPlace(item, input) {
     longitude,
     address: addressText(item && item.address),
     countryCodeIso2: clean(item && item.address && item.address.countryCodeIso2),
-    isOpenNow: openingState,
+    isOpenNow: openingState.isOpenNow,
+    closesAtMs: openingState.closesAtMs,
+    minutesUntilClose: openingState.minutesUntilClose,
+    openingHoursKnown: openingState.isOpenNow !== null,
     sourceVerified: true,
     straightDistanceMeters: Math.max(0, Math.round(straightDistanceMeters)),
   };
@@ -513,6 +522,21 @@ async function search(apiKey, raw) {
     };
   }
 
+
+  if (input.openNowOnly) {
+    const knownOpeningHours = candidates.filter(function (p) { return p.openingHoursKnown; }).length;
+    if (knownOpeningHours === 0) {
+      return {
+        resultStatus: 'DEGRADED', reason: 'OPENING_HOURS_UNAVAILABLE', places: [],
+        summary: { requested: RESULT_LIMIT, returned: 0, exhaustedCandidates: false,
+          discoveryCandidates: candidates.length, sortedBy: 'ACTUAL_PEDESTRIAN_ROUTE_DISTANCE',
+          discoverySource: 'TOMTOM_ORBIS_PLACES_CLOUD', routingSource: 'TOMTOM_CLOUD_PEDESTRIAN_ROUTING',
+          openNowGate: 'TOMTOM_ORBIS_OPENING_HOURS_FAIL_CLOSED', cloudOnly: true, international: true },
+        usage: { thisSearch: { ...usage, conservativeCostNok: costNok(usage.tomtomDiscover, usage.tomtomRoute),
+          costCapNok: SEARCH_COST_CAP_NOK, worstCaseCostNok: WORST_CASE_SEARCH_COST_NOK, freeTierAssumed: false } },
+      };
+    }
+  }
 
   const routed = [];
   const failedLowerBounds = [];
