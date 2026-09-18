@@ -106,7 +106,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-16"
+private const val APP_BUILD_ID = "production-20260918-17"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -312,6 +312,15 @@ private fun NearTimeScreen(
         }
     }
 
+    fun selectCurrentLocation() {
+        useCurrentLocation = true
+        customLocation = null
+        customLocationText = ""
+        locationSuggestions = emptyList()
+        locationError = null
+        refreshGps()
+    }
+
     fun runPlaceSearch() {
         scope.launch {
             searchState = SearchState.Loading
@@ -482,19 +491,39 @@ private fun NearTimeScreen(
             }
 
             item {
-                Text("Start from", fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Start from", fontWeight = FontWeight.SemiBold)
 
-                FilterChip(
-                    selected = useCurrentLocation,
-                    onClick = {
-                        useCurrentLocation = true
-                        customLocation = null
-                        customLocationText = ""
-                        locationSuggestions = emptyList()
-                        locationError = null
-                    },
-                    label = { Text("My current location") }
-                )
+                    FilterChip(
+                        selected = useCurrentLocation,
+                        onClick = { selectCurrentLocation() },
+                        label = { Text("My current location") }
+                    )
+                }
+
+                if (useCurrentLocation && hasLocationPermission) {
+                    currentLocation?.let { gps ->
+                        Text(
+                            text = "● Using live GPS · " +
+                                String.format(
+                                    Locale.US,
+                                    "%.4f, %.4f",
+                                    gps.latitude,
+                                    gps.longitude
+                                ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } ?: Text(
+                        text = "Locating live GPS position…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
                 if (!hasLocationPermission) {
                     OutlinedButton(
@@ -525,13 +554,7 @@ private fun NearTimeScreen(
                     ) {
                         Text("Place or address", fontWeight = FontWeight.SemiBold)
                         OutlinedButton(
-                            onClick = {
-                                useCurrentLocation = true
-                                customLocation = null
-                                customLocationText = ""
-                                locationSuggestions = emptyList()
-                                locationError = null
-                            }
+                            onClick = { selectCurrentLocation() }
                         ) { Text("Use current location") }
                     }
 
