@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-adaptive-proof-v3';
+const BUILD_ID = '2026-09-18-walk-window-proof-v4';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -446,9 +446,14 @@ function proofState(options) {
     if (Number.isFinite(failed)) lowerBound = Math.min(lowerBound, failed);
   }
 
+  const maxPossibleWalkMeters = maxWalkMinutes * (5000 / 60);
+
   for (let i = nextIndex; i < candidates.length; i += 1) {
     const candidate = candidates[i];
-    if (!openNowOnly || candidate.isOpenNow !== false) {
+    if (
+      candidate.straightDistanceMeters <= maxPossibleWalkMeters &&
+      (!openNowOnly || candidate.isOpenNow !== false)
+    ) {
       lowerBound = Math.min(lowerBound, candidate.straightDistanceMeters);
       break;
     }
@@ -569,6 +574,13 @@ async function search(apiKey, raw) {
     ) {
       const candidate = candidates[nextIndex];
       nextIndex += 1;
+
+      // Walking distance can never be shorter than straight-line distance.
+      // At a conservative 5 km/h, candidates beyond this lower-bound radius
+      // cannot satisfy the user's maximum walking-time filter and need no paid route.
+      if (candidate.straightDistanceMeters > input.maxWalkMinutes * (5000 / 60)) {
+        continue;
+      }
 
       if (input.openNowOnly) {
         if (candidate.isOpenNow === false) continue;
