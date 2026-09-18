@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-discovery-audit-v15';
+const BUILD_ID = '2026-09-18-candidate-audit-v16';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -561,6 +561,7 @@ async function search(apiKey, raw) {
 
   const routed = [];
   const failedLowerBounds = [];
+  const candidateAudit = [];
   let nextIndex = 0;
   let proof = proofState({
     routed,
@@ -592,16 +593,23 @@ async function search(apiKey, raw) {
         input.latitude, input.longitude, candidate.latitude, candidate.longitude
       )));
       if (candidate.straightDistanceMeters > input.maxWalkMinutes * (5000 / 60)) {
+        candidateAudit.push({id:candidate.id,name:candidate.name,address:candidate.address,straightDistanceMeters:candidate.straightDistanceMeters,decision:'SKIP_STRAIGHT_DISTANCE'});
         continue;
       }
 
       if (input.openNowOnly) {
-        if (candidate.isOpenNow !== true) continue;
+        if (candidate.isOpenNow !== true) {
+          candidateAudit.push({id:candidate.id,name:candidate.name,address:candidate.address,straightDistanceMeters:candidate.straightDistanceMeters,isOpenNow:candidate.isOpenNow,openingHoursKnown:candidate.openingHoursKnown,decision:'SKIP_NOT_OPEN_NOW'});
+          continue;
+        }
         if (input.minOpenMinutes > 0 &&
             (!Number.isFinite(candidate.minutesUntilClose) ||
-             candidate.minutesUntilClose < input.minOpenMinutes)) continue;
+             candidate.minutesUntilClose < input.minOpenMinutes)) {
+          candidateAudit.push({id:candidate.id,name:candidate.name,address:candidate.address,straightDistanceMeters:candidate.straightDistanceMeters,isOpenNow:candidate.isOpenNow,minutesUntilClose:candidate.minutesUntilClose,decision:'SKIP_MIN_OPEN_TIME'});
+          continue;
+        }
       }
-
+      candidateAudit.push({id:candidate.id,name:candidate.name,address:candidate.address,straightDistanceMeters:candidate.straightDistanceMeters,isOpenNow:candidate.isOpenNow,decision:'SENT_TO_ROUTE'});
       batch.push(candidate);
     }
 
@@ -615,8 +623,10 @@ async function search(apiKey, raw) {
       for (const result of results) {
         if (result && result.ok && result.place) {
           routed.push(result.place);
+          candidateAudit.push({id:result.place.id,name:result.place.name,walkMinutes:result.place.walkMinutes,walkDistanceMeters:result.place.walkDistanceMeters,decision:result.place.walkMinutes <= input.maxWalkMinutes ? 'ROUTE_WITHIN_LIMIT' : 'ROUTE_OVER_TIME_LIMIT'});
         } else if (result && result.place) {
           failedLowerBounds.push(result.place.straightDistanceMeters);
+          candidateAudit.push({id:result.place.id,name:result.place.name,reason:result.reason || 'ROUTE_FAILED',decision:'ROUTE_FAILED'});
         }
       }
     }
@@ -659,6 +669,7 @@ async function search(apiKey, raw) {
       cloudOnly: true,
       international: true,
       discoveryCandidates: candidates.length,
+      candidateAudit,
       discoveryAudit: {
         query: CATEGORY_QUERY[input.category],
         taxonomy: Object.entries(candidates.reduce(function (acc,p) {
