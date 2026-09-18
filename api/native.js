@@ -15,7 +15,7 @@
 
 const crypto = require('crypto');
 
-const BUILD_ID = '2026-09-18-opening-hours-v8';
+const BUILD_ID = '2026-09-18-open-for-v9';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -148,12 +148,16 @@ function validateSearch(body) {
     error.status = 400;
     throw error;
   }
-  return {
-    ...origin,
-    category,
-    maxWalkMinutes,
-    openNowOnly: Boolean(body && body.openNowOnly),
-  };
+  const openNowOnly = Boolean(body && body.openNowOnly);
+  const minOpenMinutes = Math.round(num(body && body.minOpenMinutes) ?? 0);
+  if (minOpenMinutes < 0 || minOpenMinutes > 360) {
+    const error = new Error('INVALID_MIN_OPEN_MINUTES');
+    error.status = 400;
+    throw error;
+  }
+  return { ...origin, category, maxWalkMinutes, openNowOnly,
+    minOpenMinutes: openNowOnly ? minOpenMinutes : 0 };
+
 }
 
 async function fetchJson(url, options, source) {
@@ -461,7 +465,7 @@ function proofState(options) {
     const candidate = candidates[i];
     if (
       candidate.straightDistanceMeters <= maxPossibleWalkMeters &&
-      (!openNowOnly || candidate.isOpenNow !== false)
+      (!openNowOnly || candidate.isOpenNow === true)
     ) {
       lowerBound = Math.min(lowerBound, candidate.straightDistanceMeters);
       break;
@@ -573,8 +577,10 @@ async function search(apiKey, raw) {
       }
 
       if (input.openNowOnly) {
-        if (candidate.isOpenNow === false) continue;
-        if (candidate.isOpenNow === null) continue;
+        if (candidate.isOpenNow !== true) continue;
+        if (input.minOpenMinutes > 0 &&
+            (!Number.isFinite(candidate.minutesUntilClose) ||
+             candidate.minutesUntilClose < input.minOpenMinutes)) continue;
       }
 
       batch.push(candidate);
