@@ -18,13 +18,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -52,6 +55,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -91,7 +95,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-7"
+private const val APP_BUILD_ID = "production-20260918-8"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -252,6 +256,7 @@ private fun NearTimeScreen() {
     }
 
     val cameraPositionState = rememberCameraPositionState()
+    val pageListState = rememberLazyListState()
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
         if (hasLocationPermission) {
@@ -348,13 +353,17 @@ private fun NearTimeScreen() {
             }
         }
     }
-
     Scaffold { innerPadding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
+        ) {
+        LazyColumn(
+            state = pageListState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 16.dp, end = 58.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
@@ -572,8 +581,29 @@ private fun NearTimeScreen() {
                             categoryExpanded = false
                         }
                     ) {
-                        SearchCategory.entries
+                        val sortedCategories = SearchCategory.entries
                             .sortedBy { it.displayName.lowercase(Locale.ROOT) }
+                        val selectedIndex = sortedCategories.indexOf(selectedCategory)
+                        if (selectedIndex > 0) {
+                            DropdownMenuItem(
+                                text = { Text("▲ Previous: " + sortedCategories[selectedIndex - 1].displayName) },
+                                onClick = {
+                                    selectedCategory = sortedCategories[selectedIndex - 1]
+                                    categoryExpanded = false
+                                }
+                            )
+                        }
+                        if (selectedIndex < sortedCategories.lastIndex) {
+                            DropdownMenuItem(
+                                text = { Text("▼ Next: " + sortedCategories[selectedIndex + 1].displayName) },
+                                onClick = {
+                                    selectedCategory = sortedCategories[selectedIndex + 1]
+                                    categoryExpanded = false
+                                }
+                            )
+                            HorizontalDivider()
+                        }
+                        sortedCategories
                             .forEach { category ->
                             DropdownMenuItem(
                                 text = {
@@ -697,7 +727,6 @@ private fun NearTimeScreen() {
 
             when (val state = searchState) {
                 SearchState.Idle -> Unit
-
                 SearchState.Loading -> {
                     item {
                         Text(
@@ -775,6 +804,43 @@ private fun NearTimeScreen() {
             item {
                 Spacer(Modifier.height(24.dp))
             }
+        }
+
+        // Persistent side navigation for the long search form and result list.
+        // It moves by several list items at a time, so the user does not need
+        // to repeatedly swipe through full result cards.
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            OutlinedButton(
+                modifier = Modifier.width(46.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                enabled = pageListState.canScrollBackward,
+                onClick = {
+                    scope.launch {
+                        val target = (pageListState.firstVisibleItemIndex - 3).coerceAtLeast(0)
+                        pageListState.animateScrollToItem(target)
+                    }
+                }
+            ) { Text("▲") }
+
+            OutlinedButton(
+                modifier = Modifier.width(46.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                enabled = pageListState.canScrollForward,
+                onClick = {
+                    scope.launch {
+                        val target = (pageListState.firstVisibleItemIndex + 3)
+                            .coerceAtMost((pageListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+                        pageListState.animateScrollToItem(target)
+                    }
+                }
+            ) { Text("▼") }
+        }
         }
     }
 }
@@ -1047,8 +1113,7 @@ private fun parsePlace(
 
     val categoryLabel = obj
         .optString("categoryLabel")
-        .trim()
-        .takeIf { it.isNotEmpty() }
+        .trim()        .takeIf { it.isNotEmpty() }
         ?: return null
 
     val categories = obj
@@ -1398,64 +1463,3 @@ private fun openWalkingDirections(
         context = context,
         uri = uri.toUri()
     )
-}
-
-private fun launchExternalUri(
-    context: Context,
-    uri: Uri
-) {
-    val intent = Intent(
-        Intent.ACTION_VIEW,
-        uri
-    ).apply {
-        addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK
-        )
-    }
-
-    try {
-        context.startActivity(intent)
-    } catch (_: ActivityNotFoundException) {
-        // No compatible map/browser app.
-        // Deliberately no paid API fallback.
-    }
-}
-
-private fun JSONObject.optDoubleOrNull(
-    name: String
-): Double? {
-    if (!has(name) || isNull(name)) {
-        return null
-    }
-
-    val value =
-        optDouble(name, Double.NaN)
-
-    return value.takeIf {
-        it.isFinite()
-    }
-}
-
-private fun JSONObject.optIntOrNull(
-    name: String
-): Int? {
-    if (!has(name) || isNull(name)) {
-        return null
-    }
-
-    return runCatching {
-        getInt(name)
-    }.getOrNull()
-}
-
-private fun JSONArray.toStringList():
-    List<String> = buildList {
-    for (index in 0 until length()) {
-        val value =
-            optString(index).trim()
-
-        if (value.isNotEmpty()) {
-            add(value)
-        }
-    }
-}
