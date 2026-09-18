@@ -105,7 +105,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val APP_BUILD_ID = "production-20260918-12"
+private const val APP_BUILD_ID = "production-20260918-13"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -363,6 +363,81 @@ private fun NearTimeScreen() {
                 )
             }
         }
+    }
+
+    val successOverlay = searchState as? SearchState.Success
+
+    if (successOverlay != null) {
+        Scaffold { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        searchState = SearchState.Idle
+                        selectedPlace = null
+                    }
+                ) {
+                    Text("Back to search")
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "${successOverlay.response.places.size} places within walking limit",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (successOverlay.response.exhaustedCandidates) {
+                    Text(
+                        "Fewer than 10 places could be established within the walking-time limit.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                successOverlay.response.usageText?.let {
+                    Text(text = it, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    LazyColumn(
+                        state = resultListState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(end = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        itemsIndexed(
+                            items = successOverlay.response.places,
+                            key = { _, place -> place.id }
+                        ) { index, place ->
+                            PlaceCard(
+                                rank = index + 1,
+                                place = place,
+                                searchOrigin = lastSearchOrigin,
+                                selected = selectedPlace?.id == place.id,
+                                onSelect = { selectedPlace = place }
+                            )
+                        }
+                    }
+                    LazyListScrollbar(
+                        state = resultListState,
+                        itemCount = successOverlay.response.places.size,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(14.dp)
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+        return
     }
 
     Scaffold { innerPadding ->
@@ -758,81 +833,7 @@ private fun NearTimeScreen() {
                     }
                 }
 
-                is SearchState.Success -> {
-                    item {
-                        Text(
-                            text = "${state.response.places.size} places within walking limit",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        if (state.response.exhaustedCandidates) {
-                            Text(
-                                "Fewer than 10 places could be established within the walking-time limit.",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
-                        state.response.usageText?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(620.dp)
-                        ) {
-                            LazyColumn(
-                                state = resultListState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(end = 14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                itemsIndexed(
-                                    items = state.response.places,
-                                    key = { _, place -> place.id }
-                                ) { index, place ->
-                                    PlaceCard(
-                                        rank = index + 1,
-                                        place = place,
-                                        searchOrigin = lastSearchOrigin,
-                                        selected = selectedPlace?.id == place.id,
-                                        onSelect = {
-                                            selectedPlace = place
-
-                                            scope.launch {
-                                                cameraPositionState.animate(
-                                                    CameraUpdateFactory.newLatLngZoom(
-                                                        LatLng(
-                                                            place.latitude,
-                                                            place.longitude
-                                                        ),
-                                                        16f
-                                                    )
-                                                )
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-
-                            LazyListScrollbar(
-                                state = resultListState,
-                                itemCount = state.response.places.size,
-                                modifier = Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .fillMaxHeight()
-                                    .width(14.dp)
-                            )
-                        }
-                    }
-                }
+                is SearchState.Success -> Unit
             }
 
             item {
