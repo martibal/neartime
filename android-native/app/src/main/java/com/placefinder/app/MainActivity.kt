@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -69,7 +70,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.net.toUri
@@ -852,7 +852,6 @@ private fun LazyListScrollbar(
 ) {
     if (itemCount <= 1) return
 
-    val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val firstVisibleIndex by remember(state) {
         derivedStateOf { state.firstVisibleItemIndex }
@@ -867,7 +866,7 @@ private fun LazyListScrollbar(
     val positionFraction = (firstVisibleIndex.toFloat() / maxFirst.toFloat())
         .coerceIn(0f, 1f)
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .background(
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -881,8 +880,9 @@ private fun LazyListScrollbar(
                         val usable = (track - thumb).coerceAtLeast(1f)
                         val fraction = ((offset.y - thumb / 2f) / usable)
                             .coerceIn(0f, 1f)
-                        val target = (fraction * maxFirst).roundToInt()
-                        scope.launch { state.scrollToItem(target) }
+                        scope.launch {
+                            state.scrollToItem((fraction * maxFirst).roundToInt())
+                        }
                     },
                     onVerticalDrag = { change, _ ->
                         change.consume()
@@ -891,24 +891,21 @@ private fun LazyListScrollbar(
                         val usable = (track - thumb).coerceAtLeast(1f)
                         val fraction = ((change.position.y - thumb / 2f) / usable)
                             .coerceIn(0f, 1f)
-                        val target = (fraction * maxFirst).roundToInt()
-                        scope.launch { state.scrollToItem(target) }
+                        scope.launch {
+                            state.scrollToItem((fraction * maxFirst).roundToInt())
+                        }
                     }
                 )
             }
     ) {
-        val trackHeight = 1f
-        val yFraction = positionFraction * (1f - thumbFraction)
+        val thumbHeight = maxHeight * thumbFraction
+        val thumbOffset = (maxHeight - thumbHeight) * positionFraction
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(thumbFraction)
-                .offset(y = with(density) {
-                    // 620dp/420dp parent heights are resolved by layout; this
-                    // offset is refined by drag while the list itself remains
-                    // the source of truth for scroll position.
-                    (yFraction * 620f).dp
-                })
+                .height(thumbHeight)
+                .offset(y = thumbOffset)
                 .background(
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
