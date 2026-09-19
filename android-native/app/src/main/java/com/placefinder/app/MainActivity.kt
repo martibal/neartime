@@ -106,7 +106,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-37"
+private const val APP_BUILD_ID = "production-20260919-38"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -1428,17 +1428,27 @@ private fun SearchUsageCard(
             if (quota.accessMode == "trial") {
                 val isTestingAllowance = quota.trialIncluded > 100
 
-                Text(
-                    text = if (isTestingAllowance) {
-                        "Free searches available"
-                    } else {
-                        quota.trialRemaining.toString() + " free searches remaining"
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                if (!isTestingAllowance) {
+                if (isTestingAllowance) {
+                    Text(
+                        text = "Free-search test counter",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = quota.trialUsed.toString() + " of 5 used",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Test only · the 5-search limit is not enforced yet.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    Text(
+                        text = quota.trialRemaining.toString() + " free searches remaining",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text(
                         text = quota.trialUsed.toString() + " of " + quota.trialIncluded.toString() + " used",
                         style = MaterialTheme.typography.bodySmall
