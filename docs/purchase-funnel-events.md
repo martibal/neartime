@@ -1,72 +1,77 @@
 # NearTime purchase funnel analytics contract
 
-This document freezes the launch analytics contract before payment UI and store purchase code are added.
+This document describes the launch analytics contract. It must remain subordinate to the live billing/quota implementation and Google Play privacy declarations.
 
 ## Principles
 
-- No raw GPS, address, query text, place names, email, name, or account profile is stored for funnel analytics.
-- The server hashes the anonymous installation identifier before persistence.
+- No raw GPS, address, query text, place names, email, name, or NearTime account profile is stored for funnel analytics.
+- The server uses a pseudonymous/hashed anonymous installation identifier for quota and funnel correlation.
 - Purchase events are derived from server-verified entitlement state, not trusted client assertions.
-- Event writes are idempotent through `(install_hash, event_key)`.
-- `first_purchase_sku`, repurchase paths, and timing must be reconstructable from authoritative purchase history from day one.
+- Event writes must be idempotent.
+- Purchase history/entitlement data used for funnel analytics must be disclosed consistently in the Privacy Policy and Play Data safety form.
 
-## Launch SKUs and quotas
+## Current launch SKUs and quotas
 
-Commercial launch guardrails are:
+Current intended commercial model:
 
-- Free: 3 successful searches, maximum 5 eligible attempts.
-- Trip Pass 3 days: 29 NOK, 5 searches.
-- Monthly: 39 NOK, 9 searches.
-- Trip Pass 7 days: 49 NOK, 11 searches. This is the highlighted `Best value` option.
+- Free: 5 completed logical searches per anonymous installation.
+- Monthly: `neartime_monthly`, target 39 NOK/month, 30 searches per billing period.
+- Extra pack: `neartime_search_pack_20`, target 19 NOK, 20 extra searches; requires an active/grace monthly subscription.
 
-The 3-day pass is not treated as an acquisition-cost product. Any later CAC/LTV interpretation requires observed repurchase data.
+A completed free search consumes one free-search unit whether it returns 0, 5 or 10 qualifying places. Result count is not a second quota gate.
+
+Technical/provider failures that do not complete normally do not consume a logical search under the current quota policy.
+
+During development, the backend free-search gate remains intentionally high. The Android `X of 5 used` display is a temporary observer of the real counter, not an enforced five-search limit.
 
 ## Events
 
 ### `trial_started`
+
 Emitted once when an installation begins its first eligible free search.
 
-Required context: installation hash, event timestamp.
+Required context: installation hash and event timestamp.
 
-### `trial_search_success`
-Emitted after a free search produces at least one qualifying result and consumes one of the three successful free searches.
+### `trial_search_completed`
 
-Required context: installation hash, successful search number 1-3, event timestamp.
+Emitted after a free search completes normally and consumes one free-search unit, independent of result count.
 
-Technical/provider failures do not count as successful free searches.
+Required context:
+
+- installation hash;
+- completed-search number;
+- event timestamp;
+- optional result-count bucket/field if needed for product analysis.
+
+A 0-result completed search still counts as one completed search.
+
+Technical/provider failures are separate failure events and do not count as completed free searches under the current quota policy.
 
 ### `trial_exhausted`
-Emitted once when the free allowance can no longer continue.
 
-`exhaustion_reason` is either:
+Emitted once when the production free allowance reaches five completed searches.
 
-- `success_limit`
-- `attempt_limit`
+There is one user-visible production free-search gate: completed-search count. Do not reintroduce a hidden success-count versus attempt-count limit.
 
 ### `purchase_completed`
+
 Emitted only after the store transaction has been verified server-side and the entitlement has been activated/synchronized.
 
-Required context: installation hash, SKU, activation timestamp, expiry timestamp where applicable, purchase sequence.
+Required context: installation hash, SKU, activation timestamp, expiry timestamp where applicable and purchase sequence.
 
 ### `first_purchase_sku`
+
 Derived once from the first verified `purchase_completed` event for an installation.
 
-This is the primary source for observed launch product mix.
-
 ### `repurchase_sku`
+
 Derived for every verified purchase after the first.
 
-Required context: previous SKU, new SKU, purchase sequence.
+Required context: previous SKU, new SKU and purchase sequence.
 
 ### `days_since_first_purchase`
-Derived on repurchase from authoritative server timestamps.
 
-Do not accept this value from the client.
-
-### `trip_to_monthly_conversion`
-Derived when a verified repurchase transitions from a Trip Pass SKU to Monthly.
-
-This is the evidence required before a Trip Pass can be discussed as an acquisition product.
+Derived on repurchase from authoritative server timestamps. Do not accept this value from the client.
 
 ## Metrics to replace planning assumptions
 
@@ -75,20 +80,17 @@ Once launch traffic exists, the economics model should progressively replace ben
 1. observed trial-to-paid conversion;
 2. observed first-purchase SKU mix;
 3. observed quota utilization;
-4. observed provider calls per search;
+4. observed provider calls/cost per completed search;
 5. observed repurchase rate and SKU path;
-6. observed Trip Pass to Monthly conversion;
-7. observed days to repurchase.
+6. observed days to repurchase.
 
-Do not revise launch economics because of small-sample noise. Benchmarks remain planning inputs until there are enough observed conversions to make the replacement statistically useful.
+Do not revise launch economics because of small-sample noise. Benchmarks remain planning inputs until enough observed conversions exist to make replacement statistically useful.
 
-## Next implementation boundary
+## Authorization boundary
 
-The next backend step is to implement the anonymous free-trial allowance and the paid logical-search quota as separate authorization layers from the provider-cost wallet.
-
-This separation is intentional:
+Logical-search quota and provider-cost authorization are separate:
 
 - the logical-search quota answers whether the user is entitled to another NearTime search;
-- the provider-cost wallet answers whether NearTime has pre-authorized enough money/cost units to make the external Google calls safely.
+- the provider-cost gate answers whether NearTime has pre-authorized enough provider spend for that request.
 
-A user-visible quota must never replace the provider cost gate, and provider cost balance must never silently grant additional user-visible searches beyond the purchased SKU quota.
+A user-visible quota must never replace the provider cost gate, and provider cost capacity must never silently grant additional user-visible searches beyond the purchased/free quota.

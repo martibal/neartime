@@ -41,3 +41,6 @@ Release checklist:
 
 Data Safety working draft:
 `docs/PLAY_DATA_SAFETY_DRAFT.md`
+
+Google Play submission packet:
+`docs/GOOGLE_PLAY_SUBMISSION_PACKET.md`

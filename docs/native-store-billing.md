@@ -2,20 +2,70 @@
 
 Current Android monetization model:
 
-- 5 free logical searches per anonymous installation.
+- Production intent: 5 free completed logical searches per anonymous installation.
+- A completed search consumes one logical search regardless of whether it returns 0, 5 or 10 qualifying places.
+- A technical/provider failure that does not complete normally does not consume the logical search under the current quota policy.
 - `neartime_monthly`: auto-renewing subscription, target Norwegian price 39 NOK/month, 30 searches per billing period.
 - `neartime_search_pack_20`: consumable one-time product, target Norwegian price 19 NOK, 20 extra searches.
 - Extra-search packs require an active/grace monthly subscription.
 - Extra searches persist until used and are consumed only after the monthly allowance reaches zero.
 
-The native Kotlin app uses Google Play Billing Library 9.1.0. Google Play remains the source of truth for checkout price and purchase state.
+The native Kotlin app uses Google Play Billing Library 9.1.0. Google Play remains the source of truth for localized checkout price and purchase state.
+
+## Current test mode
+
+The production five-search gate is **not enabled yet**. The backend trial policy is deliberately set to a very high test allowance while development continues.
+
+The Android UI exposes a temporary test observer:
+
+`X of 5 used`
+
+This display reads the real anonymous `trial_used` counter so development can verify the intended production semantics:
+
+- 0-result completed search -> +1;
+- 5-result completed search -> +1;
+- 10-result completed search -> +1;
+- technical/provider failure -> no increment under the current policy.
+
+The visible "of 5" number is diagnostic only during test mode and does not currently block the sixth search.
+
+Before production, restore the backend trial limit to 5 and verify that the same counter shown to the user is the single gate that blocks further free searches.
 
 ## Security boundary
 
-The client cannot grant paid searches itself. Google Play purchase tokens are verified on NearTime's backend before an entitlement session or top-up is granted. The Supabase search gate authorizes quota before the Google Places provider call. Technical/provider failures release the reservation and do not consume a logical search.
+The client cannot grant paid searches itself. Google Play purchase tokens are sent to NearTime's backend and verified with Google before an entitlement session or top-up is granted. The backend persists pseudonymous/HMAC-derived purchase/entitlement identifiers rather than using a NearTime email/login identity.
+
+The Supabase search gate authorizes quota before the Google Places provider call.
 
 Subscription purchases are acknowledged only after server verification. Search-pack purchases are consumed after server verification and idempotent credit, allowing the same product to be purchased again.
 
-## Testing before Play products exist
+## Google Play subscription-policy release gates
 
-A sideloaded debug build can test the five-search free allowance, live used/remaining counters, server blocking after the fifth successful search, and the paywall/restore UI. Actual checkout requires the Google Play products and a Play-distributed eligible test build/tester.
+Before the subscription is enabled for production:
+
+- show the localized Google Play price;
+- clearly state the billing period/frequency;
+- clearly state that the subscription auto-renews until cancelled;
+- clearly state the recurring benefit/quota;
+- make clear that free functionality exists if it remains available;
+- provide an easy-to-use in-app link to Google Play's subscription-management/cancellation page;
+- ensure store listing, Play product configuration and in-app copy describe the same offer.
+
+The current app has Restore purchases but does not yet have the required Manage subscription/cancellation link. That is a release blocker for paid subscription launch.
+
+## Play testing
+
+Actual checkout requires Google Play products and a Play-distributed eligible test build/tester. Sideloaded builds are sufficient for search/quota UI testing but are not the final proof of Play Billing behavior.
+
+Required Play-distributed billing tests:
+
+- subscription purchase;
+- pending purchase;
+- server verification before entitlement;
+- acknowledgement;
+- restore;
+- cancellation;
+- grace/hold if configured;
+- expiry;
+- refund/revocation handling;
+- consumable top-up verification and consumption.
