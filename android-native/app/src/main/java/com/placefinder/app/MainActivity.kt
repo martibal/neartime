@@ -43,7 +43,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -77,6 +76,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.net.toUri
@@ -103,7 +104,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-32"
+private const val APP_BUILD_ID = "production-20260919-33"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -1067,8 +1068,53 @@ private fun PlaceTypeSelector(
     selectedCategory: SearchCategory,
     onSelected: (SearchCategory) -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
-    var expanded by remember { mutableStateOf(false) }
+    var dialogOpen by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "PLACE TYPE",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            onClick = { dialogOpen = true }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = selectedCategory.displayName,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text("›")
+            }
+        }
+    }
+
+    if (dialogOpen) {
+        PlaceTypeDialog(
+            selectedCategory = selectedCategory,
+            onDismiss = { dialogOpen = false },
+            onSelected = { category ->
+                onSelected(category)
+                dialogOpen = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun PlaceTypeDialog(
+    selectedCategory: SearchCategory,
+    onDismiss: () -> Unit,
+    onSelected: (SearchCategory) -> Unit
+) {
     var filterText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -1103,75 +1149,118 @@ private fun PlaceTypeSelector(
         }
     }
 
-    LaunchedEffect(expanded) {
-        if (expanded && listState.firstVisibleItemIndex > 0) {
+    LaunchedEffect(filterText) {
+        if (listState.firstVisibleItemIndex > 0) {
             listState.scrollToItem(0)
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        TextField(
-            value = if (expanded) filterText else selectedCategory.displayName,
-            onValueChange = { value ->
-                filterText = value
-                expanded = true
-            },
-            readOnly = false,
-            singleLine = true,
-            label = { Text("Place type") },
-            placeholder = { Text("Type to filter, e.g. rest") },
-            trailingIcon = {
-                Text(if (expanded) "⌃" else "⌄")
-            },
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .onFocusChanged { focusState ->
-                    if (focusState.isFocused && !expanded) {
-                        filterText = ""
-                        expanded = true
+                .fillMaxHeight(0.94f)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Choose place type",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Browse the list or search by name.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    OutlinedButton(onClick = onDismiss) {
+                        Text("Close")
                     }
                 }
-        )
 
-        if (expanded) {
-            Spacer(Modifier.height(4.dp))
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(4.dp)
-                ) {
-                    if (filteredCategories.isEmpty()) {
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = filterText,
+                    onValueChange = { filterText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Search place types") },
+                    placeholder = { Text("e.g. restaurant, pharmacy, park") }
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                if (filteredCategories.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            "No matching place type",
-                            modifier = Modifier.padding(12.dp),
-                            style = MaterialTheme.typography.bodyMedium
+                            text = "No matching place type",
+                            style = MaterialTheme.typography.bodyLarge
                         )
-                    } else {
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(end = 14.dp),
-                            contentPadding = PaddingValues(vertical = 2.dp)
+                                .padding(end = 16.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             items(
                                 items = filteredCategories,
                                 key = { it.wireValue }
                             ) { category ->
-                                DropdownMenuItem(
-                                    text = { Text(category.displayName) },
-                                    onClick = {
-                                        onSelected(category)
-                                        filterText = ""
-                                        expanded = false
-                                        focusManager.clearFocus()
+                                val isSelected = category == selectedCategory
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelected(category) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = category.displayName,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        if (isSelected) {
+                                            Text(
+                                                text = "Selected",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
-                                )
+                                }
                             }
                         }
 
@@ -1181,7 +1270,7 @@ private fun PlaceTypeSelector(
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
                                 .fillMaxHeight()
-                                .width(14.dp)
+                                .width(12.dp)
                         )
                     }
                 }
