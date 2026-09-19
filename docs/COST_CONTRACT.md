@@ -1,51 +1,78 @@
 # NearTime production search contract
 
-Effective architecture: 2026-09-18-global-cloud-walk-v1.
+Effective architecture: 2026-09-19-google-places-v2.
 
 These are release-blocking requirements.
 
-## Customer-visible map and GPS
+## Customer-visible location and Maps handoff
 
-- The Android app renders Google Maps SDK live map content.
-- A search using My location requests a current device location at search time; it does not prefer a minutes-old cached position.
-- No country map, OSM extract, routing graph, Valhalla instance, Docker container or other local geographic dataset participates in production search.
+- A normal search starts from either the device's foreground location or a user-selected custom origin.
+- The app does not perform a paid provider search on startup, typing, GPS refresh, filter changes or result sorting.
+- "Open in Maps" and walking directions are handed off to Google Maps by URL.
+- No local country map, routing graph, Valhalla instance, Docker container or other self-hosted geographic dataset participates in the live Android search path.
 
-## International place discovery and walking measurement
+## Normal POI search
 
-- POI discovery is a live request to TomTom Places Search API on TomTom Orbis Maps.
-- Up to 100 current POI candidates are requested around the current coordinates.
-- Every candidate used for ranking is measured with TomTom hosted Routing API using pedestrian mode.
-- Results are sorted by measured pedestrian route distance in metres, then travel time as a tie-breaker.
-- At most ten places are returned.
+Each explicit normal POI search performs at most one Google Places request:
 
-NearTime never labels a straight-line estimate as walking distance.
+- minimum rating = Any: Google Nearby Search (New);
+- minimum rating > 0: Google Text Search (New), with the minimum rating sent to Google before Google's candidate limit;
+- when Text Search is active and Open now is selected, openNow is also sent provider-side;
+- walking route distance/time is returned through Google Places routing summaries in that same Places request.
 
-## Top-10 proof
+The backend verifies all selected criteria before returning a place. At most ten places are returned, ordered by measured walking route distance by default.
 
-Candidates are processed in ascending straight-line distance. Walking distance can never be shorter than straight-line distance.
+The Android "Highest rated in results" control is a local re-ordering of the already returned result set. It does not trigger another provider request and does not claim a separate global top-10-by-rating search.
 
-After cloud pedestrian routes have been measured, the Top 10 is accepted only when either all relevant discovered candidates have been resolved, or the measured walking distance of the current tenth place is no greater than the lower bound of every unresolved candidate.
+## Candidate-limit semantics
 
-Failed route calls and unknown open-now state remain blockers. They are never silently treated as non-qualifying.
+NearTime distinguishes:
 
-If the proof is not established before the hard cost limit is reached, the search returns DEGRADED with no potentially incorrect Top 10.
+- COMPLETE_TOP10: ten qualifying results were established from the provider-returned set;
+- PARTIAL_CANDIDATE_LIMIT: fewer than ten qualified after a full provider candidate page and exhaustiveness is not proven;
+- EXHAUSTED_GOOGLE_CANDIDATES: Google returned fewer than the configured candidate limit.
 
-## NOK 0.30 hard provider-cost ceiling
+The product must not claim that a partial candidate-limited result is globally exhaustive.
 
-The normal production search path permits at most one Places Discover call and at most 24 pedestrian Calculate Route calls. There is no paid retry path.
+## Provider cost guard
 
-The in-code guard deliberately uses conservative assumptions and does not deduct provider free allowances:
+The live server records a conservative NOK 0.40 value for one normal Google Places search. The application never performs a second paid Places request to fill a result list.
 
-- Places Discover guard: EUR 5.00 / 1,000;
-- Routing guard: EUR 0.75 / 1,000;
-- FX stress: NOK 13.00 / EUR.
+The cost ledger records, per successful search:
 
-Worst case: ((5.00 + 24 x 0.75) / 1000) x 13.00 = NOK 0.299.
+- Google Nearby Search calls;
+- Google Text Search calls;
+- number of places for which Google returned routing summaries;
+- legacy TomTom Discover/Route counters when applicable;
+- conservative estimated NOK cost;
+- build id and result status.
 
-The code refuses to make another paid provider call when the next call would cross NOK 0.30 under this stress model. Provider pricing must be revalidated before release whenever the provider changes its schedule.
+Routing summaries are part of the same Google Places request in the current architecture; they are not recorded as separate NearTime route API calls.
 
-## Freshness and international operation
+The conservative estimate is an internal guard, not a claim that every request is invoiced at exactly NOK 0.40. Provider billing/invoices remain the source of truth for actual billed cost.
 
-Place discovery uses TomTom Orbis Places Search, an online global service. Pedestrian routes are calculated online for each search by TomTom's hosted routing service. There is no periodically downloaded country file that can become stale on the device or NearTime server.
+## Custom start location
 
-The visible map remains Google Maps SDK, so map rendering is also not tied to NearTime-hosted geographic data.
+Custom-origin lookup is a separate, explicitly user-triggered path:
+
+- "Find place or address" can perform one TomTom Suggest request.
+- Selecting one returned suggestion can perform one TomTom Details request.
+- No Suggest request is made for every keystroke.
+- Reusing the selected custom origin for POI searches does not repeat Suggest/Details automatically.
+
+These calls are tracked separately from normal Google POI searches.
+
+## Retry and idempotency
+
+- One explicit user search maps to one logical search reservation.
+- Logical idempotency prevents duplicate quota consumption for the same request id.
+- NearTime does not intentionally add a second paid provider request as a retry/fill mechanism.
+- Cost telemetry is internal and must never be shown as customer-facing result copy.
+
+## Customer-visible result data
+
+Optional provider fields such as phone number, website, price and business status are omitted when absent. JSON null values and the literal string "null" must never be rendered as customer-visible text.
+
+Google attribution remains visible in the result view:
+
+"Place data and walking routes provided by Google Maps"

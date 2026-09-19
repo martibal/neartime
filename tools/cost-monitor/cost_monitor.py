@@ -14,11 +14,11 @@ class Monitor(tk.Tk):
         self.geometry("1180x700")
         self.minsize(980, 560)
         self.vars = {k: tk.StringVar(value="—") for k in
-                     ("searches","total","avg","max","discover","routes","status")}
+                     ("searches","total","avg","max","places","routed","status")}
         self.quota_vars = {}
         top=ttk.Frame(self,padding=12); top.pack(fill="x")
         labels=[("Searches","searches"),("Cost today","total"),("Avg/search","avg"),
-                ("Max/search","max"),("Discover","discover"),("Routes","routes")]
+                ("Max/search","max"),("Google Places","places"),("Routed places","routed")]
         for i,(label,key) in enumerate(labels):
             box=ttk.LabelFrame(top,text=label,padding=8); box.grid(row=0,column=i,padx=4,sticky="nsew")
             ttk.Label(box,textvariable=self.vars[key],font=("Segoe UI",14,"bold")).pack()
@@ -30,15 +30,15 @@ class Monitor(tk.Tk):
         self.quota_frame=quota
         self.quota_note=tk.StringVar(value="")
         ttk.Label(self,textvariable=self.quota_note,padding=(14,1)).pack(anchor="w")
-        cols=("time","category","minutes","results","discover","routes","cost","status")
+        cols=("time","category","minutes","results","provider","places","routed","cost","status")
         self.tree=ttk.Treeview(self,columns=cols,show="headings")
-        headings=("Time","Category","Min","Results","Discover","Routes","Cost NOK","Status")
-        widths=(145,190,55,65,70,70,85,210)
+        headings=("Time","Category","Min","Results","Provider","Places","Routed","Cost NOK","Status")
+        widths=(145,180,50,60,115,60,65,80,190)
         for c,h,w in zip(cols,headings,widths):
             self.tree.heading(c,text=h); self.tree.column(c,width=w,anchor="center")
         self.tree.column("category",anchor="w"); self.tree.column("status",anchor="w")
         self.tree.pack(fill="both",expand=True,padx=12,pady=10)
-        ttk.Label(self,text="Estimated provider cost. TomTom billing remains the invoice source of truth.",
+        ttk.Label(self,text="Estimated provider cost. Provider billing/invoices remain the source of truth.",
                   padding=(14,0,14,10)).pack(anchor="w")
         self.refresh()
 
@@ -55,8 +55,8 @@ class Monitor(tk.Tk):
             self.vars["total"].set(f'{float(t.get("total_cost_nok",0)):.3f} NOK')
             self.vars["avg"].set(f'{float(t.get("avg_cost_nok",0)):.3f} NOK')
             self.vars["max"].set(f'{float(t.get("max_cost_nok",0)):.3f} NOK')
-            self.vars["discover"].set(str(t.get("discover_calls",0)))
-            self.vars["routes"].set(str(t.get("route_calls",0)))
+            self.vars["places"].set(str(t.get("google_places_calls",0)))
+            self.vars["routed"].set(str(t.get("google_routing_summary_places",0)))
             self.vars["status"].set("Live · refresh every 3 seconds")
             quotas=d.get("free_quotas",[]) or []
             self.quota_note.set(str(d.get("quota_note","")))
@@ -83,8 +83,22 @@ class Monitor(tk.Tk):
             self.tree.delete(*self.tree.get_children())
             for x in rows:
                 stamp=str(x.get("occurred_at","")).replace("T"," ")[:19]
+                nearby=int(x.get("google_nearby_calls",0) or 0)
+                text_calls=int(x.get("google_text_calls",0) or 0)
+                tt_discover=int(x.get("tomtom_discover_calls",0) or 0)
+                tt_routes=int(x.get("tomtom_route_calls",0) or 0)
+                routed=int(x.get("google_routing_summary_places",0) or 0)
+                if text_calls:
+                    provider="Google Text"
+                elif nearby:
+                    provider="Google Nearby"
+                elif tt_discover or tt_routes:
+                    provider="TomTom"
+                else:
+                    provider="—"
+                places_calls=nearby+text_calls
                 self.tree.insert("", "end", values=(stamp,x.get("category",""),x.get("max_walk_minutes",""),
-                    x.get("result_count",""),x.get("tomtom_discover_calls",""),x.get("tomtom_route_calls",""),
+                    x.get("result_count",""),provider,places_calls,routed,
                     f'{float(x.get("estimated_cost_nok",0)):.3f}',x.get("result_status","")))
         except Exception as e:
             self.vars["status"].set("Read error: "+str(e))

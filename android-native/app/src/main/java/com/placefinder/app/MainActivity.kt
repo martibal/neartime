@@ -104,7 +104,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-33"
+private const val APP_BUILD_ID = "production-20260919-34"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -236,7 +236,6 @@ private data class SearchQuotaStatus(
 private data class SearchResponse(
     val places: List<PlaceResult>,
     val exhaustedCandidates: Boolean,
-    val usageText: String?,
     val quotaStatus: SearchQuotaStatus?
 )
 
@@ -544,7 +543,7 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.HIGHEST_RATED
                             scope.launch { resultListState.scrollToItem(0) }
                         },
-                        label = { Text("Highest rated") }
+                        label = { Text("Highest rated in results") }
                     )
                 }
                 if (successOverlay.response.exhaustedCandidates) {
@@ -552,9 +551,6 @@ private fun NearTimeScreen(
                         "Fewer than 10 places could be established within the walking-time limit.",
                         style = MaterialTheme.typography.bodySmall
                     )
-                }
-                successOverlay.response.usageText?.let {
-                    Text(text = it, style = MaterialTheme.typography.bodySmall)
                 }
                 Text(
                     text = "Place data and walking routes provided by Google Maps",
@@ -647,169 +643,172 @@ private fun NearTimeScreen(
                 )
             }
             item {
+                Text(
+                    "START FROM",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Start from", fontWeight = FontWeight.SemiBold)
-
                     FilterChip(
                         selected = useCurrentLocation,
                         onClick = { selectCurrentLocation() },
-                        label = { Text("My current location") }
+                        label = { Text("Current location") }
                     )
-                }
-
-                if (useCurrentLocation && hasLocationPermission) {
-                    Text(
-                        text = when {
-                            currentLocation == null ->
-                                "Locating your current position…"
-                            !currentLocationLabel.isNullOrBlank() ->
-                                "● Using your location · $currentLocationLabel"
-                            else ->
-                                "● Using your current GPS location"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1
-                    )
-                }
-
-                if (!hasLocationPermission) {
-                    Text(
-                        text = "NearTime uses your location only when you choose My current location. " +
-                            "It is sent securely to NearTime's search service and Google Maps Platform " +
-                            "to find nearby places and walking routes.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedButton(
-                        modifier = Modifier.fillMaxWidth(),
+                    FilterChip(
+                        selected = !useCurrentLocation,
                         onClick = {
-                            permissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                )
-                            )
-                        }
-                    ) { Text("Allow GPS location") }
+                            useCurrentLocation = false
+                            locationSuggestions = emptyList()
+                            locationError = null
+                        },
+                        label = { Text("Other place") }
+                    )
                 }
 
-                Spacer(Modifier.height(6.dp))
                 if (useCurrentLocation) {
-                    OutlinedButton(
-                        onClick = { useCurrentLocation = false }
-                    ) {
-                        Text("Use another place or address")
+                    if (hasLocationPermission) {
+                        Text(
+                            text = when {
+                                currentLocation == null -> "Locating your current position…"
+                                !currentLocationLabel.isNullOrBlank() ->
+                                    "● Using your location · $currentLocationLabel"
+                                else -> "● Using your current GPS location"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
+                    } else {
+                        Text(
+                            text = "NearTime uses your location only when Current location is selected. " +
+                                "It is sent securely to NearTime's search service and Google Maps Platform " +
+                                "to find nearby places and walking routes.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                permissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                )
+                            }
+                        ) { Text("Allow GPS location") }
                     }
                 } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Place or address", fontWeight = FontWeight.SemiBold)
-                        OutlinedButton(
-                            onClick = { selectCurrentLocation() }
-                        ) { Text("Use current location") }
-                    }
-
-                OutlinedTextField(
-                    value = customLocationText,
-                    onValueChange = {
-                        customLocationText = it
-                        customLocation = null
-                        useCurrentLocation = it.isBlank()
-                        locationSuggestions = emptyList()
-                        locationError = null
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("Place or address") },
-                    placeholder = { Text("e.g. hotel name or address") }
-                )
-
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !locationSearchBusy && customLocationText.trim().length >= 3,
-                    onClick = {
-                        scope.launch {
-                            locationSearchBusy = true
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = customLocationText,
+                        onValueChange = {
+                            customLocationText = it
+                            customLocation = null
+                            locationSuggestions = emptyList()
                             locationError = null
-                            try {
-                                val bias = currentLocation ?: GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
-                                val quotaEventId = UUID.randomUUID()
-                                locationSuggestions = suggestLocationsBackend(
-                                    customLocationText.trim(), bias.latitude, bias.longitude
-                                )
-                                recordClientQuotaUsage(
-                                    service = "tomtom_places_suggest",
-                                    eventId = quotaEventId
-                                )
-                                if (locationSuggestions.isEmpty()) {
-                                    locationError = "No matching start location found."
-                                }
-                            } catch (e: Exception) {
-                                locationError = e.message ?: "Location search failed."
-                            } finally { locationSearchBusy = false }
-                        }
-                    }
-                ) {
-                    if (locationSearchBusy) {
-                        CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-                    } else Text("Find place or address")
-                }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Place or address") },
+                        placeholder = { Text("e.g. hotel name or address") }
+                    )
 
-                locationSuggestions.forEach { suggestion ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth().clickable {
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !locationSearchBusy && customLocationText.trim().length >= 3,
+                        onClick = {
                             scope.launch {
                                 locationSearchBusy = true
                                 locationError = null
                                 try {
+                                    val bias = currentLocation ?: GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
                                     val quotaEventId = UUID.randomUUID()
-                                    val resolved = resolveLocationBackend(suggestion)
+                                    locationSuggestions = suggestLocationsBackend(
+                                        customLocationText.trim(), bias.latitude, bias.longitude
+                                    )
                                     recordClientQuotaUsage(
-                                        service = "tomtom_places_details",
+                                        service = "tomtom_places_suggest",
                                         eventId = quotaEventId
                                     )
-                                    customLocation = resolved
-                                    customLocationText = resolved.title
-                                    useCurrentLocation = false
-                                    locationSuggestions = emptyList()
+                                    if (locationSuggestions.isEmpty()) {
+                                        locationError = "No matching start location found."
+                                    }
                                 } catch (e: Exception) {
-                                    locationError = e.message ?: "Could not resolve location."
-                                } finally { locationSearchBusy = false }
+                                    locationError = e.message ?: "Location search failed."
+                                } finally {
+                                    locationSearchBusy = false
+                                }
                             }
                         }
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(suggestion.title, fontWeight = FontWeight.SemiBold)
-                            if (suggestion.subtitle.isNotBlank()) {
-                                Text(suggestion.subtitle, style = MaterialTheme.typography.bodySmall)
+                        if (locationSearchBusy) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.height(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("Find place or address")
+                        }
+                    }
+
+                    locationSuggestions.forEach { suggestion ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch {
+                                        locationSearchBusy = true
+                                        locationError = null
+                                        try {
+                                            val quotaEventId = UUID.randomUUID()
+                                            val resolved = resolveLocationBackend(suggestion)
+                                            recordClientQuotaUsage(
+                                                service = "tomtom_places_details",
+                                                eventId = quotaEventId
+                                            )
+                                            customLocation = resolved
+                                            customLocationText = resolved.title
+                                            locationSuggestions = emptyList()
+                                        } catch (e: Exception) {
+                                            locationError = e.message ?: "Could not resolve location."
+                                        } finally {
+                                            locationSearchBusy = false
+                                        }
+                                    }
+                                }
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(suggestion.title, fontWeight = FontWeight.SemiBold)
+                                if (suggestion.subtitle.isNotBlank()) {
+                                    Text(
+                                        suggestion.subtitle,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                customLocation?.let {
-                    Text(
-                        "Using: " + it.title +
-                            if (it.address.isNotBlank()) " · " + it.address else "",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+                    customLocation?.let {
+                        Text(
+                            "Using: " + it.title +
+                                if (it.address.isNotBlank()) " · " + it.address else "",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
 
-                locationError?.let {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+                    locationError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
 
@@ -1728,7 +1727,7 @@ private suspend fun searchBackend(
         throw IllegalStateException(
             json.optString("reason")
                 .ifBlank {
-                    "Exact Top 10 could not be proven inside the 30 øre cost cap."
+                    "The search could not be completed inside the provider cost guard."
                 }
         )
     }
@@ -1749,48 +1748,9 @@ private suspend fun searchBackend(
         places.size < RESULT_LIMIT
     ) ?: (places.size < RESULT_LIMIT)
 
-    val usage = json.optJSONObject("usage")
-    val thisSearch = usage?.optJSONObject("thisSearch")
-
-    val usageText = thisSearch?.let {
-        val googleNearbyCalls = it.optInt("googleNearbyCalls", -1)
-        val googleRoutingPlaces = it.optInt("googleRoutingSummaryPlaces", -1)
-        val guardedCost = it.optDouble("conservativeCostNok", 0.0)
-
-        if (googleNearbyCalls >= 0) {
-            buildString {
-                append("Google cloud · Places ")
-                append(googleNearbyCalls)
-                append("/1")
-                if (googleRoutingPlaces >= 0) {
-                    append(" · walking routes ")
-                    append(googleRoutingPlaces)
-                }
-                append(
-                    String.format(
-                        Locale.US,
-                        " · cost guard %.1f øre",
-                        guardedCost * 100.0
-                    )
-                )
-            }
-        } else {
-            val discoveryCalls = it.optInt("tomtomDiscover", 0)
-            val routeCalls = it.optInt("tomtomRoute", 0)
-            "Cloud search · discovery $discoveryCalls/1 · " +
-                "walking routes $routeCalls/24 · " +
-                String.format(
-                    Locale.US,
-                    "cost guard %.1f øre",
-                    guardedCost * 100.0
-                )
-        }
-    }
-
     SearchResponse(
         places = places,
         exhaustedCandidates = exhausted,
-        usageText = usageText,
         quotaStatus = parseQuotaStatus(json.optJSONObject("quota"))
     )
 }
@@ -1827,8 +1787,7 @@ private fun parseQuotaStatus(obj: JSONObject?): SearchQuotaStatus? {
         monthlyRemaining = obj.optInt("monthly_remaining", 0),
         extraRemaining = obj.optInt("extra_remaining", 0),
         totalAvailable = obj.optInt("total_available", 0),
-        billingPeriodEnd = obj.optString("billing_period_end")
-            .takeIf { it.isNotBlank() && it != "null" }
+        billingPeriodEnd = obj.optNullableString("billing_period_end")
     )
 }
 
@@ -1982,20 +1941,20 @@ private fun parsePlace(
         sourceCategories = categories,
         latitude = latitude,
         longitude = longitude,
-        address = obj.optString("address").trim(),
+        address = obj.optNullableString("address").orEmpty(),
         isOpenNow = isOpenNow,
         minutesUntilClose = obj.optIntOrNull("minutesUntilClose")?.takeIf { it >= 0 },
         rating = rating,
         userRatingCount = ratingCount,
-        priceLevel = obj.optString("priceLevel").trim().takeIf { it.isNotEmpty() },
-        priceRangeText = obj.optString("priceRangeText").trim().takeIf { it.isNotEmpty() },
-        nationalPhoneNumber = obj.optString("nationalPhoneNumber").trim().takeIf { it.isNotEmpty() },
-        websiteUri = obj.optString("websiteUri").trim()
-            .takeIf { it.startsWith("https://") || it.startsWith("http://") },
-        googleMapsUri = obj.optString("googleMapsUri").trim()
-            .takeIf { it.startsWith("https://") || it.startsWith("http://") },
+        priceLevel = obj.optNullableString("priceLevel"),
+        priceRangeText = obj.optNullableString("priceRangeText"),
+        nationalPhoneNumber = obj.optNullableString("nationalPhoneNumber"),
+        websiteUri = obj.optNullableString("websiteUri")
+            ?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
+        googleMapsUri = obj.optNullableString("googleMapsUri")
+            ?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
         providerAttributions = obj.optJSONArray("providerAttributions")?.toStringList().orEmpty(),
-        businessStatus = obj.optString("businessStatus").trim().takeIf { it.isNotEmpty() },
+        businessStatus = obj.optNullableString("businessStatus"),
         sourceVerified = true,
         walkSeconds = walkSeconds,
         walkMinutes = walkMinutes,
@@ -2409,6 +2368,17 @@ private suspend fun recordClientQuotaUsage(
     }
 }
 
+private fun JSONObject.optNullableString(name: String): String? {
+    if (!has(name) || isNull(name)) return null
+
+    return optString(name)
+        .trim()
+        .takeIf {
+            it.isNotEmpty() &&
+                !it.equals("null", ignoreCase = true)
+        }
+}
+
 private fun JSONObject.optDoubleOrNull(
     name: String
 ): Double? {
@@ -2442,7 +2412,7 @@ private fun JSONArray.toStringList():
         val value =
             optString(index).trim()
 
-        if (value.isNotEmpty()) {
+        if (value.isNotEmpty() && !value.equals("null", ignoreCase = true)) {
             add(value)
         }
     }
