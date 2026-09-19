@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.LocationManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.core.os.CancellationSignal
@@ -105,7 +106,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-36"
+private const val APP_BUILD_ID = "production-20260919-37"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -2221,6 +2222,22 @@ private fun isLocationPermissionGranted(
  * runtime permission check above. Suppressing MissingPermission here prevents
  * Android Lint from treating that verified control flow as an error.
  */
+private fun isRunningOnEmulator(): Boolean {
+    val fingerprint = Build.FINGERPRINT.lowercase(Locale.ROOT)
+    val model = Build.MODEL.lowercase(Locale.ROOT)
+    val product = Build.PRODUCT.lowercase(Locale.ROOT)
+    val hardware = Build.HARDWARE.lowercase(Locale.ROOT)
+
+    return fingerprint.contains("generic") ||
+        fingerprint.contains("emulator") ||
+        model.contains("sdk_gphone") ||
+        model.contains("emulator") ||
+        product.contains("sdk_gphone") ||
+        product.contains("emulator") ||
+        hardware.contains("ranchu") ||
+        hardware.contains("goldfish")
+}
+
 @SuppressLint("MissingPermission")
 private suspend fun resolveCurrentLocation(
     context: Context
@@ -2234,23 +2251,47 @@ private suspend fun resolveCurrentLocation(
             Context.LOCATION_SERVICE
         ) as LocationManager
 
-    fun freshestKnown(maxAgeMs: Long): GeoPoint? {
-        val freshest = listOf(
-            LocationManager.NETWORK_PROVIDER,
-            LocationManager.GPS_PROVIDER,
-            LocationManager.PASSIVE_PROVIDER
-        )
+    fun knownLocations() =
+        runCatching { manager.allProviders }
+            .getOrDefault(
+                listOf(
+                    LocationManager.NETWORK_PROVIDER,
+                    LocationManager.GPS_PROVIDER,
+                    LocationManager.PASSIVE_PROVIDER
+                )
+            )
+            .distinct()
             .mapNotNull { provider ->
                 runCatching {
                     manager.getLastKnownLocation(provider)
                 }.getOrNull()
             }
+
+    fun newestKnown(): GeoPoint? {
+        val newest = knownLocations()
+            .maxByOrNull { location ->
+                location.elapsedRealtimeNanos
+            }
+
+        return newest?.let {
+            GeoPoint(
+                latitude = it.latitude,
+                longitude = it.longitude
+            )
+        }
+    }
+
+    fun freshestKnown(maxAgeMs: Long): GeoPoint? {
+        val nowElapsedNanos = android.os.SystemClock.elapsedRealtimeNanos()
+
+        val freshest = knownLocations()
             .filter { location ->
-                val age = System.currentTimeMillis() - location.time
-                age in 0..maxAgeMs
+                val ageNanos = nowElapsedNanos - location.elapsedRealtimeNanos
+                ageNanos >= 0L &&
+                    ageNanos <= maxAgeMs * 1_000_000L
             }
             .maxByOrNull { location ->
-                location.time
+                location.elapsedRealtimeNanos
             }
 
         return freshest?.let {
@@ -2259,6 +2300,22 @@ private suspend fun resolveCurrentLocation(
                 longitude = it.longitude
             )
         }
+    }
+
+    // Android Emulator normally receives a single synthetic location when
+    // "geo fix" / Extended Controls is used. It may not emit a new fix when
+    // NearTime later calls getCurrentLocation(), so preserve that injected
+    // location regardless of age. If none has ever been injected, use the
+    // NearTime Oslo test origin. This branch is never used on a physical phone.
+    if (isRunningOnEmulator()) {
+        newestKnown()?.let {
+            return it
+        }
+
+        return GeoPoint(
+            latitude = DEFAULT_LATITUDE,
+            longitude = DEFAULT_LONGITUDE
+        )
     }
 
     // A fix from the last few seconds is already a current position and avoids
@@ -2296,7 +2353,8 @@ private suspend fun resolveCurrentLocation(
         }
     }
 
-    // Last-resort resilience: still never use a minutes-old cached position.
+    // Physical-device fallback stays deliberately short-lived so a stale
+    // position is never silently reused while the user is moving.
     return freshestKnown(maxAgeMs = 30_000)
 }
 
