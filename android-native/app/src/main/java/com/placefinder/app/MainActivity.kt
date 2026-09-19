@@ -20,8 +20,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -40,15 +38,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -84,15 +80,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.net.toUri
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.MapsInitializer
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.MapProperties
-import com.google.maps.android.compose.MapUiSettings
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -116,7 +103,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-31"
+private const val APP_BUILD_ID = "production-20260919-32"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -265,7 +252,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        MapsInitializer.initialize(applicationContext)
         billingManager = NearTimeBillingManager(this)
 
         setContent {
@@ -299,15 +285,12 @@ private fun NearTimeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val focusManager = LocalFocusManager.current
     val installHash = remember { getOrCreateInstallHash(context) }
 
     var quotaStatus by remember { mutableStateOf<SearchQuotaStatus?>(null) }
     var quotaError by remember { mutableStateOf<String?>(null) }
 
     var selectedCategory by remember { mutableStateOf(SearchCategory.BARS_DRINKS) }
-    var categoryExpanded by remember { mutableStateOf(false) }
-    var categoryFilterText by remember { mutableStateOf("") }
     var maxWalkMinutes by remember { mutableFloatStateOf(15f) }
     var openNowOnly by remember { mutableStateOf(true) }
     var minOpenMinutes by remember { mutableFloatStateOf(0f) }
@@ -338,13 +321,7 @@ private fun NearTimeScreen(
         permissionRevision += 1
     }
 
-    val cameraPositionState = rememberCameraPositionState()
-    val categoryScrollState = rememberScrollState()
     val resultListState = rememberLazyListState()
-
-    LaunchedEffect(categoryFilterText) {
-        categoryScrollState.scrollTo(0)
-    }
 
     LaunchedEffect(
         installHash,
@@ -378,23 +355,6 @@ private fun NearTimeScreen(
             null
         } else {
             reverseGeocodeLocationLabel(context, gps)
-        }
-    }
-
-    val activeOrigin = if (useCurrentLocation) {
-        currentLocation
-    } else {
-        customLocation?.let { GeoPoint(it.latitude, it.longitude) }
-    }
-
-    LaunchedEffect(activeOrigin?.latitude, activeOrigin?.longitude) {
-        activeOrigin?.let {
-            cameraPositionState.animate(
-                CameraUpdateFactory.newLatLngZoom(
-                    LatLng(it.latitude, it.longitude),
-                    14.5f
-                )
-            )
         }
     }
 
@@ -519,22 +479,27 @@ private fun NearTimeScreen(
     val successOverlay = searchState as? SearchState.Success
 
     if (successOverlay != null) {
-        val displayedPlaces = when (resultSort) {
-            ResultSort.NEAREST ->
-                successOverlay.response.places.sortedWith(
-                    compareBy<PlaceResult> { it.walkDistanceMeters }
-                        .thenBy { it.walkSeconds }
-                        .thenBy { it.name.lowercase(Locale.ROOT) }
-                )
+        val displayedPlaces = remember(
+            successOverlay.response.places,
+            resultSort
+        ) {
+            when (resultSort) {
+                ResultSort.NEAREST ->
+                    successOverlay.response.places.sortedWith(
+                        compareBy<PlaceResult> { it.walkDistanceMeters }
+                            .thenBy { it.walkSeconds }
+                            .thenBy { it.name.lowercase(Locale.ROOT) }
+                    )
 
-            ResultSort.HIGHEST_RATED ->
-                successOverlay.response.places.sortedWith(
-                    compareByDescending<PlaceResult> { it.rating != null }
-                        .thenByDescending { it.rating ?: -1.0 }
-                        .thenByDescending { it.userRatingCount ?: -1 }
-                        .thenBy { it.walkDistanceMeters }
-                        .thenBy { it.walkSeconds }
-                )
+                ResultSort.HIGHEST_RATED ->
+                    successOverlay.response.places.sortedWith(
+                        compareByDescending<PlaceResult> { it.rating != null }
+                            .thenByDescending { it.rating ?: -1.0 }
+                            .thenByDescending { it.userRatingCount ?: -1 }
+                            .thenBy { it.walkDistanceMeters }
+                            .thenBy { it.walkSeconds }
+                    )
+            }
         }
 
         Scaffold { innerPadding ->
@@ -814,10 +779,6 @@ private fun NearTimeScreen(
                                     customLocationText = resolved.title
                                     useCurrentLocation = false
                                     locationSuggestions = emptyList()
-                                    // activeOrigin already drives the map camera through
-                                    // LaunchedEffect. Starting a second animation here
-                                    // cancels the first one and used to surface
-                                    // "Animation cancelled" as a user-visible error.
                                 } catch (e: Exception) {
                                     locationError = e.message ?: "Could not resolve location."
                                 } finally { locationSearchBusy = false }
@@ -852,119 +813,10 @@ private fun NearTimeScreen(
             }
 
             item {
-                val query = categoryFilterText.trim().lowercase(Locale.ROOT)
-                val sortedCategories = SearchCategory.entries
-                    .sortedBy { it.displayName.lowercase(Locale.ROOT) }
-
-                val filteredCategories = if (query.isBlank()) {
-                    sortedCategories
-                } else {
-                    sortedCategories
-                        .filter {
-                            it.displayName
-                                .lowercase(Locale.ROOT)
-                                .contains(query)
-                        }
-                        .sortedWith(
-                            compareBy<SearchCategory> {
-                                !it.displayName
-                                    .lowercase(Locale.ROOT)
-                                    .startsWith(query)
-                            }.thenBy {
-                                it.displayName.lowercase(Locale.ROOT)
-                            }
-                        )
-                }
-
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    TextField(
-                        value = if (categoryExpanded) {
-                            categoryFilterText
-                        } else {
-                            selectedCategory.displayName
-                        },
-                        onValueChange = { value ->
-                            categoryFilterText = value
-                            categoryExpanded = true
-                        },
-                        readOnly = false,
-                        singleLine = true,
-                        label = { Text("Place type") },
-                        placeholder = { Text("Type to filter, e.g. rest") },
-                        trailingIcon = {
-                            if (categoryExpanded) {
-                                Text("⌃")
-                            } else {
-                                Text("⌄")
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { focusState ->
-                                if (focusState.isFocused) {
-                                    if (!categoryExpanded) {
-                                        categoryFilterText = ""
-                                    }
-                                    categoryExpanded = true
-                                }
-                            }
-                    )
-
-                    if (categoryExpanded) {
-                        Spacer(Modifier.height(4.dp))
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(4.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(end = 14.dp)
-                                        .verticalScroll(categoryScrollState)
-                                ) {
-                                    if (filteredCategories.isEmpty()) {
-                                        Text(
-                                            "No matching place type",
-                                            modifier = Modifier.padding(12.dp),
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    } else {
-                                        filteredCategories.forEach { category ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(category.displayName)
-                                                },
-                                                onClick = {
-                                                    selectedCategory = category
-                                                    categoryFilterText = ""
-                                                    categoryExpanded = false
-                                                    focusManager.clearFocus()
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-
-                                ScrollStateScrollbar(
-                                    state = categoryScrollState,
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .fillMaxHeight()
-                                        .width(14.dp)
-                                )
-                            }
-                        }
-                    }
-                }
+                PlaceTypeSelector(
+                    selectedCategory = selectedCategory,
+                    onSelected = { selectedCategory = it }
+                )
             }
 
             item {
@@ -1211,6 +1063,134 @@ private fun NearTimeScreen(
 
 
 @Composable
+private fun PlaceTypeSelector(
+    selectedCategory: SearchCategory,
+    onSelected: (SearchCategory) -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    var expanded by remember { mutableStateOf(false) }
+    var filterText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    val sortedCategories = remember {
+        SearchCategory.entries.sortedBy {
+            it.displayName.lowercase(Locale.ROOT)
+        }
+    }
+
+    val filteredCategories = remember(filterText, sortedCategories) {
+        val query = filterText.trim().lowercase(Locale.ROOT)
+        if (query.isBlank()) {
+            sortedCategories
+        } else {
+            sortedCategories
+                .asSequence()
+                .filter {
+                    it.displayName
+                        .lowercase(Locale.ROOT)
+                        .contains(query)
+                }
+                .sortedWith(
+                    compareBy<SearchCategory> {
+                        !it.displayName
+                            .lowercase(Locale.ROOT)
+                            .startsWith(query)
+                    }.thenBy {
+                        it.displayName.lowercase(Locale.ROOT)
+                    }
+                )
+                .toList()
+        }
+    }
+
+    LaunchedEffect(expanded) {
+        if (expanded && listState.firstVisibleItemIndex > 0) {
+            listState.scrollToItem(0)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TextField(
+            value = if (expanded) filterText else selectedCategory.displayName,
+            onValueChange = { value ->
+                filterText = value
+                expanded = true
+            },
+            readOnly = false,
+            singleLine = true,
+            label = { Text("Place type") },
+            placeholder = { Text("Type to filter, e.g. rest") },
+            trailingIcon = {
+                Text(if (expanded) "⌃" else "⌄")
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focusState ->
+                    if (focusState.isFocused && !expanded) {
+                        filterText = ""
+                        expanded = true
+                    }
+                }
+        )
+
+        if (expanded) {
+            Spacer(Modifier.height(4.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(4.dp)
+                ) {
+                    if (filteredCategories.isEmpty()) {
+                        Text(
+                            "No matching place type",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(end = 14.dp),
+                            contentPadding = PaddingValues(vertical = 2.dp)
+                        ) {
+                            items(
+                                items = filteredCategories,
+                                key = { it.wireValue }
+                            ) { category ->
+                                DropdownMenuItem(
+                                    text = { Text(category.displayName) },
+                                    onClick = {
+                                        onSelected(category)
+                                        filterText = ""
+                                        expanded = false
+                                        focusManager.clearFocus()
+                                    }
+                                )
+                            }
+                        }
+
+                        LazyListScrollbar(
+                            state = listState,
+                            itemCount = filteredCategories.size,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SearchUsageCard(
     quota: SearchQuotaStatus?,
     quotaError: String?,
@@ -1327,60 +1307,6 @@ private fun SearchUsageCard(
         }
     }
 }
-@Composable
-private fun ScrollStateScrollbar(
-    state: androidx.compose.foundation.ScrollState,
-    modifier: Modifier = Modifier
-) {
-    if (state.maxValue <= 0) return
-
-    val scope = rememberCoroutineScope()
-    val positionFraction = (state.value.toFloat() / state.maxValue.toFloat())
-        .coerceIn(0f, 1f)
-
-    BoxWithConstraints(
-        modifier = modifier
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-            )
-            .pointerInput(state.maxValue) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        val fraction = (offset.y / size.height.toFloat())
-                            .coerceIn(0f, 1f)
-                        scope.launch {
-                            state.scrollTo((fraction * state.maxValue).roundToInt())
-                        }
-                    },
-                    onVerticalDrag = { change, _ ->
-                        change.consume()
-                        val fraction = (change.position.y / size.height.toFloat())
-                            .coerceIn(0f, 1f)
-                        scope.launch {
-                            state.scrollTo((fraction * state.maxValue).roundToInt())
-                        }
-                    }
-                )
-            }
-    ) {
-        val thumbFraction = 0.22f
-        val thumbHeight = maxHeight * thumbFraction
-        val thumbOffset = (maxHeight - thumbHeight) * positionFraction
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(thumbHeight)
-                .offset(y = thumbOffset)
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                )
-        )
-    }
-}
-
 @Composable
 private fun LazyListScrollbar(
     state: LazyListState,
