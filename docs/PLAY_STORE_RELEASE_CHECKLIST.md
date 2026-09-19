@@ -60,7 +60,10 @@ This checklist is the executable release gate for the native Android app. The fu
 - [ ] IARC Content rating questionnaire completed.
 - [ ] Financial features declaration completed: current intended answer is **no financial features**.
 - [ ] Health apps declaration completed: current intended answer is **no health features**.
+- [ ] Government apps declaration completed: NearTime is **not a government app** and does not present itself as an official government source.
+- [ ] COVID-19 contact tracing/status declaration completed: **No**.
 - [ ] News/Magazine applicability answered consistently: NearTime is not a News/Magazine app.
+- [ ] Advertising ID declaration, if surfaced: confirm from the final merged manifest; current app does not intentionally use Advertising ID.
 - [ ] Complete the precise-location declaration when Play Console makes it available (announced for November 2026) if `ACCESS_FINE_LOCATION` remains in the release.
 
 ## Privacy / user data
@@ -72,6 +75,7 @@ This checklist is the executable release gate for the native Android app. The fu
 - [ ] Verify no request-body logging persists coordinates/custom address text.
 - [ ] Verify location remains optional.
 - [ ] Verify no background location permission.
+- [ ] Verify the final merged manifest does not unexpectedly contain `com.google.android.gms.permission.AD_ID`.
 - [ ] If user accounts are ever added, add in-app account deletion and a public deletion-request resource before release.
 
 ## Billing / monetization
@@ -150,5 +154,6 @@ Official references:
 - Minimum Scope / Location Button: https://support.google.com/googleplay/android-developer/answer/17033915
 - Financial features declaration: https://support.google.com/googleplay/android-developer/answer/13849271
 - Health apps declaration: https://support.google.com/googleplay/android-developer/answer/14738291
+- Government apps: https://support.google.com/googleplay/android-developer/answer/9514050
 - Subscriptions: https://support.google.com/googleplay/android-developer/answer/9900533
 - Store listing assets: https://support.google.com/googleplay/android-developer/answer/9866151

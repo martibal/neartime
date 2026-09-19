@@ -189,7 +189,35 @@ Current intended answer:
 
 NearTime is not a News or Magazine app and should not be listed in that category or described as such. Complete any Play Console applicability question consistently with that fact.
 
-## 13. Location permission / Minimum Scope
+## 13. Government apps declaration
+
+Google Play requires the Government apps declaration in App content.
+
+Current intended answer:
+
+- **NearTime is not a government app and is not developed by or on behalf of a government entity.**
+- **NearTime does not present itself as an official source of government information or government services.**
+
+If this ever changes, the declaration, store listing and sourcing/authorization requirements must be reviewed again.
+
+## 14. COVID-19 contact tracing/status declaration
+
+Google Play currently requires developers to state whether the app contains COVID-19 contact-tracing or status functionality.
+
+Current intended answer:
+
+- **No COVID-19 contact-tracing or status functionality.**
+
+## 15. Advertising ID
+
+The current native app does not use an advertising SDK and does not intentionally use the Google Advertising ID.
+
+Release gate:
+
+- [ ] confirm the final merged manifest does not unexpectedly contain `com.google.android.gms.permission.AD_ID`;
+- [ ] if Play Console presents an Advertising ID declaration, answer from the final AAB rather than assumptions.
+
+## 16. Location permission / Minimum Scope
 
 Current manifest requests:
 
@@ -214,7 +242,7 @@ Release implications:
 
 Do not request background location unless the product fundamentally changes and passes a new policy review.
 
-## 14. Google Play Billing / subscriptions
+## 17. Google Play Billing / subscriptions
 
 Current products in code:
 
@@ -239,7 +267,7 @@ Current hard blocker:
 
 The Play Store product configuration and in-app text must agree. Do not hard-code a price as authoritative; display the localized price returned by Google Play.
 
-## 15. Store listing / metadata
+## 18. Store listing / metadata
 
 Before publishing a store listing:
 
@@ -256,7 +284,7 @@ Before publishing a store listing:
 
 Store listing claims and screenshots must match actual released functionality. Do not claim global/exhaustive search coverage that the backend cannot prove.
 
-## 16. Release artifact / signing
+## 19. Release artifact / signing
 
 Before any external Play test:
 
@@ -272,7 +300,7 @@ Before any external Play test:
 
 Current `targetSdk = 37`, which is above the API 36 minimum for new apps/updates effective 2026-08-31.
 
-## 17. Testing track
+## 20. Testing track
 
 For an Organization developer account, the special 12-testers-for-14-days rule for newly created Personal accounts is not the relevant gate. NearTime should still use Play tracks in this order:
 
@@ -282,7 +310,7 @@ For an Organization developer account, the special 12-testers-for-14-days rule f
 
 Before closed testing, complete all Play Console declarations that Play marks as required for the track, including the Financial features and Health apps declarations.
 
-## 18. Repository consistency issues found during audit
+## 21. Repository consistency issues found during audit
 
 These are not all Google-policy violations by themselves, but they must be resolved before release because they can make declarations inaccurate.
 
@@ -295,7 +323,7 @@ These are not all Google-policy violations by themselves, but they must be resol
 - The subscription UI does not yet contain a Google Play subscription-management/cancellation link.
 - The final privacy contact email cannot be completed until the developer account/contact address is chosen.
 
-## 19. Authoritative repository files for Play submission
+## 22. Authoritative repository files for Play submission
 
 Use these files for submission work:
 
@@ -318,6 +346,8 @@ Do **not** derive Play declarations from archived COGS experiments or the old Ex
 - Content ratings: https://support.google.com/googleplay/android-developer/answer/9898843
 - Financial features declaration: https://support.google.com/googleplay/android-developer/answer/13849271
 - Health apps declaration: https://support.google.com/googleplay/android-developer/answer/14738291
+- Government apps: https://support.google.com/googleplay/android-developer/answer/9514050
+- Prepare app for review / COVID-19 declaration: https://support.google.com/googleplay/android-developer/answer/9859455
 - Minimum Scope / Location Button: https://support.google.com/googleplay/android-developer/answer/17033915
 - Subscriptions policy: https://support.google.com/googleplay/android-developer/answer/9900533
 - Payments policy: https://support.google.com/googleplay/android-developer/answer/9858738
