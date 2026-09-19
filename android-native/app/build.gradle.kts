@@ -22,8 +22,8 @@ android {
         applicationId = "com.placefinder.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 16
-        versionName = "1.0.16-production"
+        versionCode = 17
+        versionName = "1.0.17-ui-prototype"
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
