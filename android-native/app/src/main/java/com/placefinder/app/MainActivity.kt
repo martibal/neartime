@@ -17,6 +17,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -42,8 +50,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -71,6 +81,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -106,13 +117,43 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-38"
+private const val APP_BUILD_ID = "ui-prototype-20260919-39"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
 private const val DEFAULT_LONGITUDE = 10.7522
 private const val PRIVACY_POLICY_URL = "https://neartime.vercel.app/privacy"
 private const val TERMS_OF_USE_URL = "https://neartime.vercel.app/terms"
+
+private val NearTimeLightColors = lightColorScheme(
+    primary = Color(0xFF007AFF),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFDCEBFF),
+    onPrimaryContainer = Color(0xFF002E69),
+    background = Color(0xFFF2F2F7),
+    onBackground = Color(0xFF111113),
+    surface = Color.White,
+    onSurface = Color(0xFF111113),
+    surfaceVariant = Color(0xFFE9E9EF),
+    onSurfaceVariant = Color(0xFF6C6C70),
+    outline = Color(0xFFD1D1D6),
+    error = Color(0xFFFF3B30)
+)
+
+private val NearTimeDarkColors = darkColorScheme(
+    primary = Color(0xFF0A84FF),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF0A3A6D),
+    onPrimaryContainer = Color(0xFFDCEBFF),
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFF5F5F7),
+    surface = Color(0xFF1C1C1E),
+    onSurface = Color(0xFFF5F5F7),
+    surfaceVariant = Color(0xFF2C2C2E),
+    onSurfaceVariant = Color(0xFFAEAEB2),
+    outline = Color(0xFF48484A),
+    error = Color(0xFFFF453A)
+)
 
 private enum class SearchCategory(
     val wireValue: String,
@@ -260,7 +301,7 @@ class MainActivity : ComponentActivity() {
             var darkMode by remember { mutableStateOf(false) }
             val billingUiState by billingManager.state.collectAsState()
 
-            MaterialTheme(colorScheme = if (darkMode) darkColorScheme() else lightColorScheme()) {
+            MaterialTheme(colorScheme = if (darkMode) NearTimeDarkColors else NearTimeLightColors) {
                 NearTimeScreen(
                     darkMode = darkMode,
                     onDarkModeChange = { darkMode = it },
@@ -567,62 +608,72 @@ private fun NearTimeScreen(
             }
         }
 
-        Scaffold { innerPadding ->
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background
+        ) { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp)
             ) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        searchState = SearchState.Idle
-                        selectedPlace = null
-                    }
-                ) {
-                    Text("Back to search")
-                }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "${displayedPlaces.size} places match all selected criteria",
+                    text = "‹ Search",
+                    color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickable {
+                            searchState = SearchState.Idle
+                            selectedPlace = null
+                        }
+                        .padding(vertical = 6.dp)
+                )
+                Text(
+                    text = "Results",
+                    style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = resultSort == ResultSort.NEAREST,
-                        onClick = {
-                            resultSort = ResultSort.NEAREST
-                            scope.launch { resultListState.scrollToItem(0) }
-                        },
-                        label = { Text("Nearest") }
-                    )
-                    FilterChip(
-                        selected = resultSort == ResultSort.HIGHEST_RATED,
-                        onClick = {
-                            resultSort = ResultSort.HIGHEST_RATED
-                            scope.launch { resultListState.scrollToItem(0) }
-                        },
-                        label = { Text("Highest rated in results") }
-                    )
-                }
+                Text(
+                    text = selectedCategory.displayName + " · within " +
+                        maxWalkMinutes.roundToInt().toString() + " min walk",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                AppleSegmentedControl(
+                    leftLabel = "Nearest",
+                    rightLabel = "Highest rated",
+                    leftSelected = resultSort == ResultSort.NEAREST,
+                    onLeft = {
+                        resultSort = ResultSort.NEAREST
+                        scope.launch { resultListState.scrollToItem(0) }
+                    },
+                    onRight = {
+                        resultSort = ResultSort.HIGHEST_RATED
+                        scope.launch { resultListState.scrollToItem(0) }
+                    }
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = displayedPlaces.size.toString() + " places match every selected condition",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
                 if (successOverlay.response.exhaustedCandidates) {
                     Text(
-                        "Fewer than 10 places could be established within the walking-time limit.",
-                        style = MaterialTheme.typography.bodySmall
+                        text = "Fewer than 10 qualifying places were established in range.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Text(
                     text = "Place data and walking routes provided by Google Maps",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -632,7 +683,7 @@ private fun NearTimeScreen(
                         state = resultListState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(end = 18.dp),
+                            .padding(end = 10.dp),
                         contentPadding = PaddingValues(bottom = 28.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -645,7 +696,10 @@ private fun NearTimeScreen(
                                 place = place,
                                 searchOrigin = lastSearchOrigin,
                                 selected = selectedPlace?.id == place.id,
-                                onSelect = { selectedPlace = place }
+                                onSelect = {
+                                    selectedPlace =
+                                        if (selectedPlace?.id == place.id) null else place
+                                }
                             )
                         }
                     }
@@ -655,10 +709,9 @@ private fun NearTimeScreen(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .fillMaxHeight()
-                            .width(18.dp)
+                            .width(10.dp)
                     )
                 }
-                Spacer(Modifier.height(8.dp))
             }
         }
         return
@@ -680,28 +733,35 @@ private fun NearTimeScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 9.dp)
             ) {
                 Button(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(58.dp),
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
                     enabled = searchButtonEnabled,
                     onClick = { runPlaceSearch() }
                 ) {
                     if (searchState is SearchState.Loading) {
                         CircularProgressIndicator(
                             modifier = Modifier.height(20.dp),
-                            strokeWidth = 2.dp
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
                         )
                     } else {
-                        Text(searchButtonText)
+                        Text(
+                            text = searchButtonText,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
                     }
                 }
             }
@@ -712,28 +772,42 @@ private fun NearTimeScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(bottom = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
                 Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "NearTime",
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold
                         )
-                        Text("Find places by real walking time.")
+                        Text(
+                            text = "Find what works right now.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (darkMode) "☾" else "☀")
-                        Switch(
-                            checked = darkMode,
-                            onCheckedChange = onDarkModeChange
+                    Card(
+                        modifier = Modifier.clickable {
+                            onDarkModeChange(!darkMode)
+                        },
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Text(
+                            text = if (darkMode) "☀" else "☾",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
                 }
@@ -749,195 +823,263 @@ private fun NearTimeScreen(
                     onRestore = { billingManager.restorePurchases(showMessage = true) }
                 )
             }
+
             item {
-                Text(
-                    "START FROM",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = useCurrentLocation,
-                        onClick = { selectCurrentLocation() },
-                        label = { Text("Current location") }
-                    )
-                    FilterChip(
-                        selected = !useCurrentLocation,
-                        onClick = {
+                AppleSectionLabel("Start from")
+                ApplePanel {
+                    AppleSegmentedControl(
+                        leftLabel = "Current location",
+                        rightLabel = "Other place",
+                        leftSelected = useCurrentLocation,
+                        onLeft = { selectCurrentLocation() },
+                        onRight = {
                             useCurrentLocation = false
                             locationSuggestions = emptyList()
                             locationError = null
-                        },
-                        label = { Text("Other place") }
-                    )
-                }
-
-                if (useCurrentLocation) {
-                    if (hasLocationPermission) {
-                        Text(
-                            text = when {
-                                !currentLocationLookupFinished ->
-                                    "Locating your current position…"
-                                currentLocation == null ->
-                                    "Current location is not available."
-                                !currentLocationLabel.isNullOrBlank() ->
-                                    "● Using your location · $currentLocationLabel"
-                                else ->
-                                    "● Using your current GPS location"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (
-                                currentLocationLookupFinished &&
-                                currentLocation == null
-                            ) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            },
-                            maxLines = 1
-                        )
-
-                        if (
-                            currentLocationLookupFinished &&
-                            currentLocation == null
-                        ) {
-                            Spacer(Modifier.height(6.dp))
-                            OutlinedButton(
-                                onClick = { refreshGps() }
-                            ) {
-                                Text("Try current location again")
-                            }
                         }
-                    } else {
-                        Text(
-                            text = "NearTime uses your location only when Current location is selected. " +
-                                "It is sent securely to NearTime's search service and Google Maps Platform " +
-                                "to find nearby places and walking routes.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        OutlinedButton(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        ) { Text("Allow GPS location") }
-                    }
-                } else {
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = customLocationText,
-                        onValueChange = {
-                            customLocationText = it
-                            customLocation = null
-                            locationSuggestions = emptyList()
-                            locationError = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Place or address") },
-                        placeholder = { Text("e.g. hotel name or address") }
                     )
 
-                    OutlinedButton(
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !locationSearchBusy && customLocationText.trim().length >= 3,
-                        onClick = {
-                            scope.launch {
-                                locationSearchBusy = true
-                                locationError = null
-                                try {
-                                    val bias = currentLocation ?: GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
-                                    val quotaEventId = UUID.randomUUID()
-                                    locationSuggestions = suggestLocationsBackend(
-                                        customLocationText.trim(), bias.latitude, bias.longitude
+                    Spacer(Modifier.height(12.dp))
+
+                    Crossfade(
+                        targetState = useCurrentLocation,
+                        label = "origin-mode"
+                    ) { currentMode ->
+                        if (currentMode) {
+                            Column {
+                                if (hasLocationPermission) {
+                                    Text(
+                                        text = when {
+                                            !currentLocationLookupFinished ->
+                                                "Locating…"
+                                            currentLocation == null ->
+                                                "Current location is unavailable"
+                                            !currentLocationLabel.isNullOrBlank() ->
+                                                currentLocationLabel!!
+                                            else ->
+                                                "Current GPS location"
+                                        },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (
+                                            currentLocationLookupFinished &&
+                                            currentLocation == null
+                                        ) {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        maxLines = 1
                                     )
-                                    recordClientQuotaUsage(
-                                        service = "tomtom_places_suggest",
-                                        eventId = quotaEventId
+                                    Text(
+                                        text = when {
+                                            !currentLocationLookupFinished ->
+                                                "Getting your position"
+                                            currentLocation != null ->
+                                                "Ready to search from here"
+                                            else ->
+                                                "Try again or choose another place"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    if (locationSuggestions.isEmpty()) {
-                                        locationError = "No matching start location found."
+
+                                    if (
+                                        currentLocationLookupFinished &&
+                                        currentLocation == null
+                                    ) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            text = "Try current location again",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier
+                                                .clickable { refreshGps() }
+                                                .padding(vertical = 6.dp)
+                                        )
                                     }
-                                } catch (e: Exception) {
-                                    locationError = e.message ?: "Location search failed."
-                                } finally {
-                                    locationSearchBusy = false
+                                } else {
+                                    Text(
+                                        text = "Use your current location",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Location is used only for this nearby search.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    Button(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(14.dp),
+                                        onClick = {
+                                            permissionLauncher.launch(
+                                                arrayOf(
+                                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                                )
+                                            )
+                                        }
+                                    ) {
+                                        Text("Allow location")
+                                    }
                                 }
                             }
-                        }
-                    ) {
-                        if (locationSearchBusy) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.height(18.dp),
-                                strokeWidth = 2.dp
-                            )
                         } else {
-                            Text("Find place or address")
-                        }
-                    }
-
-                    locationSuggestions.forEach { suggestion ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    scope.launch {
-                                        locationSearchBusy = true
+                            Column {
+                                OutlinedTextField(
+                                    value = customLocationText,
+                                    onValueChange = {
+                                        customLocationText = it
+                                        customLocation = null
+                                        locationSuggestions = emptyList()
                                         locationError = null
-                                        try {
-                                            val quotaEventId = UUID.randomUUID()
-                                            val resolved = resolveLocationBackend(suggestion)
-                                            recordClientQuotaUsage(
-                                                service = "tomtom_places_details",
-                                                eventId = quotaEventId
-                                            )
-                                            customLocation = resolved
-                                            customLocationText = resolved.title
-                                            locationSuggestions = emptyList()
-                                        } catch (e: Exception) {
-                                            locationError = e.message ?: "Could not resolve location."
-                                        } finally {
-                                            locationSearchBusy = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp),
+                                    label = { Text("Place or address") },
+                                    placeholder = { Text("Hotel, station, address…") }
+                                )
+
+                                Spacer(Modifier.height(8.dp))
+
+                                Button(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    enabled = !locationSearchBusy &&
+                                        customLocationText.trim().length >= 3,
+                                    onClick = {
+                                        scope.launch {
+                                            locationSearchBusy = true
+                                            locationError = null
+                                            try {
+                                                val bias = currentLocation
+                                                    ?: GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
+                                                val quotaEventId = UUID.randomUUID()
+                                                locationSuggestions = suggestLocationsBackend(
+                                                    customLocationText.trim(),
+                                                    bias.latitude,
+                                                    bias.longitude
+                                                )
+                                                recordClientQuotaUsage(
+                                                    service = "tomtom_places_suggest",
+                                                    eventId = quotaEventId
+                                                )
+                                                if (locationSuggestions.isEmpty()) {
+                                                    locationError =
+                                                        "No matching start location found."
+                                                }
+                                            } catch (e: Exception) {
+                                                locationError =
+                                                    e.message ?: "Location search failed."
+                                            } finally {
+                                                locationSearchBusy = false
+                                            }
                                         }
                                     }
+                                ) {
+                                    if (locationSearchBusy) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.height(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    } else {
+                                        Text("Find location")
+                                    }
                                 }
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text(suggestion.title, fontWeight = FontWeight.SemiBold)
-                                if (suggestion.subtitle.isNotBlank()) {
+
+                                if (locationSuggestions.isNotEmpty()) {
+                                    Spacer(Modifier.height(8.dp))
+                                }
+
+                                locationSuggestions.forEachIndexed { index, suggestion ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                scope.launch {
+                                                    locationSearchBusy = true
+                                                    locationError = null
+                                                    try {
+                                                        val quotaEventId = UUID.randomUUID()
+                                                        val resolved =
+                                                            resolveLocationBackend(suggestion)
+                                                        recordClientQuotaUsage(
+                                                            service = "tomtom_places_details",
+                                                            eventId = quotaEventId
+                                                        )
+                                                        customLocation = resolved
+                                                        customLocationText = resolved.title
+                                                        locationSuggestions = emptyList()
+                                                    } catch (e: Exception) {
+                                                        locationError =
+                                                            e.message ?: "Could not resolve location."
+                                                    } finally {
+                                                        locationSearchBusy = false
+                                                    }
+                                                }
+                                            }
+                                            .padding(vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = suggestion.title,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            if (suggestion.subtitle.isNotBlank()) {
+                                                Text(
+                                                    text = suggestion.subtitle,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        Text(
+                                            text = "›",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.titleLarge
+                                        )
+                                    }
+                                    if (index < locationSuggestions.lastIndex) {
+                                        HorizontalDivider(
+                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                                        )
+                                    }
+                                }
+
+                                customLocation?.let {
+                                    Spacer(Modifier.height(8.dp))
                                     Text(
-                                        suggestion.subtitle,
+                                        text = "Using · " + it.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    if (it.address.isNotBlank()) {
+                                        Text(
+                                            text = it.address,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+
+                                locationError?.let {
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = it,
+                                        color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
                             }
                         }
-                    }
-
-                    customLocation?.let {
-                        Text(
-                            text = "Using: " + it.title,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    locationError?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
                     }
                 }
             }
@@ -950,23 +1092,30 @@ private fun NearTimeScreen(
             }
 
             item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "MAXIMUM WALKING TIME",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
+                AppleSectionLabel("Conditions")
+                ApplePanel {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Walking radius", style = MaterialTheme.typography.titleMedium)
+                        Column {
+                            Text(
+                                text = "Maximum walking time",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Real walking route",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Text(
-                            "${maxWalkMinutes.roundToInt()} min",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            text = maxWalkMinutes.roundToInt().toString() + " min",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                     Slider(
@@ -975,30 +1124,28 @@ private fun NearTimeScreen(
                         valueRange = 5f..30f,
                         steps = 24
                     )
-                }
-            }
 
-            item {
-                HorizontalDivider()
-            }
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                    )
 
-            item {
-                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "OPEN NOW",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
+                                text = "Open now",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(Modifier.height(4.dp))
                             Text(
-                                "Exclude places confirmed closed",
-                                style = MaterialTheme.typography.bodyMedium
+                                text = "Hide places that are closed",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
@@ -1017,114 +1164,181 @@ private fun NearTimeScreen(
                     (if (minRating > 0f) 1 else 0) +
                         (if (openNowOnly && minOpenMinutes > 0f) 1 else 0)
 
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { moreFiltersExpanded = !moreFiltersExpanded }
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { moreFiltersExpanded = !moreFiltersExpanded },
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
-                    Text(
-                        when {
-                            activeMoreFilters > 0 && moreFiltersExpanded ->
-                                "Hide more filters · $activeMoreFilters active"
-                            activeMoreFilters > 0 ->
-                                "More filters · $activeMoreFilters active"
-                            moreFiltersExpanded ->
-                                "Hide more filters"
-                            else ->
-                                "More filters"
-                        }
-                    )
-                }
-            }
-
-            if (moreFiltersExpanded) {
-                if (openNowOnly) {
-                    item {
-                        Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
                             Text(
-                                "MINIMUM TIME UNTIL CLOSING",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                if (minOpenMinutes.roundToInt() == 0) {
-                                    "No minimum"
-                                } else if (minOpenMinutes.roundToInt() < 60) {
-                                    "${minOpenMinutes.roundToInt()} min"
-                                } else {
-                                    val hours = minOpenMinutes.roundToInt() / 60
-                                    val minutes = minOpenMinutes.roundToInt() % 60
-                                    if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
-                                },
+                                text = "More filters",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Slider(
-                                value = minOpenMinutes,
-                                onValueChange = { minOpenMinutes = it },
-                                valueRange = 0f..180f,
-                                steps = 5
+                            Text(
+                                text = if (activeMoreFilters > 0) {
+                                    activeMoreFilters.toString() + " active"
+                                } else {
+                                    "Rating and time until closing"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Text(
+                            text = if (moreFiltersExpanded) "⌃" else "⌄",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.titleLarge
+                        )
                     }
                 }
 
-                item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "MINIMUM RATING",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            if (minRating <= 0f) {
-                                "Any"
-                            } else {
-                                String.format(Locale.US, "%.1f+ ★", minRating)
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Slider(
-                            value = minRating,
-                            onValueChange = {
-                                minRating = (it * 2f).roundToInt() / 2f
-                            },
-                            valueRange = 0f..5f,
-                            steps = 9
-                        )
+                AnimatedVisibility(
+                    visible = moreFiltersExpanded,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column {
+                        Spacer(Modifier.height(10.dp))
+                        ApplePanel {
+                            if (openNowOnly) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Open for at least",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = "Minimum time until closing",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Text(
+                                        text = when {
+                                            minOpenMinutes.roundToInt() == 0 -> "Any"
+                                            minOpenMinutes.roundToInt() < 60 ->
+                                                minOpenMinutes.roundToInt().toString() + " min"
+                                            else -> formatMinutesCompact(
+                                                minOpenMinutes.roundToInt()
+                                            )
+                                        },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Slider(
+                                    value = minOpenMinutes,
+                                    onValueChange = { minOpenMinutes = it },
+                                    valueRange = 0f..180f,
+                                    steps = 5
+                                )
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                                )
+                                Spacer(Modifier.height(10.dp))
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Minimum rating",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Google rating",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    text = if (minRating <= 0f) {
+                                        "Any"
+                                    } else {
+                                        String.format(Locale.US, "%.1f+ ★", minRating)
+                                    },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Slider(
+                                value = minRating,
+                                onValueChange = {
+                                    minRating = (it * 2f).roundToInt() / 2f
+                                },
+                                valueRange = 0f..5f,
+                                steps = 9
+                            )
+                        }
                     }
                 }
             }
 
             item {
                 Text(
-                    text = "All selected criteria must be met. Using filters may result in fewer than 10 matches.",
-                    style = MaterialTheme.typography.bodySmall
+                    text = "Every result must meet every selected condition.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
-
 
             when (val state = searchState) {
                 SearchState.Idle -> Unit
 
                 SearchState.Loading -> {
                     item {
-                        Text(
-                            "Checking current places and real walking routes…"
-                        )
+                        ApplePanel {
+                            Text(
+                                text = "Checking nearby places and walking routes…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
 
                 is SearchState.Error -> {
                     item {
                         Card(
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                         ) {
                             Text(
                                 text = state.message,
-                                modifier = Modifier.padding(14.dp),
+                                modifier = Modifier.padding(16.dp),
                                 color = MaterialTheme.colorScheme.error
                             )
                         }
@@ -1135,51 +1349,134 @@ private fun NearTimeScreen(
             }
 
             item {
-                HorizontalDivider()
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Legal & privacy",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
                     Text(
-                        text = "Privacy policy",
+                        text = "Privacy",
                         color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable {
                             launchExternalUri(context, PRIVACY_POLICY_URL.toUri())
                         }
                     )
                     Text(
-                        text = "Terms of use",
+                        text = "Terms",
                         color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable {
                             launchExternalUri(context, TERMS_OF_USE_URL.toUri())
                         }
                     )
                 }
-                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "No account is required. Location access is optional; you can use another place or address instead.",
-                    style = MaterialTheme.typography.bodySmall
+                    text = "No account required · location is optional",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
             }
 
             item {
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(12.dp))
             }
         }
-
     }
 }
 
 
+
+@Composable
+private fun AppleSectionLabel(text: String) {
+    Text(
+        text = text.uppercase(Locale.ROOT),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+    )
+}
+
+@Composable
+private fun ApplePanel(
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun AppleSegmentedControl(
+    leftLabel: String,
+    rightLabel: String,
+    leftSelected: Boolean,
+    onLeft: () -> Unit,
+    onRight: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant,
+                RoundedCornerShape(13.dp)
+            )
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        listOf(
+            Triple(leftLabel, leftSelected, onLeft),
+            Triple(rightLabel, !leftSelected, onRight)
+        ).forEach { (label, selected, action) ->
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = action),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selected) {
+                        MaterialTheme.colorScheme.surface
+                    } else {
+                        Color.Transparent
+                    }
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Text(
+                    text = label,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 9.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun PlaceTypeSelector(
@@ -1189,28 +1486,41 @@ private fun PlaceTypeSelector(
     var dialogOpen by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "PLACE TYPE",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(6.dp))
-        OutlinedButton(
+        AppleSectionLabel("Place type")
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(58.dp),
-            onClick = { dialogOpen = true }
+                .clickable { dialogOpen = true },
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selectedCategory.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Choose from " + SearchCategory.entries.size.toString() + " place types",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Text(
-                    text = selectedCategory.displayName,
-                    style = MaterialTheme.typography.titleMedium
+                    text = "›",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.headlineSmall
                 )
-                Text("›")
             }
         }
     }
@@ -1280,34 +1590,55 @@ private fun PlaceTypeDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.94f)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxHeight(0.95f)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.background
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
+                Box(
+                    modifier = Modifier
+                        .width(38.dp)
+                        .height(5.dp)
+                        .align(Alignment.CenterHorizontally)
+                        .background(
+                            MaterialTheme.colorScheme.outline,
+                            RoundedCornerShape(10.dp)
+                        )
+                )
+                Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Choose place type",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Browse the list or search by name.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    OutlinedButton(onClick = onDismiss) {
-                        Text("Close")
-                    }
+                    Text(
+                        text = "Place type",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Done",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable(onClick = onDismiss)
+                            .padding(8.dp)
+                    )
                 }
+                Text(
+                    text = "Search or scan the full list.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 Spacer(Modifier.height(12.dp))
 
@@ -1316,8 +1647,8 @@ private fun PlaceTypeDialog(
                     onValueChange = { filterText = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("Search place types") },
-                    placeholder = { Text("e.g. restaurant, pharmacy, park") }
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("Search place types") }
                 )
 
                 Spacer(Modifier.height(10.dp))
@@ -1331,7 +1662,8 @@ private fun PlaceTypeDialog(
                     ) {
                         Text(
                             text = "No matching place type",
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 } else {
@@ -1340,43 +1672,56 @@ private fun PlaceTypeDialog(
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        LazyColumn(
-                            state = listState,
+                        Card(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(end = 16.dp),
-                            contentPadding = PaddingValues(vertical = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                .padding(end = 10.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                         ) {
-                            items(
-                                items = filteredCategories,
-                                key = { it.wireValue }
-                            ) { category ->
-                                val isSelected = category == selectedCategory
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onSelected(category) }
-                                ) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp)
+                            ) {
+                                itemsIndexed(
+                                    items = filteredCategories,
+                                    key = { _, category -> category.wireValue }
+                                ) { index, category ->
+                                    val isSelected = category == selectedCategory
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                                            .clickable { onSelected(category) }
+                                            .padding(vertical = 14.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
                                             text = category.displayName,
                                             style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (isSelected) {
+                                                FontWeight.SemiBold
+                                            } else {
+                                                FontWeight.Normal
+                                            }
                                         )
                                         if (isSelected) {
                                             Text(
-                                                text = "Selected",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary
+                                                text = "✓",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
+                                    }
+                                    if (index < filteredCategories.lastIndex) {
+                                        HorizontalDivider(
+                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                                        )
                                     }
                                 }
                             }
@@ -1388,7 +1733,7 @@ private fun PlaceTypeDialog(
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
                                 .fillMaxHeight()
-                                .width(12.dp)
+                                .width(10.dp)
                         )
                     }
                 }
@@ -1406,63 +1751,85 @@ private fun SearchUsageCard(
     onBuyExtra: () -> Unit,
     onRestore: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = "SEARCHES",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)
+        ) {
             if (quota == null) {
-                Spacer(Modifier.height(8.dp))
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = quotaError ?: "Loading your search allowance…",
-                    style = MaterialTheme.typography.bodySmall
+                    text = quotaError ?: "Loading search allowance…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 return@Column
             }
 
             if (quota.accessMode == "trial") {
                 val isTestingAllowance = quota.trialIncluded > 100
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = if (isTestingAllowance) "TEST MODE" else "FREE SEARCHES",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = if (isTestingAllowance) {
+                                quota.trialUsed.toString() + " of 5 used"
+                            } else {
+                                quota.trialRemaining.toString() + " remaining"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (billing.ready) {
+                        Text(
+                            text = "Restore",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clickable(onClick = onRestore)
+                                .padding(8.dp)
+                        )
+                    }
+                }
 
                 if (isTestingAllowance) {
                     Text(
-                        text = "Free-search test counter",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = quota.trialUsed.toString() + " of 5 used",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Test only · the 5-search limit is not enforced yet.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                } else {
-                    Text(
-                        text = quota.trialRemaining.toString() + " free searches remaining",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = quota.trialUsed.toString() + " of " + quota.trialIncluded.toString() + " used",
-                        style = MaterialTheme.typography.bodySmall
+                        text = "5-search limit is not enforced yet",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 if (!isTestingAllowance && quota.trialRemaining <= 0) {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "30 searches every month · " + billing.monthlyPrice + "/month · auto-renews until cancelled in Google Play.",
-                        style = MaterialTheme.typography.bodySmall
+                        text = "30 searches per month · " +
+                            billing.monthlyPrice + "/month · auto-renews",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(8.dp))
                     Button(
                         modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
                         enabled = !billing.busy,
                         onClick = onSubscribe
                     ) {
@@ -1470,41 +1837,58 @@ private fun SearchUsageCard(
                     }
                 }
             } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "SEARCHES",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = quota.totalAvailable.toString() + " available",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (billing.ready) {
+                        Text(
+                            text = "Restore",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clickable(onClick = onRestore)
+                                .padding(8.dp)
+                        )
+                    }
+                }
                 Text(
-                    text = quota.totalAvailable.toString() + " searches available",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Monthly · " + quota.monthlyUsed.toString() + " of " +
-                        quota.monthlyIncluded.toString() + " used · " +
-                        quota.monthlyRemaining.toString() + " remaining",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = quota.monthlyRemaining.toString() +
+                        " monthly · " + quota.extraRemaining.toString() + " extra",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 quota.billingPeriodEnd?.take(10)?.let { date ->
                     Text(
-                        text = "Monthly allowance resets " + date,
-                        style = MaterialTheme.typography.bodySmall
+                        text = "Resets " + date,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = "Extra searches · " + quota.extraRemaining.toString() + " remaining",
-                    style = MaterialTheme.typography.bodyMedium
-                )
 
                 if (quota.monthlyRemaining <= 0) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "Extra packs require an active subscription and remain available until used.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Spacer(Modifier.height(8.dp))
                     Button(
                         modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
                         enabled = !billing.busy,
                         onClick = onBuyExtra
                     ) {
-                        Text("Get 20 extra searches · " + billing.extraPrice)
+                        Text("20 extra searches · " + billing.extraPrice)
                     }
                 }
             }
@@ -1523,24 +1907,14 @@ private fun SearchUsageCard(
                         color = if (billing.isError) {
                             MaterialTheme.colorScheme.error
                         } else {
-                            MaterialTheme.colorScheme.primary
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )
                 }
-
-            if (billing.ready) {
-                Spacer(Modifier.height(6.dp))
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !billing.busy,
-                    onClick = onRestore
-                ) {
-                    Text("Restore Google Play purchases")
-                }
-            }
         }
     }
 }
+
 @Composable
 private fun LazyListScrollbar(
     state: LazyListState,
@@ -1664,14 +2038,32 @@ private fun PlaceCard(
     onSelect: () -> Unit
 ) {
     val context = LocalContext.current
+    val openColor = if (place.isOpenNow == true) {
+        Color(0xFF2E8B57)
+    } else if (place.isOpenNow == false) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onSelect)
+            .animateContentSize()
+            .clickable(onClick = onSelect),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = if (selected) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
+        } else {
+            null
+        },
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1679,50 +2071,53 @@ private fun PlaceCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(0.76f)
+                    modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = "$rank. ${place.name}",
+                        text = rank.toString() + ". " + place.name,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleLarge
                     )
-
                     Text(
                         text = place.categoryLabel,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
-
+                Spacer(Modifier.width(12.dp))
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "${place.walkMinutes} min",
-                        fontWeight = FontWeight.Bold
+                        text = place.walkMinutes.toString() + " min",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "${place.walkDistanceMeters} m",
-                        style = MaterialTheme.typography.bodySmall
+                        text = place.walkDistanceMeters.toString() + " m",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
+            Spacer(Modifier.height(8.dp))
+
             val ratingLine = buildString {
                 place.rating?.let {
-                    append(String.format(Locale.US, "%.1f ★", it))
+                    append(String.format(Locale.US, "★ %.1f", it))
                 }
                 place.userRatingCount?.let {
-                    if (isNotEmpty()) append(" · ")
-                    append("$it reviews")
+                    if (isNotEmpty()) append("  ·  ")
+                    append(it.toString() + " reviews")
                 }
                 val price = place.priceRangeText ?: place.priceLevel
                 if (!price.isNullOrBlank()) {
-                    if (isNotEmpty()) append(" · ")
+                    if (isNotEmpty()) append("  ·  ")
                     append(price)
                 }
             }
 
             if (ratingLine.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
                 Text(
                     text = ratingLine,
                     style = MaterialTheme.typography.bodyMedium,
@@ -1730,18 +2125,10 @@ private fun PlaceCard(
                 )
             }
 
-            if (place.address.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = place.address,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
             val openText = when (place.isOpenNow) {
                 true -> {
                     place.minutesUntilClose?.let {
-                        "Open now · closes in ${formatMinutesCompact(it)}"
+                        "Open · " + formatMinutesCompact(it) + " remaining"
                     } ?: "Open now"
                 }
                 false -> "Closed now"
@@ -1750,9 +2137,20 @@ private fun PlaceCard(
 
             Text(
                 text = openText,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = if (place.isOpenNow == true) FontWeight.SemiBold else FontWeight.Normal
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = openColor
             )
+
+            if (place.address.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = place.address,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
+            }
 
             if (place.businessStatus == "CLOSED_TEMPORARILY") {
                 Text(
@@ -1762,64 +2160,68 @@ private fun PlaceCard(
                 )
             }
 
-            if (!place.nationalPhoneNumber.isNullOrBlank()) {
-                Text(
-                    text = place.nationalPhoneNumber,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            if (!place.websiteUri.isNullOrBlank()) {
-                Text(
-                    text = "Website",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.clickable {
-                        launchExternalUri(context, place.websiteUri.toUri())
+            AnimatedVisibility(
+                visible = selected,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
+                    if (!place.nationalPhoneNumber.isNullOrBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = place.nationalPhoneNumber,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
-                )
+
+                    if (!place.websiteUri.isNullOrBlank()) {
+                        Text(
+                            text = "Website",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier
+                                .clickable {
+                                    launchExternalUri(context, place.websiteUri.toUri())
+                                }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+
+                    if (place.providerAttributions.isNotEmpty()) {
+                        Text(
+                            text = "Additional data: " +
+                                place.providerAttributions.joinToString(", "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
-            if (place.providerAttributions.isNotEmpty()) {
-                Text(
-                    text = "Additional data: " + place.providerAttributions.joinToString(", "),
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-
-            if (selected) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Selected",
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(8.dp))
-
+            Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
                     modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
                     onClick = {
                         openPlaceInGoogleMaps(context, place)
                     }
                 ) {
-                    Text("Open in Maps")
+                    Text("Maps")
                 }
 
                 Button(
                     modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
                     onClick = {
                         openWalkingDirections(context, place, searchOrigin)
                     }
                 ) {
-                    Text("Show route")
+                    Text("Directions")
                 }
             }
         }
