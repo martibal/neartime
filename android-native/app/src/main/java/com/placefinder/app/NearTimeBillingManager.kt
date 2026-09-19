@@ -90,8 +90,8 @@ internal class NearTimeBillingManager(
                 } else {
                     _state.value = _state.value.copy(
                         ready = false,
-                        message = "Google Play Billing is unavailable in this build/device.",
-                        isError = true
+                        message = null,
+                        isError = false
                     )
                 }
             }
@@ -118,8 +118,8 @@ internal class NearTimeBillingManager(
         billingClient.queryProductDetailsAsync(params) { result, detailsResult ->
             if (result.responseCode != BillingClient.BillingResponseCode.OK) {
                 _state.value = _state.value.copy(
-                    message = "Google Play products are not available yet.",
-                    isError = true
+                    message = null,
+                    isError = false
                 )
                 return@queryProductDetailsAsync
             }
@@ -150,9 +150,7 @@ internal class NearTimeBillingManager(
                 extraPrice = extraPrice,
                 monthlyAvailable = monthlyProduct != null,
                 extraAvailable = extraProduct != null,
-                message = if (monthlyProduct == null || extraProduct == null) {
-                    "Billing is wired, but Play Console products are not published to this build yet."
-                } else null,
+                message = null,
                 isError = false
             )
         }

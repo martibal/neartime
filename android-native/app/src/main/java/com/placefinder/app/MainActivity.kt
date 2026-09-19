@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.padding
@@ -104,7 +105,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-34"
+private const val APP_BUILD_ID = "production-20260919-35"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -295,6 +296,7 @@ private fun NearTimeScreen(
     var openNowOnly by remember { mutableStateOf(true) }
     var minOpenMinutes by remember { mutableFloatStateOf(0f) }
     var minRating by remember { mutableFloatStateOf(0f) }
+    var moreFiltersExpanded by remember { mutableStateOf(false) }
     var resultSort by remember { mutableStateOf(ResultSort.NEAREST) }
 
     var useCurrentLocation by remember { mutableStateOf(true) }
@@ -599,7 +601,49 @@ private fun NearTimeScreen(
         return
     }
 
-    Scaffold { innerPadding ->
+    val searchButtonEnabled =
+        searchState !is SearchState.Loading &&
+            (quotaStatus?.totalAvailable ?: 0) > 0 &&
+            if (useCurrentLocation) {
+                hasLocationPermission
+            } else {
+                customLocation != null
+            }
+
+    val searchButtonText = when {
+        quotaStatus == null -> "Loading search allowance…"
+        quotaStatus?.totalAvailable == 0 -> "No searches remaining"
+        else -> "Find up to 10 places"
+    }
+
+    Scaffold(
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp),
+                    enabled = searchButtonEnabled,
+                    onClick = { runPlaceSearch() }
+                ) {
+                    if (searchState is SearchState.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.height(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(searchButtonText)
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -796,9 +840,9 @@ private fun NearTimeScreen(
 
                     customLocation?.let {
                         Text(
-                            "Using: " + it.title +
-                                if (it.address.isNotBlank()) " · " + it.address else "",
-                            style = MaterialTheme.typography.bodySmall
+                            text = "Using: " + it.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
 
@@ -879,67 +923,92 @@ private fun NearTimeScreen(
                             }
                         )
                     }
+                }
+            }
 
-                    if (openNowOnly) {
-                        Spacer(Modifier.height(18.dp))
+            item {
+                val activeMoreFilters =
+                    (if (minRating > 0f) 1 else 0) +
+                        (if (openNowOnly && minOpenMinutes > 0f) 1 else 0)
+
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { moreFiltersExpanded = !moreFiltersExpanded }
+                ) {
+                    Text(
+                        when {
+                            activeMoreFilters > 0 && moreFiltersExpanded ->
+                                "Hide more filters · $activeMoreFilters active"
+                            activeMoreFilters > 0 ->
+                                "More filters · $activeMoreFilters active"
+                            moreFiltersExpanded ->
+                                "Hide more filters"
+                            else ->
+                                "More filters"
+                        }
+                    )
+                }
+            }
+
+            if (moreFiltersExpanded) {
+                if (openNowOnly) {
+                    item {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                "MINIMUM TIME UNTIL CLOSING",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                if (minOpenMinutes.roundToInt() == 0) {
+                                    "No minimum"
+                                } else if (minOpenMinutes.roundToInt() < 60) {
+                                    "${minOpenMinutes.roundToInt()} min"
+                                } else {
+                                    val hours = minOpenMinutes.roundToInt() / 60
+                                    val minutes = minOpenMinutes.roundToInt() % 60
+                                    if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Slider(
+                                value = minOpenMinutes,
+                                onValueChange = { minOpenMinutes = it },
+                                valueRange = 0f..180f,
+                                steps = 5
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            "MINIMUM TIME UNTIL CLOSING",
+                            "MINIMUM RATING",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            if (minOpenMinutes.roundToInt() == 0) {
-                                "No minimum"
-                            } else if (minOpenMinutes.roundToInt() < 60) {
-                                "${minOpenMinutes.roundToInt()} min"
+                            if (minRating <= 0f) {
+                                "Any"
                             } else {
-                                val hours = minOpenMinutes.roundToInt() / 60
-                                val minutes = minOpenMinutes.roundToInt() % 60
-                                if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
+                                String.format(Locale.US, "%.1f+ ★", minRating)
                             },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Slider(
-                            value = minOpenMinutes,
-                            onValueChange = { minOpenMinutes = it },
-                            valueRange = 0f..180f,
-                            steps = 5
+                            value = minRating,
+                            onValueChange = {
+                                minRating = (it * 2f).roundToInt() / 2f
+                            },
+                            valueRange = 0f..5f,
+                            steps = 9
                         )
                     }
-                }
-            }
-
-            item {
-                HorizontalDivider()
-            }
-
-            item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "MINIMUM RATING",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        if (minRating <= 0f) {
-                            "Any"
-                        } else {
-                            String.format(Locale.US, "%.1f+ ★", minRating)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Slider(
-                        value = minRating,
-                        onValueChange = {
-                            minRating = (it * 2f).roundToInt() / 2f
-                        },
-                        valueRange = 0f..5f,
-                        steps = 9
-                    )
                 }
             }
 
@@ -950,42 +1019,6 @@ private fun NearTimeScreen(
                 )
             }
 
-            item {
-                Spacer(Modifier.height(8.dp))
-            }
-
-            item {
-                Button(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(58.dp),
-                    enabled = searchState !is SearchState.Loading &&
-                        (quotaStatus?.totalAvailable ?: 0) > 0 &&
-                        if (useCurrentLocation) {
-                            hasLocationPermission
-                        } else {
-                            customLocation != null
-                        },
-                    onClick = {
-                        runPlaceSearch()
-                    }
-                ) {
-                    if (searchState is SearchState.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.height(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            when {
-                                quotaStatus == null -> "Loading search allowance…"
-                                quotaStatus?.totalAvailable == 0 -> "No searches remaining"
-                                else -> "Find up to 10 places"
-                            }
-                        )
-                    }
-                }
-            }
 
             when (val state = searchState) {
                 SearchState.Idle -> Unit
@@ -1307,17 +1340,26 @@ private fun SearchUsageCard(
             }
 
             if (quota.accessMode == "trial") {
+                val isTestingAllowance = quota.trialIncluded > 100
+
                 Text(
-                    text = quota.trialRemaining.toString() + " free searches remaining",
+                    text = if (isTestingAllowance) {
+                        "Free searches available"
+                    } else {
+                        quota.trialRemaining.toString() + " free searches remaining"
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = quota.trialUsed.toString() + " of " + quota.trialIncluded.toString() + " used",
-                    style = MaterialTheme.typography.bodySmall
-                )
 
-                if (quota.trialRemaining <= 0) {
+                if (!isTestingAllowance) {
+                    Text(
+                        text = quota.trialUsed.toString() + " of " + quota.trialIncluded.toString() + " used",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                if (!isTestingAllowance && quota.trialRemaining <= 0) {
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = "30 searches every month · " + billing.monthlyPrice + "/month · auto-renews until cancelled in Google Play.",
@@ -1371,26 +1413,34 @@ private fun SearchUsageCard(
                 }
             }
 
-            billing.message?.let { message ->
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (billing.isError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.primary
-                    }
-                )
-            }
+            billing.message
+                ?.takeIf { message ->
+                    !message.contains("unavailable in this build/device", ignoreCase = true) &&
+                        !message.contains("not published to this build yet", ignoreCase = true) &&
+                        !message.contains("products are not available yet", ignoreCase = true)
+                }
+                ?.let { message ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (billing.isError) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+                }
 
-            Spacer(Modifier.height(6.dp))
-            OutlinedButton(
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !billing.busy,
-                onClick = onRestore
-            ) {
-                Text("Restore Google Play purchases")
+            if (billing.ready) {
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !billing.busy,
+                    onClick = onRestore
+                ) {
+                    Text("Restore Google Play purchases")
+                }
             }
         }
     }
