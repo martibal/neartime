@@ -30,10 +30,10 @@ class Monitor(tk.Tk):
         self.quota_frame=quota
         self.quota_note=tk.StringVar(value="")
         ttk.Label(self,textvariable=self.quota_note,padding=(14,1)).pack(anchor="w")
-        cols=("time","category","minutes","results","provider","places","routed","cost","status")
+        cols=("time","category","minutes","results","provider","places","routed","cost","attempt","status")
         self.tree=ttk.Treeview(self,columns=cols,show="headings")
-        headings=("Time","Category","Min","Results","Provider","Places","Routed","Cost NOK","Status")
-        widths=(145,180,50,60,115,60,65,80,190)
+        headings=("Time","Category","Min","Results","Provider","Places","Routed","Cost NOK","Attempt","Status")
+        widths=(140,165,45,55,105,55,60,75,120,175)
         for c,h,w in zip(cols,headings,widths):
             self.tree.heading(c,text=h); self.tree.column(c,width=w,anchor="center")
         self.tree.column("category",anchor="w"); self.tree.column("status",anchor="w")
@@ -97,9 +97,10 @@ class Monitor(tk.Tk):
                 else:
                     provider="—"
                 places_calls=nearby+text_calls
+                attempt=x.get("provider_attempt_state","")
                 self.tree.insert("", "end", values=(stamp,x.get("category",""),x.get("max_walk_minutes",""),
                     x.get("result_count",""),provider,places_calls,routed,
-                    f'{float(x.get("estimated_cost_nok",0)):.3f}',x.get("result_status","")))
+                    f'{float(x.get("estimated_cost_nok",0)):.3f}',attempt,x.get("result_status","")))
         except Exception as e:
             self.vars["status"].set("Read error: "+str(e))
         self.after(REFRESH_MS,self.refresh)

@@ -10,7 +10,7 @@
  * - conservative hard provider COGS ceiling: NOK 0.30
  * - result order: measured pedestrian route distance
  * - fail closed when the Top 10 cannot be proven inside the cost ceiling
- */ const BUILD_ID = '2026-09-19-google-cost-ledger-v38';
+ */ const BUILD_ID = '2026-09-19-provider-attempt-ledger-v39';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -647,7 +647,7 @@ function googlePriceLevelText(level) {
   };
   return map[String(level || '')] || null;
 }
-async function search(_tomTomKey, raw) {
+async function search(_tomTomKey, raw, beforeProviderAttempt) {
   const input = validateSearch(raw);
   const key = await requireGooglePlacesKey();
   const includedTypes = GOOGLE_CATEGORY_TYPES[input.category];
@@ -717,6 +717,15 @@ async function search(_tomTomKey, raw) {
       requestBody.openNow = true;
     }
 
+    if (beforeProviderAttempt) {
+      await beforeProviderAttempt({
+        googleNearbyCalls: 0,
+        googleTextCalls: 1,
+        googleRoutingSummaryPlaces: 0,
+        conservativeCostNok: GOOGLE_SEARCH_COST_NOK,
+        costCapNok: SEARCH_COST_CAP_NOK
+      });
+    }
     payload = await fetchJson(
       'https://places.googleapis.com/v1/places:searchText',
       {
@@ -728,6 +737,15 @@ async function search(_tomTomKey, raw) {
     );
     discoverySource = 'GOOGLE_PLACES_TEXT_SEARCH_NEW_MIN_RATING';
   } else {
+    if (beforeProviderAttempt) {
+      await beforeProviderAttempt({
+        googleNearbyCalls: 1,
+        googleTextCalls: 0,
+        googleRoutingSummaryPlaces: 0,
+        conservativeCostNok: GOOGLE_SEARCH_COST_NOK,
+        costCapNok: SEARCH_COST_CAP_NOK
+      });
+    }
     payload = await fetchJson(
       'https://places.googleapis.com/v1/places:searchNearby',
       {
@@ -1112,12 +1130,38 @@ async function quotaSearch(body, requestId) {
   const reservationId = clean(authorization.reservation_id);
   if (!reservationId) throw new Error('SEARCH_QUOTA_RESERVATION_MISSING');
 
+  let providerAttemptRecorded = false;
+  let providerAttemptUsage = null;
+
+  const recordProviderAttempt = async (usage) => {
+    providerAttemptUsage = usage;
+    await idempotencyRpc('neartime_record_search_cost_v3', {
+      p_request_id: requestId,
+      p_category: clean(body?.category) || clean(body?.categoryId) || 'unknown',
+      p_max_walk_minutes: Number(body?.maxWalkMinutes) || 0,
+      p_open_now_only: Boolean(body?.openNowOnly),
+      p_result_status: 'PROVIDER_ATTEMPTED',
+      p_result_count: 0,
+      p_google_nearby_calls: Number(usage.googleNearbyCalls) || 0,
+      p_google_text_calls: Number(usage.googleTextCalls) || 0,
+      p_google_routing_summary_places: 0,
+      p_tomtom_discover_calls: 0,
+      p_tomtom_route_calls: 0,
+      p_estimated_cost_nok: Number(usage.conservativeCostNok) || GOOGLE_SEARCH_COST_NOK,
+      p_cost_cap_nok: Number(usage.costCapNok) || SEARCH_COST_CAP_NOK,
+      p_build_id: BUILD_ID,
+      p_provider_attempt_state: 'attempted',
+      p_error_code: null
+    });
+    providerAttemptRecorded = true;
+  };
+
   try {
-    const result = await search(null, body);
+    const result = await search(null, body, recordProviderAttempt);
     const usage = result?.usage?.thisSearch || {};
 
     try {
-      await idempotencyRpc('neartime_record_search_cost_v2', {
+      await idempotencyRpc('neartime_record_search_cost_v3', {
         p_request_id: requestId,
         p_category: clean(body?.category) || clean(body?.categoryId) || 'unknown',
         p_max_walk_minutes: Number(body?.maxWalkMinutes) || 0,
@@ -1131,7 +1175,9 @@ async function quotaSearch(body, requestId) {
         p_tomtom_route_calls: Number(usage.tomtomRoute) || 0,
         p_estimated_cost_nok: Number(usage.conservativeCostNok) || 0,
         p_cost_cap_nok: Number(usage.costCapNok) || SEARCH_COST_CAP_NOK,
-        p_build_id: BUILD_ID
+        p_build_id: BUILD_ID,
+        p_provider_attempt_state: 'succeeded',
+        p_error_code: null
       });
     } catch (ledgerError) {
       console.error('COST_LEDGER_WRITE_FAILED', ledgerError);
@@ -1149,6 +1195,32 @@ async function quotaSearch(body, requestId) {
       quota: await usageStatus(body, entitlementHash)
     };
   } catch (error) {
+    if (providerAttemptRecorded) {
+      try {
+        const usage = providerAttemptUsage || {};
+        await idempotencyRpc('neartime_record_search_cost_v3', {
+          p_request_id: requestId,
+          p_category: clean(body?.category) || clean(body?.categoryId) || 'unknown',
+          p_max_walk_minutes: Number(body?.maxWalkMinutes) || 0,
+          p_open_now_only: Boolean(body?.openNowOnly),
+          p_result_status: 'PROVIDER_FAILED_AFTER_ATTEMPT',
+          p_result_count: 0,
+          p_google_nearby_calls: Number(usage.googleNearbyCalls) || 0,
+          p_google_text_calls: Number(usage.googleTextCalls) || 0,
+          p_google_routing_summary_places: 0,
+          p_tomtom_discover_calls: 0,
+          p_tomtom_route_calls: 0,
+          p_estimated_cost_nok: Number(usage.conservativeCostNok) || GOOGLE_SEARCH_COST_NOK,
+          p_cost_cap_nok: Number(usage.costCapNok) || SEARCH_COST_CAP_NOK,
+          p_build_id: BUILD_ID,
+          p_provider_attempt_state: 'failed_after_attempt',
+          p_error_code: clean(error && error.message) || 'SEARCH_FAILED'
+        });
+      } catch (ledgerError) {
+        console.error('COST_LEDGER_FAILURE_UPDATE_FAILED', ledgerError);
+      }
+    }
+
     try {
       await idempotencyRpc('neartime_finish_search_v2', {
         p_reservation_id: reservationId,

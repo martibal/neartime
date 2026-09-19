@@ -62,10 +62,14 @@ Custom-origin lookup is a separate, explicitly user-triggered path:
 
 These calls are tracked separately from normal Google POI searches.
 
-## Retry and idempotency
+## Retry, idempotency and provider-attempt accounting
 
 - One explicit user search maps to one logical search reservation.
 - Logical idempotency prevents duplicate quota consumption for the same request id.
+- Immediately before a Google Places request is sent, NearTime writes a conservative provider-attempt row to the cost ledger.
+- If that ledger write fails, the Google request is not sent.
+- Once the attempt row exists, the NOK 0.40 conservative amount remains accounted for even if the Google request later times out, returns invalid data, or the function fails before a normal result is produced.
+- Successful completion upgrades the attempt row to `succeeded`; a caught post-send failure upgrades it to `failed_after_attempt`. An unresolved `attempted` row remains conservatively counted if execution terminates before finalization.
 - NearTime does not intentionally add a second paid provider request as a retry/fill mechanism.
 - Cost telemetry is internal and must never be shown as customer-facing result copy.
 
