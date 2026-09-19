@@ -105,7 +105,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-35"
+private const val APP_BUILD_ID = "production-20260919-36"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -302,6 +302,8 @@ private fun NearTimeScreen(
     var useCurrentLocation by remember { mutableStateOf(true) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var currentLocationLabel by remember { mutableStateOf<String?>(null) }
+    var currentLocationLookupFinished by remember { mutableStateOf(false) }
+    var infoDialogMessage by remember { mutableStateOf<String?>(null) }
     var customLocation by remember { mutableStateOf<ResolvedLocation?>(null) }
     var customLocationText by remember { mutableStateOf("") }
     var locationSuggestions by remember { mutableStateOf<List<LocationSuggestion>>(emptyList()) }
@@ -343,12 +345,14 @@ private fun NearTimeScreen(
     }
 
     LaunchedEffect(hasLocationPermission, permissionRevision) {
+        currentLocationLookupFinished = false
         if (hasLocationPermission) {
             currentLocation = resolveCurrentLocation(context)
         } else {
             currentLocation = null
             currentLocationLabel = null
         }
+        currentLocationLookupFinished = true
     }
 
     LaunchedEffect(currentLocation?.latitude, currentLocation?.longitude) {
@@ -363,12 +367,14 @@ private fun NearTimeScreen(
     fun refreshGps() {
         scope.launch {
             locationError = null
-            try {
-                currentLocation = resolveCurrentLocation(context)
-                    ?: throw IllegalStateException("GPS position is not available.")
+            currentLocationLookupFinished = false
+            currentLocation = try {
+                resolveCurrentLocation(context)
             } catch (e: Exception) {
-                locationError = e.message ?: "Could not read GPS position."
+                Log.w(LOG_TAG, "LOCATION_LOOKUP_FAILED build=$APP_BUILD_ID", e)
+                null
             }
+            currentLocationLookupFinished = true
         }
     }
 
@@ -383,6 +389,19 @@ private fun NearTimeScreen(
 
     fun runPlaceSearch() {
         scope.launch {
+            if (useCurrentLocation && currentLocation == null) {
+                infoDialogMessage =
+                    "Please select a starting position before searching. " +
+                    "Try Current location again or choose Other place."
+                return@launch
+            }
+
+            if (!useCurrentLocation && customLocation == null) {
+                infoDialogMessage =
+                    "Please select a starting position before searching."
+                return@launch
+            }
+
             val allowance = quotaStatus
             if (allowance == null) {
                 searchState = SearchState.Error("Search allowance is still loading.")
@@ -406,10 +425,22 @@ private fun NearTimeScreen(
             try {
                 val origin = if (useCurrentLocation) {
                     resolveCurrentLocation(context)
-                        ?: throw IllegalStateException("Current GPS position is not available yet.")
+                        ?: currentLocation
+                        ?: run {
+                            infoDialogMessage =
+                                "Please select a starting position before searching. " +
+                                "Try Current location again or choose Other place."
+                            searchState = SearchState.Idle
+                            return@launch
+                        }
                 } else {
                     customLocation?.let { GeoPoint(it.latitude, it.longitude) }
-                    ?: throw IllegalStateException("Choose a start location first.")
+                        ?: run {
+                            infoDialogMessage =
+                                "Please select a starting position before searching."
+                            searchState = SearchState.Idle
+                            return@launch
+                        }
                 }
 
                 if (useCurrentLocation) {
@@ -471,9 +502,40 @@ private fun NearTimeScreen(
                 }.getOrNull()?.let { quotaStatus = it }
 
                 searchState = SearchState.Error(
-                    "$APP_BUILD_ID · ${e::class.java.simpleName}: " +
-                        (e.message ?: "Search failed.")
+                    "Search could not be completed. Please try again."
                 )
+            }
+        }
+    }
+
+    infoDialogMessage?.let { message ->
+        Dialog(
+            onDismissRequest = { infoDialogMessage = null }
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp)
+                ) {
+                    Text(
+                        text = "Starting position required",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { infoDialogMessage = null }
+                    ) {
+                        Text("OK")
+                    }
+                }
             }
         }
     }
@@ -717,15 +779,38 @@ private fun NearTimeScreen(
                     if (hasLocationPermission) {
                         Text(
                             text = when {
-                                currentLocation == null -> "Locating your current position…"
+                                !currentLocationLookupFinished ->
+                                    "Locating your current position…"
+                                currentLocation == null ->
+                                    "Current location is not available."
                                 !currentLocationLabel.isNullOrBlank() ->
                                     "● Using your location · $currentLocationLabel"
-                                else -> "● Using your current GPS location"
+                                else ->
+                                    "● Using your current GPS location"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = if (
+                                currentLocationLookupFinished &&
+                                currentLocation == null
+                            ) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
                             maxLines = 1
                         )
+
+                        if (
+                            currentLocationLookupFinished &&
+                            currentLocation == null
+                        ) {
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedButton(
+                                onClick = { refreshGps() }
+                            ) {
+                                Text("Try current location again")
+                            }
+                        }
                     } else {
                         Text(
                             text = "NearTime uses your location only when Current location is selected. " +
