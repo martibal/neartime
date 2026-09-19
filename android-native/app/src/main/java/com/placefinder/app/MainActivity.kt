@@ -83,6 +83,13 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.net.toUri
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -106,7 +113,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-38"
+private const val APP_BUILD_ID = "production-20260919-39"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -305,6 +312,11 @@ private fun NearTimeScreen(
     var currentLocationLabel by remember { mutableStateOf<String?>(null) }
     var currentLocationLookupFinished by remember { mutableStateOf(false) }
     var infoDialogMessage by remember { mutableStateOf<String?>(null) }
+    var mapPickerOpen by remember { mutableStateOf(false) }
+    var mapPickerPoint by remember { mutableStateOf<GeoPoint?>(null) }
+    var mapPickerInitialCenter by remember {
+        mutableStateOf(GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE))
+    }
     var customLocation by remember { mutableStateOf<ResolvedLocation?>(null) }
     var customLocationText by remember { mutableStateOf("") }
     var locationSuggestions by remember { mutableStateOf<List<LocationSuggestion>>(emptyList()) }
@@ -505,6 +517,155 @@ private fun NearTimeScreen(
                 searchState = SearchState.Error(
                     "Search could not be completed. Please try again."
                 )
+            }
+        }
+    }
+
+    if (mapPickerOpen) {
+        val cameraPositionState = rememberCameraPositionState {
+            position = CameraPosition.fromLatLngZoom(
+                LatLng(
+                    mapPickerInitialCenter.latitude,
+                    mapPickerInitialCenter.longitude
+                ),
+                15f
+            )
+        }
+
+        Dialog(
+            onDismissRequest = {
+                mapPickerOpen = false
+                mapPickerPoint = null
+            },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            Card(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Choose starting point",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Move around the map and tap where you want the search to start.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        GoogleMap(
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPositionState = cameraPositionState,
+                            uiSettings = MapUiSettings(
+                                zoomControlsEnabled = false,
+                                mapToolbarEnabled = false
+                            ),
+                            onMapClick = { latLng ->
+                                mapPickerPoint = GeoPoint(
+                                    latitude = latLng.latitude,
+                                    longitude = latLng.longitude
+                                )
+                            }
+                        ) {
+                            mapPickerPoint?.let { point ->
+                                Marker(
+                                    state = MarkerState(
+                                        position = LatLng(
+                                            point.latitude,
+                                            point.longitude
+                                        )
+                                    ),
+                                    title = "Starting point"
+                                )
+                            }
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        mapPickerPoint?.let {
+                            Text(
+                                text = "Starting point selected",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = mapPickerPoint != null,
+                            onClick = {
+                                val point = mapPickerPoint ?: return@Button
+
+                                customLocation = ResolvedLocation(
+                                    title = "Selected map point",
+                                    address = "",
+                                    latitude = point.latitude,
+                                    longitude = point.longitude
+                                )
+                                customLocationText = "Selected map point"
+                                useCurrentLocation = false
+                                locationSuggestions = emptyList()
+                                locationError = null
+                                mapPickerOpen = false
+                                mapPickerPoint = null
+
+                                scope.launch {
+                                    val label = reverseGeocodeLocationLabel(
+                                        context = context,
+                                        point = point
+                                    )
+                                    if (!label.isNullOrBlank()) {
+                                        val active = customLocation
+                                        if (
+                                            active != null &&
+                                            active.latitude == point.latitude &&
+                                            active.longitude == point.longitude
+                                        ) {
+                                            customLocation = active.copy(
+                                                title = label,
+                                                address = label
+                                            )
+                                            customLocationText = label
+                                        }
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Use this location")
+                        }
+
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                mapPickerOpen = false
+                                mapPickerPoint = null
+                            }
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                }
             }
         }
     }
@@ -774,6 +935,30 @@ private fun NearTimeScreen(
                         },
                         label = { Text("Other place") }
                     )
+                }
+
+                Spacer(Modifier.height(6.dp))
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        val existingCustom = customLocation?.let {
+                            GeoPoint(
+                                latitude = it.latitude,
+                                longitude = it.longitude
+                            )
+                        }
+                        mapPickerInitialCenter =
+                            existingCustom
+                                ?: currentLocation
+                                ?: GeoPoint(
+                                    DEFAULT_LATITUDE,
+                                    DEFAULT_LONGITUDE
+                                )
+                        mapPickerPoint = null
+                        mapPickerOpen = true
+                    }
+                ) {
+                    Text("Choose on map")
                 }
 
                 if (useCurrentLocation) {
