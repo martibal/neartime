@@ -116,7 +116,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-30"
+private const val APP_BUILD_ID = "production-20260919-31"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -180,6 +180,11 @@ private enum class SearchCategory(
     VETERINARY("veterinary", "Veterinary"),
     PET_CARE("pet_care", "Pet care"),
     PET_STORES("pet_stores", "Pet stores")
+}
+
+private enum class ResultSort {
+    NEAREST,
+    HIGHEST_RATED
 }
 
 private data class GeoPoint(
@@ -306,6 +311,8 @@ private fun NearTimeScreen(
     var maxWalkMinutes by remember { mutableFloatStateOf(15f) }
     var openNowOnly by remember { mutableStateOf(true) }
     var minOpenMinutes by remember { mutableFloatStateOf(0f) }
+    var minRating by remember { mutableFloatStateOf(0f) }
+    var resultSort by remember { mutableStateOf(ResultSort.NEAREST) }
 
     var useCurrentLocation by remember { mutableStateOf(true) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
@@ -432,6 +439,7 @@ private fun NearTimeScreen(
 
             searchState = SearchState.Loading
             selectedPlace = null
+            resultSort = ResultSort.NEAREST
 
             try {
                 val origin = if (useCurrentLocation) {
@@ -454,6 +462,7 @@ private fun NearTimeScreen(
                     maxWalkMinutes = maxWalkMinutes.roundToInt(),
                     openNowOnly = openNowOnly,
                     minOpenMinutes = if (openNowOnly) minOpenMinutes.roundToInt() else 0,
+                    minRating = minRating.toDouble(),
                     installHash = installHash,
                     entitlementSession = billingUiState.entitlementSession
                 )
@@ -473,6 +482,10 @@ private fun NearTimeScreen(
                     // confirmed-closed places are already excluded there; unknown hours
                     // must not be silently treated as closed by the Android client.
                     .filter { !openNowOnly || it.isOpenNow == true }
+                    .filter {
+                        minRating <= 0f ||
+                            (it.rating != null && it.rating >= minRating.toDouble())
+                    }
                     .sortedWith(
                         compareBy<PlaceResult> { it.walkDistanceMeters }
                             .thenBy { it.walkSeconds }
@@ -506,6 +519,24 @@ private fun NearTimeScreen(
     val successOverlay = searchState as? SearchState.Success
 
     if (successOverlay != null) {
+        val displayedPlaces = when (resultSort) {
+            ResultSort.NEAREST ->
+                successOverlay.response.places.sortedWith(
+                    compareBy<PlaceResult> { it.walkDistanceMeters }
+                        .thenBy { it.walkSeconds }
+                        .thenBy { it.name.lowercase(Locale.ROOT) }
+                )
+
+            ResultSort.HIGHEST_RATED ->
+                successOverlay.response.places.sortedWith(
+                    compareByDescending<PlaceResult> { it.rating != null }
+                        .thenByDescending { it.rating ?: -1.0 }
+                        .thenByDescending { it.userRatingCount ?: -1 }
+                        .thenBy { it.walkDistanceMeters }
+                        .thenBy { it.walkSeconds }
+                )
+        }
+
         Scaffold { innerPadding ->
             Column(
                 modifier = Modifier
@@ -524,10 +555,32 @@ private fun NearTimeScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "${successOverlay.response.places.size} places within walking limit",
+                    text = "${displayedPlaces.size} places match all selected criteria",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = resultSort == ResultSort.NEAREST,
+                        onClick = {
+                            resultSort = ResultSort.NEAREST
+                            scope.launch { resultListState.scrollToItem(0) }
+                        },
+                        label = { Text("Nearest") }
+                    )
+                    FilterChip(
+                        selected = resultSort == ResultSort.HIGHEST_RATED,
+                        onClick = {
+                            resultSort = ResultSort.HIGHEST_RATED
+                            scope.launch { resultListState.scrollToItem(0) }
+                        },
+                        label = { Text("Highest rated") }
+                    )
+                }
                 if (successOverlay.response.exhaustedCandidates) {
                     Text(
                         "Fewer than 10 places could be established within the walking-time limit.",
@@ -557,7 +610,7 @@ private fun NearTimeScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         itemsIndexed(
-                            items = successOverlay.response.places,
+                            items = displayedPlaces,
                             key = { _, place -> place.id }
                         ) { index, place ->
                             PlaceCard(
@@ -571,7 +624,7 @@ private fun NearTimeScreen(
                     }
                     LazyListScrollbar(
                         state = resultListState,
-                        itemCount = successOverlay.response.places.size,
+                        itemCount = displayedPlaces.size,
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .fillMaxHeight()
@@ -1007,7 +1060,46 @@ private fun NearTimeScreen(
             }
 
             item {
-                Spacer(Modifier.height(18.dp))
+                HorizontalDivider()
+            }
+
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "MINIMUM RATING",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        if (minRating <= 0f) {
+                            "Any"
+                        } else {
+                            String.format(Locale.US, "%.1f+ ★", minRating)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Slider(
+                        value = minRating,
+                        onValueChange = {
+                            minRating = (it * 2f).roundToInt() / 2f
+                        },
+                        valueRange = 0f..5f,
+                        steps = 9
+                    )
+                }
+            }
+
+            item {
+                Text(
+                    text = "All selected criteria must be met. Using filters may result in fewer than 10 matches.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
             }
 
             item {
@@ -1592,6 +1684,7 @@ private suspend fun searchBackend(
     maxWalkMinutes: Int,
     openNowOnly: Boolean,
     minOpenMinutes: Int,
+    minRating: Double,
     installHash: String,
     entitlementSession: String?
 ): SearchResponse = withContext(Dispatchers.IO) {
@@ -1606,6 +1699,7 @@ private suspend fun searchBackend(
             .put("maxWalkMinutes", maxWalkMinutes)
             .put("openNowOnly", openNowOnly)
             .put("minOpenMinutes", minOpenMinutes)
+            .put("minRating", minRating)
             .put("installHash", installHash)
             .apply {
                 if (!entitlementSession.isNullOrBlank()) {
