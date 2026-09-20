@@ -1,4 +1,4 @@
-# NearTime native Google Play billing
+# WayNear native Google Play billing
 
 Current Android monetization model:
 
@@ -33,7 +33,7 @@ Before production, restore the backend trial limit to 5 and verify that the same
 
 ## Security boundary
 
-The client cannot grant paid searches itself. Google Play purchase tokens are sent to NearTime's backend and verified with Google before an entitlement session or top-up is granted. The backend persists pseudonymous/HMAC-derived purchase/entitlement identifiers rather than using a NearTime email/login identity.
+The client cannot grant paid searches itself. Google Play purchase tokens are sent to WayNear's backend and verified with Google before an entitlement session or top-up is granted. The backend persists pseudonymous/HMAC-derived purchase/entitlement identifiers rather than using a WayNear email/login identity.
 
 The Supabase search gate authorizes quota before the Google Places provider call.
 
