@@ -54,6 +54,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -119,7 +120,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-53"
+private const val APP_BUILD_ID = "production-20260920-54"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
     onPrimary = Color(0xFFFFFFFF),
@@ -1434,7 +1435,22 @@ private fun NearTimeScreen(
                         value = maxWalkMinutes,
                         onValueChange = { maxWalkMinutes = it },
                         valueRange = 5f..30f,
-                        steps = 24
+                        steps = 24,
+                        colors = SliderDefaults.colors(
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                            inactiveTrackColor = if (darkMode) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
+                            } else {
+                                Color(0xFFB9AED2)
+                            },
+                            inactiveTickColor = if (darkMode) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+                            } else {
+                                Color(0xFF6F648F)
+                            }
+                        )
                     )
                 }
             }
@@ -1507,7 +1523,22 @@ private fun NearTimeScreen(
                             value = minOpenMinutes,
                             onValueChange = { minOpenMinutes = it },
                             valueRange = 0f..180f,
-                            steps = 5
+                            steps = 5,
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                                inactiveTrackColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
+                                } else {
+                                    Color(0xFFB9AED2)
+                                },
+                                inactiveTickColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+                                } else {
+                                    Color(0xFF6F648F)
+                                }
+                            )
                         )
                     }
                 }
@@ -1550,7 +1581,22 @@ private fun NearTimeScreen(
                             minRating = (it * 2f).roundToInt() / 2f
                         },
                         valueRange = 0f..5f,
-                        steps = 9
+                        steps = 9,
+                        colors = SliderDefaults.colors(
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                            inactiveTrackColor = if (darkMode) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
+                            } else {
+                                Color(0xFFB9AED2)
+                            },
+                            inactiveTickColor = if (darkMode) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+                            } else {
+                                Color(0xFF6F648F)
+                            }
+                        )
                     )
                 }
             }
