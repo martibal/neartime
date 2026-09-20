@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-41"
+private const val APP_BUILD_ID = "production-20260920-42"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -2738,12 +2738,16 @@ private suspend fun reverseGeocodeLocationLabel(
             result.subThoroughfare?.trim()?.takeIf { it.isNotEmpty() }
         ).joinToString(" ")
 
+        val city = listOfNotNull(
+            result.locality?.trim()?.takeIf { it.isNotEmpty() },
+            result.subAdminArea?.trim()?.takeIf { it.isNotEmpty() },
+            result.adminArea?.trim()?.takeIf { it.isNotEmpty() }
+        ).firstOrNull()
+
         val postalCity = listOfNotNull(
             result.postalCode?.trim()?.takeIf { it.isNotEmpty() },
-            result.locality?.trim()?.takeIf { it.isNotEmpty() }
+            city
         ).joinToString(" ")
-
-        val city = result.locality?.trim()?.takeIf { it.isNotEmpty() }
 
         when {
             street.isNotBlank() && postalCity.isNotBlank() ->
