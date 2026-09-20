@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-43"
+private const val APP_BUILD_ID = "production-20260920-44"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -182,7 +182,9 @@ private enum class SearchCategory(
 
 private enum class ResultSort {
     NEAREST,
-    HIGHEST_RATED
+    HIGHEST_RATED,
+    LONGEST_OPEN,
+    LOWEST_PRICE
 }
 
 private data class GeoPoint(
@@ -228,6 +230,31 @@ private data class PlaceResult(
     val walkMinutes: Int,
     val walkDistanceMeters: Int
 )
+
+private fun PlaceResult.priceSortKey(): Double? {
+    val level = priceLevel?.trim()?.uppercase(Locale.ROOT)
+
+    val levelRank = when {
+        level.isNullOrBlank() -> null
+        "FREE" in level -> 0.0
+        "INEXPENSIVE" in level -> 1.0
+        "MODERATE" in level -> 2.0
+        "VERY_EXPENSIVE" in level -> 4.0
+        "EXPENSIVE" in level -> 3.0
+        else -> null
+    }
+
+    if (levelRank != null) {
+        return levelRank
+    }
+
+    val firstNumericPrice = priceRangeText
+        ?.replace(',', '.')
+        ?.let { Regex("""\d+(?:\.\d+)?""").find(it)?.value }
+        ?.toDoubleOrNull()
+
+    return firstNumericPrice
+}
 
 private data class SearchQuotaStatus(
     val accessMode: String,
@@ -729,6 +756,22 @@ private fun NearTimeScreen(
                             .thenBy { it.walkDistanceMeters }
                             .thenBy { it.walkSeconds }
                     )
+
+                ResultSort.LONGEST_OPEN ->
+                    successOverlay.response.places.sortedWith(
+                        compareByDescending<PlaceResult> { it.minutesUntilClose != null }
+                            .thenByDescending { it.minutesUntilClose ?: -1 }
+                            .thenBy { it.walkDistanceMeters }
+                            .thenBy { it.walkSeconds }
+                    )
+
+                ResultSort.LOWEST_PRICE ->
+                    successOverlay.response.places.sortedWith(
+                        compareByDescending<PlaceResult> { it.priceSortKey() != null }
+                            .thenBy { it.priceSortKey() ?: Double.MAX_VALUE }
+                            .thenBy { it.walkDistanceMeters }
+                            .thenBy { it.walkSeconds }
+                    )
             }
         }
 
@@ -754,12 +797,25 @@ private fun NearTimeScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "SORT THESE RESULTS",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Sorting only reorders these ${successOverlay.response.places.size} matches. It does not run a new search.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
+                        modifier = Modifier.weight(1f),
                         selected = resultSort == ResultSort.NEAREST,
                         onClick = {
                             resultSort = ResultSort.NEAREST
@@ -768,12 +824,47 @@ private fun NearTimeScreen(
                         label = { Text("Nearest") }
                     )
                     FilterChip(
+                        modifier = Modifier.weight(1f),
                         selected = resultSort == ResultSort.HIGHEST_RATED,
                         onClick = {
                             resultSort = ResultSort.HIGHEST_RATED
                             scope.launch { resultListState.scrollToItem(0) }
                         },
-                        label = { Text("Highest rated in results") }
+                        label = { Text("Highest rated") }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val hasOpeningTimeData =
+                        successOverlay.response.places.any { it.minutesUntilClose != null }
+                    val hasPriceData =
+                        successOverlay.response.places.any { it.priceSortKey() != null }
+
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = resultSort == ResultSort.LONGEST_OPEN,
+                        enabled = hasOpeningTimeData,
+                        onClick = {
+                            resultSort = ResultSort.LONGEST_OPEN
+                            scope.launch { resultListState.scrollToItem(0) }
+                        },
+                        label = {
+                            Text(if (hasOpeningTimeData) "Open longest" else "Opening time unavailable")
+                        }
+                    )
+                    FilterChip(
+                        modifier = Modifier.weight(1f),
+                        selected = resultSort == ResultSort.LOWEST_PRICE,
+                        enabled = hasPriceData,
+                        onClick = {
+                            resultSort = ResultSort.LOWEST_PRICE
+                            scope.launch { resultListState.scrollToItem(0) }
+                        },
+                        label = {
+                            Text(if (hasPriceData) "Lowest price" else "Price unavailable")
+                        }
                     )
                 }
                 if (successOverlay.response.exhaustedCandidates) {
@@ -1330,10 +1421,47 @@ private fun NearTimeScreen(
                 }
             }
 
+            if (openNowOnly) {
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "STAY OPEN FOR AT LEAST",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Choose how much longer each place must remain open.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (minOpenMinutes.roundToInt() == 0) {
+                                "No minimum"
+                            } else if (minOpenMinutes.roundToInt() < 60) {
+                                "${minOpenMinutes.roundToInt()} min"
+                            } else {
+                                val hours = minOpenMinutes.roundToInt() / 60
+                                val minutes = minOpenMinutes.roundToInt() % 60
+                                if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Slider(
+                            value = minOpenMinutes,
+                            onValueChange = { minOpenMinutes = it },
+                            valueRange = 0f..180f,
+                            steps = 5
+                        )
+                    }
+                }
+            }
+
             item {
                 val activeMoreFilters =
-                    (if (minRating > 0f) 1 else 0) +
-                        (if (openNowOnly && minOpenMinutes > 0f) 1 else 0)
+                    if (minRating > 0f) 1 else 0
 
                 OutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
@@ -1355,38 +1483,6 @@ private fun NearTimeScreen(
             }
 
             if (moreFiltersExpanded) {
-                if (openNowOnly) {
-                    item {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                "MINIMUM TIME UNTIL CLOSING",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                if (minOpenMinutes.roundToInt() == 0) {
-                                    "No minimum"
-                                } else if (minOpenMinutes.roundToInt() < 60) {
-                                    "${minOpenMinutes.roundToInt()} min"
-                                } else {
-                                    val hours = minOpenMinutes.roundToInt() / 60
-                                    val minutes = minOpenMinutes.roundToInt() % 60
-                                    if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
-                                },
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Slider(
-                                value = minOpenMinutes,
-                                onValueChange = { minOpenMinutes = it },
-                                valueRange = 0f..180f,
-                                steps = 5
-                            )
-                        }
-                    }
-                }
-
                 item {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
