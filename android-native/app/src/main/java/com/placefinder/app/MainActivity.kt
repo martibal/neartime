@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-44"
+private const val APP_BUILD_ID = "production-20260920-45"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -332,7 +332,6 @@ private fun NearTimeScreen(
     var openNowOnly by remember { mutableStateOf(true) }
     var minOpenMinutes by remember { mutableFloatStateOf(0f) }
     var minRating by remember { mutableFloatStateOf(0f) }
-    var moreFiltersExpanded by remember { mutableStateOf(false) }
     var resultSort by remember { mutableStateOf(ResultSort.NEAREST) }
 
     var useCurrentLocation by remember { mutableStateOf(true) }
@@ -1460,55 +1459,39 @@ private fun NearTimeScreen(
             }
 
             item {
-                val activeMoreFilters =
-                    if (minRating > 0f) 1 else 0
-
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { moreFiltersExpanded = !moreFiltersExpanded }
-                ) {
-                    Text(
-                        when {
-                            activeMoreFilters > 0 && moreFiltersExpanded ->
-                                "Hide more filters · $activeMoreFilters active"
-                            activeMoreFilters > 0 ->
-                                "More filters · $activeMoreFilters active"
-                            moreFiltersExpanded ->
-                                "Hide more filters"
-                            else ->
-                                "More filters"
-                        }
-                    )
-                }
+                HorizontalDivider()
             }
 
-            if (moreFiltersExpanded) {
-                item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "MINIMUM RATING",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            if (minRating <= 0f) {
-                                "Any"
-                            } else {
-                                String.format(Locale.US, "%.1f+ ★", minRating)
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Slider(
-                            value = minRating,
-                            onValueChange = {
-                                minRating = (it * 2f).roundToInt() / 2f
-                            },
-                            valueRange = 0f..5f,
-                            steps = 9
-                        )
-                    }
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "MINIMUM RATING",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (minRating <= 0f) {
+                            "Any rating"
+                        } else {
+                            String.format(Locale.US, "%.1f+ ★", minRating)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (minRating > 0f) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    Slider(
+                        value = minRating,
+                        onValueChange = {
+                            minRating = (it * 2f).roundToInt() / 2f
+                        },
+                        valueRange = 0f..5f,
+                        steps = 9
+                    )
                 }
             }
 
