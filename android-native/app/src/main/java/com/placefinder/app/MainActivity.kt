@@ -72,6 +72,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -114,7 +115,37 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-47"
+private const val APP_BUILD_ID = "production-20260920-48"
+private val NearTimeLightColors = lightColorScheme(
+    primary = Color(0xFF6E52B5),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFE9E2F7),
+    onPrimaryContainer = Color(0xFF261A46),
+    background = Color(0xFFF2F5F8),
+    onBackground = Color(0xFF1D232B),
+    surface = Color(0xFFF7F9FB),
+    onSurface = Color(0xFF1D232B),
+    surfaceVariant = Color(0xFFE3E8EE),
+    onSurfaceVariant = Color(0xFF59636F),
+    outline = Color(0xFFBAC2CC),
+    outlineVariant = Color(0xFFD5DBE2)
+)
+
+private val NearTimeDarkColors = darkColorScheme(
+    primary = Color(0xFFB49AE8),
+    onPrimary = Color(0xFF251542),
+    primaryContainer = Color(0xFF3A295D),
+    onPrimaryContainer = Color(0xFFE9DFFF),
+    background = Color(0xFF071321),
+    onBackground = Color(0xFFEAF0F6),
+    surface = Color(0xFF0D1A2A),
+    onSurface = Color(0xFFEAF0F6),
+    surfaceVariant = Color(0xFF182638),
+    onSurfaceVariant = Color(0xFFB7C2CF),
+    outline = Color(0xFF536275),
+    outlineVariant = Color(0xFF344356)
+)
+
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -295,7 +326,7 @@ class MainActivity : ComponentActivity() {
             var darkMode by remember { mutableStateOf(false) }
             val billingUiState by billingManager.state.collectAsState()
 
-            MaterialTheme(colorScheme = if (darkMode) darkColorScheme() else lightColorScheme()) {
+            MaterialTheme(colorScheme = if (darkMode) NearTimeDarkColors else NearTimeLightColors) {
                 NearTimeScreen(
                     darkMode = darkMode,
                     onDarkModeChange = { darkMode = it },
