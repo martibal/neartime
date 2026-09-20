@@ -163,3 +163,19 @@ test('search input allows international coordinates and enforces max walk range'
     });
   }, /INVALID_WALK_LIMIT/);
 });
+
+
+test('rated Google Text Search is hard-restricted to the local search area', () => {
+  const source = fs.readFileSync(
+    require.resolve('../supabase/functions/native-search/index.ts'),
+    'utf8'
+  );
+  const start = source.indexOf('if (useTextSearch) {');
+  const end = source.indexOf('} else {', start);
+  assert.ok(start >= 0 && end > start);
+
+  const ratedBranch = source.slice(start, end);
+  assert.ok(ratedBranch.includes('locationRestriction'));
+  assert.ok(ratedBranch.includes('textSearchRestrictionRectangle'));
+  assert.equal(ratedBranch.includes('locationBias'), false);
+});
