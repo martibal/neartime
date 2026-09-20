@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -46,9 +48,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -122,7 +126,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-55"
+private const val APP_BUILD_ID = "production-20260920-56"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
     onPrimary = Color(0xFFFFFFFF),
@@ -141,16 +145,16 @@ private val NearTimeLightColors = lightColorScheme(
 private val NearTimeDarkColors = darkColorScheme(
     primary = Color(0xFFB49AE8),
     onPrimary = Color(0xFF251542),
-    primaryContainer = Color(0xFF3A295D),
-    onPrimaryContainer = Color(0xFFE9DFFF),
+    primaryContainer = Color(0xFF453468),
+    onPrimaryContainer = Color(0xFFF0E8FF),
     background = Color(0xFF071321),
     onBackground = Color(0xFFEAF0F6),
-    surface = Color(0xFF0D1A2A),
+    surface = Color(0xFF0E1D2E),
     onSurface = Color(0xFFEAF0F6),
-    surfaceVariant = Color(0xFF182638),
-    onSurfaceVariant = Color(0xFFB7C2CF),
-    outline = Color(0xFF536275),
-    outlineVariant = Color(0xFF344356)
+    surfaceVariant = Color(0xFF17283C),
+    onSurfaceVariant = Color(0xFFC5CFDA),
+    outline = Color(0xFF718196),
+    outlineVariant = Color(0xFF4D5E72)
 )
 
 private const val LOG_TAG = "NearTimeNet"
@@ -855,19 +859,51 @@ private fun NearTimeScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(
+                                width = 1.15.dp,
+                                color = if (resultSort == ResultSort.NEAREST) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ),
                         selected = resultSort == ResultSort.NEAREST,
                         onClick = {
                             resultSort = ResultSort.NEAREST
                         },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                        ),
                         label = { Text("Nearest") }
                     )
                     FilterChip(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(
+                                width = 1.15.dp,
+                                color = if (resultSort == ResultSort.HIGHEST_RATED) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ),
                         selected = resultSort == ResultSort.HIGHEST_RATED,
                         onClick = {
                             resultSort = ResultSort.HIGHEST_RATED
                         },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                        ),
                         label = { Text("Highest rated") }
                     )
                 }
@@ -881,23 +917,59 @@ private fun NearTimeScreen(
                         successOverlay.response.places.any { it.priceSortKey() != null }
 
                     FilterChip(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(
+                                width = 1.15.dp,
+                                color = if (resultSort == ResultSort.LONGEST_OPEN) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ),
                         selected = resultSort == ResultSort.LONGEST_OPEN,
                         enabled = hasOpeningTimeData,
                         onClick = {
                             resultSort = ResultSort.LONGEST_OPEN
                         },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                            disabledContainerColor = if (darkMode) Color(0xFF0C1929) else MaterialTheme.colorScheme.surfaceVariant,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
                         label = {
                             Text(if (hasOpeningTimeData) "Open longest" else "Opening time unavailable")
                         }
                     )
                     FilterChip(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .border(
+                                width = 1.15.dp,
+                                color = if (resultSort == ResultSort.LOWEST_PRICE) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ),
                         selected = resultSort == ResultSort.LOWEST_PRICE,
                         enabled = hasPriceData,
                         onClick = {
                             resultSort = ResultSort.LOWEST_PRICE
                         },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                            disabledContainerColor = if (darkMode) Color(0xFF0C1929) else MaterialTheme.colorScheme.surfaceVariant,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
                         label = {
                             Text(if (hasPriceData) "Lowest price" else "Price unavailable")
                         }
@@ -937,6 +1009,7 @@ private fun NearTimeScreen(
                                 place = place,
                                 searchOrigin = lastSearchOrigin,
                                 selected = selectedPlace?.id == place.id,
+                                darkMode = darkMode,
                                 onSelect = { selectedPlace = place }
                             )
                         }
@@ -2219,6 +2292,7 @@ private fun PlaceCard(
     place: PlaceResult,
     searchOrigin: GeoPoint?,
     selected: Boolean,
+    darkMode: Boolean,
     onSelect: () -> Unit
 ) {
     val context = LocalContext.current
@@ -2226,7 +2300,22 @@ private fun PlaceCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onSelect)
+            .clickable(onClick = onSelect),
+        colors = CardDefaults.cardColors(
+            containerColor = if (darkMode) {
+                Color(0xFF162538)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (darkMode) {
+                MaterialTheme.colorScheme.outlineVariant
+            } else {
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
+            }
+        )
     ) {
         Column(
             modifier = Modifier.padding(14.dp)
@@ -2371,7 +2460,23 @@ private fun PlaceCard(
                     modifier = Modifier.weight(1f),
                     onClick = {
                         openPlaceInGoogleMaps(context, place)
-                    }
+                    },
+                    border = BorderStroke(
+                        width = 1.25.dp,
+                        color = if (darkMode) {
+                            MaterialTheme.colorScheme.outline
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        }
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (darkMode) {
+                            Color(0xFF122236)
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        },
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
                 ) {
                     Text("Open in Maps")
                 }
