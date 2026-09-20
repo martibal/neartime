@@ -119,20 +119,20 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-52"
+private const val APP_BUILD_ID = "production-20260920-53"
 private val NearTimeLightColors = lightColorScheme(
-    primary = Color(0xFF6E52B5),
+    primary = Color(0xFF7B6AA9),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE4DEF0),
-    onPrimaryContainer = Color(0xFF261A46),
+    primaryContainer = Color(0xFFE7E2EE),
+    onPrimaryContainer = Color(0xFF2D2543),
     background = Color(0xFFDDE5EC),
-    onBackground = Color(0xFF1D232B),
-    surface = Color(0xFFE9EFF4),
-    onSurface = Color(0xFF1D232B),
-    surfaceVariant = Color(0xFFD2DCE5),
-    onSurfaceVariant = Color(0xFF53606D),
-    outline = Color(0xFFAAB6C2),
-    outlineVariant = Color(0xFFC3CED8)
+    onBackground = Color(0xFF2A3440),
+    surface = Color(0xFFE8EEF3),
+    onSurface = Color(0xFF2A3440),
+    surfaceVariant = Color(0xFFD6DFE7),
+    onSurfaceVariant = Color(0xFF64727F),
+    outline = Color(0xFFAFBBC6),
+    outlineVariant = Color(0xFFC8D2DB)
 )
 
 private val NearTimeDarkColors = darkColorScheme(
