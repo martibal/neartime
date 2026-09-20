@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-45"
+private const val APP_BUILD_ID = "production-20260920-46"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -798,13 +798,12 @@ private fun NearTimeScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "SORT THESE RESULTS",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "Sort these ${successOverlay.response.places.size} results",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Sorting only reorders these ${successOverlay.response.places.size} matches. It does not run a new search.",
+                    text = "Reorders these results only — no new search.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -874,8 +873,8 @@ private fun NearTimeScreen(
                 }
                 Text(
                     text = "Place data and walking routes provided by Google Maps",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
                 Box(
@@ -1359,22 +1358,20 @@ private fun NearTimeScreen(
 
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "MAXIMUM WALKING TIME",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Walking radius", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "WALKING TIME",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                         Text(
                             "${maxWalkMinutes.roundToInt()} min",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                     Slider(
@@ -1392,6 +1389,12 @@ private fun NearTimeScreen(
 
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "OPENING TIME",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(2.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1399,14 +1402,14 @@ private fun NearTimeScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "OPEN NOW",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
+                                "Open now",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(Modifier.height(4.dp))
                             Text(
                                 "Exclude places confirmed closed",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
@@ -1417,37 +1420,33 @@ private fun NearTimeScreen(
                             }
                         )
                     }
-                }
-            }
 
-            if (openNowOnly) {
-                item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "STAY OPEN FOR AT LEAST",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Choose how much longer each place must remain open.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            if (minOpenMinutes.roundToInt() == 0) {
-                                "No minimum"
-                            } else if (minOpenMinutes.roundToInt() < 60) {
-                                "${minOpenMinutes.roundToInt()} min"
-                            } else {
-                                val hours = minOpenMinutes.roundToInt() / 60
-                                val minutes = minOpenMinutes.roundToInt() % 60
-                                if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    if (openNowOnly) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                "Stay open for at least",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                if (minOpenMinutes.roundToInt() == 0) {
+                                    "No minimum"
+                                } else if (minOpenMinutes.roundToInt() < 60) {
+                                    "${minOpenMinutes.roundToInt()} min"
+                                } else {
+                                    val hours = minOpenMinutes.roundToInt() / 60
+                                    val minutes = minOpenMinutes.roundToInt() % 60
+                                    if (minutes == 0) "${hours} h" else "${hours} h ${minutes} min"
+                                },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Slider(
                             value = minOpenMinutes,
                             onValueChange = { minOpenMinutes = it },
@@ -1464,26 +1463,31 @@ private fun NearTimeScreen(
 
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "MINIMUM RATING",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if (minRating <= 0f) {
-                            "Any rating"
-                        } else {
-                            String.format(Locale.US, "%.1f+ ★", minRating)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (minRating > 0f) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "MINIMUM RATING",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (minRating <= 0f) {
+                                "Any"
+                            } else {
+                                String.format(Locale.US, "%.1f+ ★", minRating)
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (minRating > 0f) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
                     Slider(
                         value = minRating,
                         onValueChange = {
@@ -1804,105 +1808,92 @@ private fun SearchUsageCard(
     onRestore: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = "SEARCHES",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
             if (quota == null) {
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = quotaError ?: "Loading your search allowance…",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Searches",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        quotaError ?: "Loading…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 return@Column
             }
 
-            if (quota.accessMode == "trial") {
-                val isTestingAllowance = quota.trialIncluded > 100
+            val isTestingAllowance =
+                quota.accessMode == "trial" && quota.trialIncluded > 100
 
-                if (isTestingAllowance) {
-                    Text(
-                        text = "Free-search test counter",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = quota.trialUsed.toString() + " of 5 used",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Test only · the 5-search limit is not enforced yet.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                } else {
-                    Text(
-                        text = quota.trialRemaining.toString() + " free searches remaining",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = quota.trialUsed.toString() + " of " + quota.trialIncluded.toString() + " used",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                if (!isTestingAllowance && quota.trialRemaining <= 0) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "30 searches every month · " + billing.monthlyPrice + "/month · auto-renews until cancelled in Google Play.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !billing.busy,
-                        onClick = onSubscribe
-                    ) {
-                        Text("Subscribe · " + billing.monthlyPrice + "/month")
-                    }
-                }
-            } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
-                    text = quota.totalAvailable.toString() + " searches available",
-                    style = MaterialTheme.typography.titleMedium,
+                    "Searches",
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Monthly · " + quota.monthlyUsed.toString() + " of " +
-                        quota.monthlyIncluded.toString() + " used · " +
-                        quota.monthlyRemaining.toString() + " remaining",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                quota.billingPeriodEnd?.take(10)?.let { date ->
-                    Text(
-                        text = "Monthly allowance resets " + date,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                Text(
-                    text = "Extra searches · " + quota.extraRemaining.toString() + " remaining",
-                    style = MaterialTheme.typography.bodyMedium
-                )
 
-                if (quota.monthlyRemaining <= 0) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "Extra packs require an active subscription and remain available until used.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Button(
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !billing.busy,
-                        onClick = onBuyExtra
-                    ) {
-                        Text("Get 20 extra searches · " + billing.extraPrice)
-                    }
+                Text(
+                    text = when {
+                        isTestingAllowance ->
+                            quota.trialUsed.toString() + " of 5 used · test mode"
+                        quota.accessMode == "trial" ->
+                            quota.trialRemaining.toString() + " free remaining"
+                        else ->
+                            quota.totalAvailable.toString() + " available"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            if (isTestingAllowance) {
+                Text(
+                    text = "5-search limit is not enforced yet.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (!isTestingAllowance && quota.accessMode == "trial" && quota.trialRemaining <= 0) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "30 searches every month · " + billing.monthlyPrice + "/month",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !billing.busy,
+                    onClick = onSubscribe
+                ) {
+                    Text("Subscribe · " + billing.monthlyPrice + "/month")
+                }
+            }
+
+            if (quota.accessMode != "trial" && quota.monthlyRemaining <= 0) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Extra packs require an active subscription.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !billing.busy,
+                    onClick = onBuyExtra
+                ) {
+                    Text("Get 20 extra searches · " + billing.extraPrice)
                 }
             }
 
@@ -1913,10 +1904,10 @@ private fun SearchUsageCard(
                         !message.contains("products are not available yet", ignoreCase = true)
                 }
                 ?.let { message ->
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = message,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = if (billing.isError) {
                             MaterialTheme.colorScheme.error
                         } else {
@@ -1925,130 +1916,16 @@ private fun SearchUsageCard(
                     )
                 }
 
-            if (billing.ready) {
-                Spacer(Modifier.height(6.dp))
-                OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !billing.busy,
-                    onClick = onRestore
-                ) {
-                    Text("Restore Google Play purchases")
-                }
-            }
-        }
-    }
-}
-@Composable
-private fun LazyListScrollbar(
-    state: LazyListState,
-    itemCount: Int,
-    modifier: Modifier = Modifier
-) {
-    if (itemCount <= 1) return
-
-    val scope = rememberCoroutineScope()
-    val firstVisibleIndex by remember(state) {
-        derivedStateOf { state.firstVisibleItemIndex }
-    }
-    val firstVisibleOffset by remember(state) {
-        derivedStateOf { state.firstVisibleItemScrollOffset }
-    }
-    val visibleCount by remember(state) {
-        derivedStateOf { state.layoutInfo.visibleItemsInfo.size.coerceAtLeast(1) }
-    }
-    val canScrollForward by remember(state) {
-        derivedStateOf { state.canScrollForward }
-    }
-
-    val thumbFraction = (visibleCount.toFloat() / itemCount.toFloat())
-        .coerceIn(0.12f, 1f)
-
-    val maxFirst = (itemCount - visibleCount).coerceAtLeast(1)
-    val firstSize = state.layoutInfo.visibleItemsInfo
-        .firstOrNull()
-        ?.size
-        ?.coerceAtLeast(1)
-        ?: 1
-    val itemFraction = (firstVisibleOffset.toFloat() / firstSize.toFloat())
-        .coerceIn(0f, 1f)
-
-    val rawPosition = (
-        (firstVisibleIndex.toFloat() + itemFraction) /
-            maxFirst.toFloat()
-        ).coerceIn(0f, 1f)
-
-    // Never show the thumb at the physical bottom while the list can still
-    // scroll further. This was the old failure mode with variable-height cards.
-    val positionFraction = when {
-        !canScrollForward -> 1f
-        firstVisibleIndex == 0 && firstVisibleOffset == 0 -> 0f
-        else -> rawPosition.coerceAtMost(0.97f)
-    }
-
-    fun scrollToFraction(fraction: Float) {
-        scope.launch {
-            val bounded = fraction.coerceIn(0f, 1f)
-            when {
-                bounded <= 0.01f -> {
-                    state.scrollToItem(0)
-                }
-                bounded >= 0.99f -> {
-                    // Force the actual list end, not merely the last estimated
-                    // first-visible index. scrollBy clamps at the real max.
-                    state.scrollToItem(itemCount - 1)
-                    state.scrollBy(100_000f)
-                }
-                else -> {
-                    val target = (
-                        bounded * (itemCount - 1).toFloat()
-                        ).roundToInt().coerceIn(0, itemCount - 1)
-                    state.scrollToItem(target)
-                }
-            }
-        }
-    }
-
-    BoxWithConstraints(
-        modifier = modifier
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-            )
-            .pointerInput(itemCount, visibleCount) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset ->
-                        val track = size.height.toFloat()
-                        val thumb = track * thumbFraction
-                        val usable = (track - thumb).coerceAtLeast(1f)
-                        val fraction = ((offset.y - thumb / 2f) / usable)
-                            .coerceIn(0f, 1f)
-                        scrollToFraction(fraction)
-                    },
-                    onVerticalDrag = { change, _ ->
-                        change.consume()
-                        val track = size.height.toFloat()
-                        val thumb = track * thumbFraction
-                        val usable = (track - thumb).coerceAtLeast(1f)
-                        val fraction = ((change.position.y - thumb / 2f) / usable)
-                            .coerceIn(0f, 1f)
-                        scrollToFraction(fraction)
-                    }
+            if (billing.ready && !isTestingAllowance) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Restore purchases",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.clickable { onRestore() }
                 )
             }
-    ) {
-        val thumbHeight = maxHeight * thumbFraction
-        val thumbOffset = (maxHeight - thumbHeight) * positionFraction
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(thumbHeight)
-                .offset(y = thumbOffset)
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                )
-        )
+        }
     }
 }
 
@@ -2148,7 +2025,12 @@ private fun PlaceCard(
             Text(
                 text = openText,
                 style = MaterialTheme.typography.bodySmall,
-                fontWeight = if (place.isOpenNow == true) FontWeight.SemiBold else FontWeight.Normal
+                fontWeight = if (place.isOpenNow == true) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (place.isOpenNow == true) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
 
             if (place.businessStatus == "CLOSED_TEMPORARILY") {
