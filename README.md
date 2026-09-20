@@ -1,6 +1,6 @@
-# NearTime
+# WayNear
 
-NearTime is a mobile-first place search and decision app built around one simple question:
+WayNear is a mobile-first place search and decision app built around one simple question:
 
 > What do you need, and how much time are you willing to spend getting there?
 
@@ -8,13 +8,13 @@ NearTime is a mobile-first place search and decision app built around one simple
 
 The native Android app uses a current or user-selected origin. Normal place searches are sent over HTTPS to the production Supabase Edge Function. The current production search path uses Google Places Nearby Search with Google walking routing summaries, returns up to ten qualifying places, and ranks them by measured walking distance/time.
 
-TomTom is currently used for the optional **Use another place or address** suggestion/details flow. Android's platform geocoder is used only to turn the device's current coordinates into a human-readable location label.
+TomTom is currently used for the optional **Type a location** suggestion/details flow. Android's platform geocoder is used only to turn the device's current coordinates into a human-readable location label. The native app also includes the Google Maps Android SDK (via Maps Compose) for the user-initiated **Choose on map** start-point picker.
 
 No ADB reverse, local Node backend, downloaded country map, OSM extract, Valhalla graph, Docker routing service or desktop process is required by the released mobile search path.
 
 ## Cost controls
 
-Provider usage is bounded by server-side search rules and monitored through the NearTime Cost Monitor. Production code must remain fail-closed when a requested provider path would violate the active cost contract.
+Provider usage is bounded by server-side search rules and monitored through the WayNear Cost Monitor. Production code must remain fail-closed when a requested provider path would violate the active cost contract.
 
 The normative cost documents are `docs/ECONOMIC_INVARIANTS.md` and `docs/COST_CONTRACT.md`.
 
