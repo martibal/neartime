@@ -126,7 +126,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-60"
+private const val APP_BUILD_ID = "production-20260920-61"
 private val RatingStarGold = Color(0xFFB8860B)
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
@@ -431,7 +431,9 @@ private fun NearTimeScreen(
     LaunchedEffect(hasLocationPermission, permissionRevision) {
         currentLocationLookupFinished = false
         if (hasLocationPermission) {
-            currentLocation = resolveCurrentLocation(context)
+            // Startup must never wait for a fresh GPS/network fix. Use only a
+            // cached location here; Search/Refresh still requests a fresh fix.
+            currentLocation = resolveStartupLocation(context)
         } else {
             currentLocation = null
             currentLocationLabel = null
@@ -586,8 +588,15 @@ private fun NearTimeScreen(
                     )
                 }.getOrNull()?.let { quotaStatus = it }
 
+                val failure = e.message.orEmpty()
                 searchState = SearchState.Error(
-                    "Search could not be completed. Please try again."
+                    when {
+                        "GOOGLE_TEXT_TIMEOUT" in failure ||
+                            "GOOGLE_NEARBY_TIMEOUT" in failure ->
+                            "Google Places timed out. Please try again."
+                        else ->
+                            "Search could not be completed. Please try again."
+                    }
                 )
             }
         }
@@ -2907,6 +2916,54 @@ private fun isRunningOnEmulator(): Boolean {
         product.contains("emulator") ||
         hardware.contains("ranchu") ||
         hardware.contains("goldfish")
+}
+
+@SuppressLint("MissingPermission")
+private fun resolveStartupLocation(
+    context: Context
+): GeoPoint? {
+    if (!isLocationPermissionGranted(context)) {
+        return null
+    }
+
+    val manager =
+        context.getSystemService(
+            Context.LOCATION_SERVICE
+        ) as LocationManager
+
+    val newest = runCatching { manager.allProviders }
+        .getOrDefault(
+            listOf(
+                LocationManager.NETWORK_PROVIDER,
+                LocationManager.GPS_PROVIDER,
+                LocationManager.PASSIVE_PROVIDER
+            )
+        )
+        .distinct()
+        .mapNotNull { provider ->
+            runCatching {
+                manager.getLastKnownLocation(provider)
+            }.getOrNull()
+        }
+        .maxByOrNull { location ->
+            location.elapsedRealtimeNanos
+        }
+
+    if (newest != null) {
+        return GeoPoint(
+            latitude = newest.latitude,
+            longitude = newest.longitude
+        )
+    }
+
+    return if (isRunningOnEmulator()) {
+        GeoPoint(
+            latitude = DEFAULT_LATITUDE,
+            longitude = DEFAULT_LONGITUDE
+        )
+    } else {
+        null
+    }
 }
 
 @SuppressLint("MissingPermission")
