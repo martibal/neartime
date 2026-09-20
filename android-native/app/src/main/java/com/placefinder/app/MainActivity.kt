@@ -1010,6 +1010,8 @@ private fun NearTimeScreen(
                     Text("Choose on map")
                 }
 
+                Spacer(Modifier.height(8.dp))
+
                 if (useCurrentLocation) {
                     if (hasLocationPermission) {
                         Text(
@@ -1030,7 +1032,7 @@ private fun NearTimeScreen(
                             ) {
                                 MaterialTheme.colorScheme.error
                             } else {
-                                MaterialTheme.colorScheme.primary
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             maxLines = 1
                         )
