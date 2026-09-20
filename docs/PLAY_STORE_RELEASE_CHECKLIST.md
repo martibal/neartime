@@ -1,4 +1,4 @@
-# NearTime — Google Play release gate
+# WayNear — Google Play release gate
 
 Last reviewed: 2026-09-19.
 
@@ -24,21 +24,21 @@ This checklist is the executable release gate for the native Android app. The fu
 - [x] Public terms source and route exist: `legal/terms.html` -> `/terms`.
 - [x] Privacy Policy and Terms of Use are accessible from inside the app.
 - [x] Google attribution is displayed with provider results.
-- [x] No NearTime account creation is offered, so Google's account-deletion requirement is not currently triggered.
+- [x] No WayNear account creation is offered, so Google's account-deletion requirement is not currently triggered.
 - [x] No ads are currently served.
 - [x] Google Play Billing is integrated client-side and purchase tokens are verified server-side before entitlement.
 - [x] Data Safety working draft includes location, custom-origin text, app interactions, install identifiers and purchase history.
 
 ## Repository/documentation blockers before Play submission
 
-- [ ] Replace `strings.xml` value `PlaceFinder` with the final product name.
-- [ ] Reconcile `.env.example` Google Play package with the final Android package.
-- [ ] Confirm whether the unused-looking Google Maps Android API-key manifest entry is still needed; remove it if the release app does not use the Maps SDK.
+- [x] `strings.xml` and manifest display label are aligned to `WayNear`.
+- [x] `.env.example` Google Play package is aligned to `com.placefinder.app`.
+- [x] Google Maps Android SDK/API-key configuration is required by the `Choose on map` start-point picker; keep it and restrict the production key to the Android app/package/signing certificate.
 - [ ] Put the actual verified developer/privacy email in the public Privacy Policy.
 - [ ] If the app is renamed, update Privacy Policy, Terms and all Play metadata.
 - [ ] Add an in-app **Manage subscription** / cancellation link before paid subscription launch.
 - [ ] Ensure the subscription offer UI clearly shows localized price, billing frequency, auto-renewal, benefit/quota and availability of free functionality.
-- [ ] Implement Android Location Button before the 2027-01-27 enforcement deadline if the app still targets API 37+ and uses precise location transactionally.
+- [ ] Implement Android Location Button and `android:onlyForLocationButton="true"` before any release subject to the 2027-01-27 enforcement deadline. Because WayNear targets API 37 and uses precise location for a one-time nearby-search action, treat this as a pre-production policy gate rather than postponing it.
 
 ## Organization developer-account setup
 
@@ -56,13 +56,13 @@ This checklist is the executable release gate for the native Android app. The fu
 - [ ] Data safety: complete from `docs/PLAY_DATA_SAFETY_DRAFT.md`, then reconcile against the release AAB.
 - [ ] Ads: declare **No** unless release behavior changes.
 - [ ] App access: state no sign-in is required and give reviewer instructions for Current location / Other place and any paid-entitlement limitations.
-- [ ] Target audience and content: choose the actual target age groups; NearTime is not child-directed.
+- [ ] Target audience and content: choose the actual target age groups; WayNear is not child-directed.
 - [ ] IARC Content rating questionnaire completed.
 - [ ] Financial features declaration completed: current intended answer is **no financial features**.
 - [ ] Health apps declaration completed: current intended answer is **no health features**.
-- [ ] Government apps declaration completed: NearTime is **not a government app** and does not present itself as an official government source.
+- [ ] Government apps declaration completed: WayNear is **not a government app** and does not present itself as an official government source.
 - [ ] COVID-19 contact tracing/status declaration completed: **No**.
-- [ ] News/Magazine applicability answered consistently: NearTime is not a News/Magazine app.
+- [ ] News/Magazine applicability answered consistently: WayNear is not a News/Magazine app.
 - [ ] Advertising ID declaration, if surfaced: confirm from the final merged manifest; current app does not intentionally use Advertising ID.
 - [ ] Complete the precise-location declaration when Play Console makes it available (announced for November 2026) if `ACCESS_FINE_LOCATION` remains in the release.
 
@@ -121,11 +121,11 @@ This checklist is the executable release gate for the native Android app. The fu
 - [ ] Closed testing: recruit external testers and verify real-device behavior.
 - [ ] Production only after all gates above are closed.
 
-The special 12-testers-for-14-days production-access rule applies to qualifying new **Personal** developer accounts. If NearTime is registered under the planned Organization account, do not treat that Personal-account rule as the governing release gate.
+The special 12-testers-for-14-days production-access rule applies to qualifying new **Personal** developer accounts. If WayNear is registered under the planned Organization account, do not treat that Personal-account rule as the governing release gate.
 
 ## Location Button gate — Android 17 / API 37
 
-NearTime targets API 37 and uses precise location for a one-time **search nearby** action. Google's Minimum Scope policy identifies this as a Location Button use case.
+WayNear targets API 37 and uses precise location for a one-time **search nearby** action. Google's Minimum Scope policy identifies this as a Location Button use case.
 
 - Google states the precise-location declaration will be available from November 2026.
 - Enforcement is currently stated for **2027-01-27**.
@@ -138,7 +138,7 @@ NearTime targets API 37 and uses precise location for a one-time **search nearby
 - a new SDK/provider is added;
 - analytics, ads, accounts, crash reporting or push notifications are enabled;
 - billing products/benefits change;
-- NearTime starts retaining location/search history;
+- WayNear starts retaining location/search history;
 - background location or continuous navigation is introduced;
 - Google/TomTom/Supabase architecture changes;
 - the app starts targeting children;
