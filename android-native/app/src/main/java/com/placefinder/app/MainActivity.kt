@@ -126,7 +126,8 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-59"
+private const val APP_BUILD_ID = "production-20260920-60"
+private val RatingStarGold = Color(0xFFB8860B)
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
     onPrimary = Color(0xFFFFFFFF),
@@ -1666,10 +1667,17 @@ private fun NearTimeScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            if (minRating <= 0f) {
-                                "Any"
+                            text = if (minRating <= 0f) {
+                                buildAnnotatedString {
+                                    append("Any")
+                                }
                             } else {
-                                String.format(Locale.US, "%.1f+ ★", minRating)
+                                buildAnnotatedString {
+                                    append(String.format(Locale.US, "%.1f+ ", minRating))
+                                    withStyle(SpanStyle(color = RatingStarGold)) {
+                                        append("★")
+                                    }
+                                }
                             },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -2334,22 +2342,25 @@ private fun PlaceCard(
                 }
             }
 
-            val ratingLine = buildString {
+            val ratingLine = buildAnnotatedString {
                 place.rating?.let {
-                    append(String.format(Locale.US, "%.1f ★", it))
+                    append(String.format(Locale.US, "%.1f ", it))
+                    withStyle(SpanStyle(color = RatingStarGold)) {
+                        append("★")
+                    }
                 }
                 place.userRatingCount?.let {
-                    if (isNotEmpty()) append(" · ")
+                    if (length > 0) append(" · ")
                     append("$it reviews")
                 }
                 val price = place.priceRangeText ?: place.priceLevel
                 if (!price.isNullOrBlank()) {
-                    if (isNotEmpty()) append(" · ")
+                    if (length > 0) append(" · ")
                     append(price)
                 }
             }
 
-            if (ratingLine.isNotBlank()) {
+            if (ratingLine.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = ratingLine,
