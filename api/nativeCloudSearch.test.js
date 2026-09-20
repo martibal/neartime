@@ -165,17 +165,14 @@ test('search input allows international coordinates and enforces max walk range'
 });
 
 
-test('rated Google Text Search is hard-restricted to the local search area', () => {
+test('rated searches keep distance-ranked Nearby acquisition and filter rating locally', () => {
   const source = fs.readFileSync(
     require.resolve('../supabase/functions/native-search/index.ts'),
     'utf8'
   );
-  const start = source.indexOf('if (useTextSearch) {');
-  const end = source.indexOf('} else {', start);
-  assert.ok(start >= 0 && end > start);
 
-  const ratedBranch = source.slice(start, end);
-  assert.ok(ratedBranch.includes('locationRestriction'));
-  assert.ok(ratedBranch.includes('textSearchRestrictionRectangle'));
-  assert.equal(ratedBranch.includes('locationBias'), false);
+  assert.ok(source.includes("'https://places.googleapis.com/v1/places:searchNearby'"));
+  assert.ok(source.includes("LOCAL_HARD_MIN_RATING_"));
+  assert.ok(source.includes("rating < input.minRating"));
+  assert.equal(source.includes("const useTextSearch = input.minRating > 0"), false);
 });
