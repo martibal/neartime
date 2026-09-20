@@ -1,6 +1,6 @@
 # WayNear — Google Play submission packet
 
-Last reviewed against Google Play documentation: 2026-09-19.
+Last reviewed against Google Play documentation: 2026-09-20.
 
 This file is the authoritative worksheet for Google Play submission. It records every Play Console declaration or supporting document that WayNear is expected to need. It is not itself uploaded to Google Play. The final Play Console answers must be checked against the exact release AAB and current policy wording immediately before submission.
 
@@ -10,9 +10,9 @@ Current repository state:
 
 - Android application ID: `com.placefinder.app`
 - Android namespace: `com.placefinder.app`
-- current display name in the manifest: `WayNear`
-- `strings.xml` still contains the old value `PlaceFinder`
-- the product name is not yet final
+- current display name: `WayNear` (`AndroidManifest.xml` references `@string/app_name`)
+- `strings.xml` value: `WayNear`
+- current Android application ID/package: `com.placefinder.app`
 
 ### Release gate
 
@@ -23,7 +23,7 @@ Before first upload:
 - [x] app display name currently set to `WayNear`;
 - [x] manifest label and `strings.xml` use the same display name;
 - [ ] final application ID/package chosen and used consistently in Android, backend Google Play verification configuration and documentation;
-- [ ] Privacy Policy and Terms refer to the final app name;
+- [x] Privacy Policy and Terms refer to `WayNear`;
 - [ ] Google Play developer name chosen.
 
 ## 2. Developer account / organization verification
@@ -315,10 +315,9 @@ Before closed testing, complete all Play Console declarations that Play marks as
 
 These are not all Google-policy violations by themselves, but they must be resolved before release because they can make declarations inaccurate.
 
-- `strings.xml` still says `PlaceFinder` while the manifest says `WayNear`.
-- Product name is not final.
-- `.env.example` contains the historical Google Play package `com.martibal.neartime`, while the active native app is currently `com.placefinder.app`.
-- The native manifest still contains a Google Maps Android API-key meta-data entry even though the current native dependency list does not include the Google Maps SDK; confirm whether it is still needed and remove it if unused.
+- Display identity is aligned to `WayNear` in the manifest, resources, Privacy Policy and Terms.
+- `.env.example` uses the active Google Play package `com.placefinder.app`.
+- The Google Maps Android API-key manifest entry is intentional because Maps Compose is used for the explicit `Choose on map` start-point picker. Restrict the production key to the final package and signing certificate.
 - Several old architecture/COGS documents describe superseded provider paths. They are engineering history and must not be used as Play Console declaration sources.
 - `docs/purchase-funnel-events.md` contained the retired 3-success/5-attempt trial model; this audit updates it to the current one-counter model.
 - The subscription UI does not yet contain a Google Play subscription-management/cancellation link.
