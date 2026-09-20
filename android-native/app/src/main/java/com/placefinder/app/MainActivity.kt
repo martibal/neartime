@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-42"
+private const val APP_BUILD_ID = "production-20260920-43"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -1202,8 +1202,18 @@ private fun NearTimeScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary,
                                 textAlign = TextAlign.Center,
-                                maxLines = 2
+                                maxLines = 1
                             )
+                            if (it.address.isNotBlank() && !it.address.equals(it.title, ignoreCase = true)) {
+                                Spacer(Modifier.height(1.dp))
+                                Text(
+                                    text = it.address,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2
+                                )
+                            }
                         }
                     }
 
@@ -1233,8 +1243,18 @@ private fun NearTimeScreen(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.primary,
                                 textAlign = TextAlign.Center,
-                                maxLines = 2
+                                maxLines = 1
                             )
+                            if (it.address.isNotBlank() && !it.address.equals(it.title, ignoreCase = true)) {
+                                Spacer(Modifier.height(1.dp))
+                                Text(
+                                    text = it.address,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2
+                                )
+                            }
                         }
                     }
                 }
@@ -2307,7 +2327,8 @@ private suspend fun resolveLocationBackend(
             .ifBlank { suggestion.title },
         address = json
             .optString("address")
-            .trim(),
+            .trim()
+            .ifBlank { suggestion.subtitle.trim() },
         latitude = latitude,
         longitude = longitude
     )
