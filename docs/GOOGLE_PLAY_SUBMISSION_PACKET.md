@@ -1,8 +1,8 @@
-# NearTime — Google Play submission packet
+# WayNear — Google Play submission packet
 
 Last reviewed against Google Play documentation: 2026-09-19.
 
-This file is the authoritative worksheet for Google Play submission. It records every Play Console declaration or supporting document that NearTime is expected to need. It is not itself uploaded to Google Play. The final Play Console answers must be checked against the exact release AAB and current policy wording immediately before submission.
+This file is the authoritative worksheet for Google Play submission. It records every Play Console declaration or supporting document that WayNear is expected to need. It is not itself uploaded to Google Play. The final Play Console answers must be checked against the exact release AAB and current policy wording immediately before submission.
 
 ## 1. Release identity
 
@@ -10,7 +10,7 @@ Current repository state:
 
 - Android application ID: `com.placefinder.app`
 - Android namespace: `com.placefinder.app`
-- current display name in the manifest: `NearTime`
+- current display name in the manifest: `WayNear`
 - `strings.xml` still contains the old value `PlaceFinder`
 - the product name is not yet final
 
@@ -20,8 +20,8 @@ Do not create the permanent Play app record until the final product name and per
 
 Before first upload:
 
-- [ ] final app name chosen;
-- [ ] manifest label and `strings.xml` use the same final name;
+- [x] app display name currently set to `WayNear`;
+- [x] manifest label and `strings.xml` use the same display name;
 - [ ] final application ID/package chosen and used consistently in Android, backend Google Play verification configuration and documentation;
 - [ ] Privacy Policy and Terms refer to the final app name;
 - [ ] Google Play developer name chosen.
@@ -73,18 +73,18 @@ Current covered processing:
 - Supabase, Google Maps Platform / Places and TomTom service-provider processing;
 - HTTPS transport;
 - no advertising;
-- no NearTime user account.
+- no WayNear user account.
 
 ### Release gate
 
 - [ ] Replace the generic contact paragraph with the actual verified developer/privacy email before submission.
-- [ ] Replace NearTime with the final app name if renamed.
+- [ ] Replace WayNear with the final app name if renamed.
 - [ ] Confirm public privacy URL loads without authentication and without errors.
 - [ ] Confirm the policy exactly matches the final SDK/provider inventory.
 
 ## 4. Data safety declaration
 
-NearTime must answer **Yes** to the high-level question asking whether the app collects or shares required user data types, because data leaves the device for core functionality.
+WayNear must answer **Yes** to the high-level question asking whether the app collects or shares required user data types, because data leaves the device for core functionality.
 
 Working declaration source:
 
@@ -101,7 +101,7 @@ Expected categories currently in scope:
 - Device or other IDs (anonymous installation identifier / hash)
 - Purchase history when Google Play Billing is enabled
 
-NearTime does not access card numbers or other payment credentials; Google Play collects those directly. Do not declare payment-card data merely because Google Play Billing is used.
+WayNear does not access card numbers or other payment credentials; Google Play collects those directly. Do not declare payment-card data merely because Google Play Billing is used.
 
 Transfers to Supabase/Google/TomTom must be classified using the current Play Data safety definitions. A service-provider transfer may be exempt from the "shared" label, but only if the actual contractual/processing role qualifies under Google's definition. Do not infer this solely from the vendor name.
 
@@ -109,7 +109,7 @@ Transfers to Supabase/Google/TomTom must be classified using the current Play Da
 
 Current app behavior:
 
-- no NearTime account creation;
+- no WayNear account creation;
 - no user login;
 - subscription entitlement is pseudonymous and derived from Google Play;
 - anonymous installation/quota state exists.
@@ -120,7 +120,7 @@ The Data safety form still contains data-deletion questions. Answer them truthfu
 
 Release rule:
 
-- if NearTime later adds account creation, it must add both an in-app deletion path and a public web deletion-request resource before release.
+- if WayNear later adds account creation, it must add both an in-app deletion path and a public web deletion-request resource before release.
 
 ## 6. App access declaration
 
@@ -142,7 +142,7 @@ If any advertising SDK or ad placement is later added, this declaration, Privacy
 
 ## 8. Target audience and content
 
-NearTime is a general-purpose place-search utility and is not designed as a child-directed app.
+WayNear is a general-purpose place-search utility and is not designed as a child-directed app.
 
 Before submission:
 
@@ -162,7 +162,7 @@ Current product facts relevant to the questionnaire:
 - no user-to-user communication;
 - no user-generated review text currently displayed;
 - no gambling;
-- no violence/sexual content generated by NearTime;
+- no violence/sexual content generated by WayNear;
 - no ads.
 
 The final questionnaire must be completed in Play Console and repeated if material app content changes.
@@ -175,7 +175,7 @@ Current intended answer:
 
 - **My app doesn't provide any financial features.**
 
-Google Play Billing for the app's own digital subscription/search packs is commerce for app functionality; it does not make NearTime a banking, wallet, lending, trading or other financial-services app.
+Google Play Billing for the app's own digital subscription/search packs is commerce for app functionality; it does not make WayNear a banking, wallet, lending, trading or other financial-services app.
 
 ## 11. Health apps declaration
 
@@ -187,7 +187,7 @@ Current intended answer:
 
 ## 12. News and Magazine declaration
 
-NearTime is not a News or Magazine app and should not be listed in that category or described as such. Complete any Play Console applicability question consistently with that fact.
+WayNear is not a News or Magazine app and should not be listed in that category or described as such. Complete any Play Console applicability question consistently with that fact.
 
 ## 13. Government apps declaration
 
@@ -195,8 +195,8 @@ Google Play requires the Government apps declaration in App content.
 
 Current intended answer:
 
-- **NearTime is not a government app and is not developed by or on behalf of a government entity.**
-- **NearTime does not present itself as an official source of government information or government services.**
+- **WayNear is not a government app and is not developed by or on behalf of a government entity.**
+- **WayNear does not present itself as an official source of government information or government services.**
 
 If this ever changes, the declaration, store listing and sourcing/authorization requirements must be reviewed again.
 
@@ -232,13 +232,14 @@ The app targets API 37. Google's announced Minimum Scope policy requires the And
 Current status:
 
 - ordinary runtime fine/coarse permission flow is still used;
-- Location Button is not yet implemented.
+- Location Button is not yet implemented;
+- because the app targets API 37 and its precise-location use is transactional/one-time nearby search, Google's announced Minimum Scope policy places this use case in the Location Button path. The Play Console declaration is expected from November 2026 and enforcement is stated for 27 January 2027.
 
 Release implications:
 
 - a 2026 closed test can proceed under the currently announced enforcement timeline;
-- this is a hard release gate for any release subject to the 2027-01-27 enforcement date;
-- before that deadline, implement the official Location Button flow or change the product so precise persistent foreground access is genuinely required and can be justified.
+- treat Location Button support plus `android:onlyForLocationButton="true"` as a pre-production gate for the target API 37 architecture, even though enforcement is stated for 27 January 2027;
+- do not attempt to justify persistent `ACCESS_FINE_LOCATION`: WayNear's current use is a one-time, user-initiated nearby-search action and should follow the minimum-scope path.
 
 Do not request background location unless the product fundamentally changes and passes a new policy review.
 
@@ -302,7 +303,7 @@ Current `targetSdk = 37`, which is above the API 36 minimum for new apps/updates
 
 ## 20. Testing track
 
-For an Organization developer account, the special 12-testers-for-14-days rule for newly created Personal accounts is not the relevant gate. NearTime should still use Play tracks in this order:
+For an Organization developer account, the special 12-testers-for-14-days rule for newly created Personal accounts is not the relevant gate. WayNear should still use Play tracks in this order:
 
 1. Internal testing for the developer's own Play-distributed release verification.
 2. Closed testing for external testers.
@@ -314,7 +315,7 @@ Before closed testing, complete all Play Console declarations that Play marks as
 
 These are not all Google-policy violations by themselves, but they must be resolved before release because they can make declarations inaccurate.
 
-- `strings.xml` still says `PlaceFinder` while the manifest says `NearTime`.
+- `strings.xml` still says `PlaceFinder` while the manifest says `WayNear`.
 - Product name is not final.
 - `.env.example` contains the historical Google Play package `com.martibal.neartime`, while the active native app is currently `com.placefinder.app`.
 - The native manifest still contains a Google Maps Android API-key meta-data entry even though the current native dependency list does not include the Google Maps SDK; confirm whether it is still needed and remove it if unused.
