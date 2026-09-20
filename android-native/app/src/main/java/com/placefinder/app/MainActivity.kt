@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-46"
+private const val APP_BUILD_ID = "production-20260920-47"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -1926,6 +1926,120 @@ private fun SearchUsageCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LazyListScrollbar(
+    state: LazyListState,
+    itemCount: Int,
+    modifier: Modifier = Modifier
+) {
+    if (itemCount <= 1) return
+
+    val scope = rememberCoroutineScope()
+    val firstVisibleIndex by remember(state) {
+        derivedStateOf { state.firstVisibleItemIndex }
+    }
+    val firstVisibleOffset by remember(state) {
+        derivedStateOf { state.firstVisibleItemScrollOffset }
+    }
+    val visibleCount by remember(state) {
+        derivedStateOf { state.layoutInfo.visibleItemsInfo.size.coerceAtLeast(1) }
+    }
+    val canScrollForward by remember(state) {
+        derivedStateOf { state.canScrollForward }
+    }
+
+    val thumbFraction = (visibleCount.toFloat() / itemCount.toFloat())
+        .coerceIn(0.12f, 1f)
+
+    val maxFirst = (itemCount - visibleCount).coerceAtLeast(1)
+    val firstSize = state.layoutInfo.visibleItemsInfo
+        .firstOrNull()
+        ?.size
+        ?.coerceAtLeast(1)
+        ?: 1
+    val itemFraction = (firstVisibleOffset.toFloat() / firstSize.toFloat())
+        .coerceIn(0f, 1f)
+
+    val rawPosition = (
+        (firstVisibleIndex.toFloat() + itemFraction) /
+            maxFirst.toFloat()
+        ).coerceIn(0f, 1f)
+
+    // Never show the thumb at the physical bottom while the list can still
+    // scroll further. This was the old failure mode with variable-height cards.
+    val positionFraction = when {
+        !canScrollForward -> 1f
+        firstVisibleIndex == 0 && firstVisibleOffset == 0 -> 0f
+        else -> rawPosition.coerceAtMost(0.97f)
+    }
+
+    fun scrollToFraction(fraction: Float) {
+        scope.launch {
+            val bounded = fraction.coerceIn(0f, 1f)
+            when {
+                bounded <= 0.01f -> {
+                    state.scrollToItem(0)
+                }
+                bounded >= 0.99f -> {
+                    // Force the actual list end, not merely the last estimated
+                    // first-visible index. scrollBy clamps at the real max.
+                    state.scrollToItem(itemCount - 1)
+                    state.scrollBy(100_000f)
+                }
+                else -> {
+                    val target = (
+                        bounded * (itemCount - 1).toFloat()
+                        ).roundToInt().coerceIn(0, itemCount - 1)
+                    state.scrollToItem(target)
+                }
+            }
+        }
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+            )
+            .pointerInput(itemCount, visibleCount) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset ->
+                        val track = size.height.toFloat()
+                        val thumb = track * thumbFraction
+                        val usable = (track - thumb).coerceAtLeast(1f)
+                        val fraction = ((offset.y - thumb / 2f) / usable)
+                            .coerceIn(0f, 1f)
+                        scrollToFraction(fraction)
+                    },
+                    onVerticalDrag = { change, _ ->
+                        change.consume()
+                        val track = size.height.toFloat()
+                        val thumb = track * thumbFraction
+                        val usable = (track - thumb).coerceAtLeast(1f)
+                        val fraction = ((change.position.y - thumb / 2f) / usable)
+                            .coerceIn(0f, 1f)
+                        scrollToFraction(fraction)
+                    }
+                )
+            }
+    ) {
+        val thumbHeight = maxHeight * thumbFraction
+        val thumbOffset = (maxHeight - thumbHeight) * positionFraction
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(thumbHeight)
+                .offset(y = thumbOffset)
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                )
+        )
     }
 }
 
