@@ -115,7 +115,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-48"
+private const val APP_BUILD_ID = "production-20260920-49"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF6E52B5),
     onPrimary = Color(0xFFFFFFFF),
@@ -805,6 +805,10 @@ private fun NearTimeScreen(
             }
         }
 
+        LaunchedEffect(resultSort, successOverlay.response.places) {
+            resultListState.scrollToItem(0)
+        }
+
         Scaffold { innerPadding ->
             Column(
                 modifier = Modifier
@@ -848,7 +852,6 @@ private fun NearTimeScreen(
                         selected = resultSort == ResultSort.NEAREST,
                         onClick = {
                             resultSort = ResultSort.NEAREST
-                            scope.launch { resultListState.scrollToItem(0) }
                         },
                         label = { Text("Nearest") }
                     )
@@ -857,7 +860,6 @@ private fun NearTimeScreen(
                         selected = resultSort == ResultSort.HIGHEST_RATED,
                         onClick = {
                             resultSort = ResultSort.HIGHEST_RATED
-                            scope.launch { resultListState.scrollToItem(0) }
                         },
                         label = { Text("Highest rated") }
                     )
@@ -877,7 +879,6 @@ private fun NearTimeScreen(
                         enabled = hasOpeningTimeData,
                         onClick = {
                             resultSort = ResultSort.LONGEST_OPEN
-                            scope.launch { resultListState.scrollToItem(0) }
                         },
                         label = {
                             Text(if (hasOpeningTimeData) "Open longest" else "Opening time unavailable")
@@ -889,7 +890,6 @@ private fun NearTimeScreen(
                         enabled = hasPriceData,
                         onClick = {
                             resultSort = ResultSort.LOWEST_PRICE
-                            scope.launch { resultListState.scrollToItem(0) }
                         },
                         label = {
                             Text(if (hasPriceData) "Lowest price" else "Price unavailable")
