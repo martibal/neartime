@@ -77,9 +77,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
@@ -115,7 +118,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-50"
+private const val APP_BUILD_ID = "production-20260920-51"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF6E52B5),
     onPrimary = Color(0xFFFFFFFF),
@@ -1008,11 +1011,32 @@ private fun NearTimeScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "NearTime",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
+                            text = buildAnnotatedString {
+                                withStyle(
+                                    SpanStyle(
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                ) {
+                                    append("Way")
+                                }
+                                withStyle(
+                                    SpanStyle(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                ) {
+                                    append("Near")
+                                }
+                            },
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                letterSpacing = 0.15.sp
+                            )
                         )
-                        Text("Find places by real walking time.")
+                        Text(
+                            text = "Find places by real walking time.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(if (darkMode) "☾" else "☀")
