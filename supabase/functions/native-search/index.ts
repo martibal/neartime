@@ -10,7 +10,7 @@
  * - conservative hard provider COGS ceiling: NOK 0.30
  * - result order: measured pedestrian route distance
  * - fail closed when the Top 10 cannot be proven inside the cost ceiling
- */ const BUILD_ID = '2026-09-20-text-rating-location-restriction-v40';
+ */ const BUILD_ID = '2026-09-20-nearby-rating-filter-v41';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -699,7 +699,6 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
     throw e;
   }
 
-  const useTextSearch = input.minRating > 0;
   const radius = discoverRadiusMeters(input.maxWalkMinutes);
   const fieldMask =
     'places.id,places.displayName,places.formattedAddress,places.location,' +
@@ -716,105 +715,51 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
   };
 
   let payload;
-  let discoverySource;
+  const discoverySource = 'GOOGLE_PLACES_NEARBY_SEARCH_NEW';
 
-  if (useTextSearch) {
-    const requestBody = {
-      textQuery: CATEGORY_QUERY[input.category],
-      pageSize: 20,
-      minRating: input.minRating,
-      rankPreference: 'DISTANCE',
-      // Rating searches must be geographically hard-bounded. A bias can
-      // return distant results that consume Google's 20-result candidate page
-      // before nearby qualifying places are considered.
-      locationRestriction: {
-        rectangle: textSearchRestrictionRectangle(
-          input.latitude,
-          input.longitude,
-          radius
-        )
-      },
-      routingParameters: {
-        origin: {
-          latitude: input.latitude,
-          longitude: input.longitude
-        },
-        travelMode: 'WALK'
-      }
-    };
+  // Always use Nearby Search for category searches, including when a minimum
+  // rating is selected. This preserves local distance-ranked candidate
+  // acquisition. Text Search with minRating can fill its 20-result page with
+  // farther text-relevance matches and omit nearby qualifying places.
+  if (beforeProviderAttempt) {
+    await beforeProviderAttempt({
+      googleNearbyCalls: 1,
+      googleTextCalls: 0,
+      googleRoutingSummaryPlaces: 0,
+      conservativeCostNok: GOOGLE_SEARCH_COST_NOK,
+      costCapNok: SEARCH_COST_CAP_NOK
+    });
+  }
 
-    // Text Search supports one includedType. Use strict type filtering when
-    // NearTime's category maps cleanly to one Google type (restaurants,
-    // pharmacies, hotels, etc.). Multi-type NearTime categories are validated
-    // against p.types after Google returns the rating-qualified candidates.
-    if (includedTypes.length === 1) {
-      requestBody.includedType = includedTypes[0];
-      requestBody.strictTypeFiltering = true;
-    }
-    if (input.openNowOnly) {
-      requestBody.openNow = true;
-    }
-
-    if (beforeProviderAttempt) {
-      await beforeProviderAttempt({
-        googleNearbyCalls: 0,
-        googleTextCalls: 1,
-        googleRoutingSummaryPlaces: 0,
-        conservativeCostNok: GOOGLE_SEARCH_COST_NOK,
-        costCapNok: SEARCH_COST_CAP_NOK
-      });
-    }
-    payload = await fetchJson(
-      'https://places.googleapis.com/v1/places:searchText',
-      {
-        method: 'POST',
-        headers: commonHeaders,
-        body: JSON.stringify(requestBody)
-      },
-      'GOOGLE_TEXT'
-    );
-    discoverySource = 'GOOGLE_PLACES_TEXT_SEARCH_NEW_MIN_RATING';
-  } else {
-    if (beforeProviderAttempt) {
-      await beforeProviderAttempt({
-        googleNearbyCalls: 1,
-        googleTextCalls: 0,
-        googleRoutingSummaryPlaces: 0,
-        conservativeCostNok: GOOGLE_SEARCH_COST_NOK,
-        costCapNok: SEARCH_COST_CAP_NOK
-      });
-    }
-    payload = await fetchJson(
-      'https://places.googleapis.com/v1/places:searchNearby',
-      {
-        method: 'POST',
-        headers: commonHeaders,
-        body: JSON.stringify({
-          includedTypes,
-          maxResultCount: 20,
-          rankPreference: 'DISTANCE',
-          locationRestriction: {
-            circle: {
-              center: {
-                latitude: input.latitude,
-                longitude: input.longitude
-              },
-              radius
-            }
-          },
-          routingParameters: {
-            origin: {
+  payload = await fetchJson(
+    'https://places.googleapis.com/v1/places:searchNearby',
+    {
+      method: 'POST',
+      headers: commonHeaders,
+      body: JSON.stringify({
+        includedTypes,
+        maxResultCount: 20,
+        rankPreference: 'DISTANCE',
+        locationRestriction: {
+          circle: {
+            center: {
               latitude: input.latitude,
               longitude: input.longitude
             },
-            travelMode: 'WALK'
+            radius
           }
-        })
-      },
-      'GOOGLE_NEARBY'
-    );
-    discoverySource = 'GOOGLE_PLACES_NEARBY_SEARCH_NEW';
-  }
+        },
+        routingParameters: {
+          origin: {
+            latitude: input.latitude,
+            longitude: input.longitude
+          },
+          travelMode: 'WALK'
+        }
+      })
+    },
+    'GOOGLE_NEARBY'
+  );
 
   const places = Array.isArray(payload && payload.places) ? payload.places : [];
   const summaries = Array.isArray(payload && payload.routingSummaries)
@@ -851,8 +796,8 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
     if (walkMinutes > input.maxWalkMinutes) continue;
 
     const rating = num(p.rating);
-    // Defensive check. With Text Search, minRating is already applied by
-    // Google before the 20-candidate cap.
+    // Rating is a strict local hard filter over the distance-ranked Nearby
+    // candidate set. A place below the selected floor never reaches the app.
     if (input.minRating > 0 && (rating === null || rating < input.minRating)) continue;
 
     const userRatingCount = Number.isFinite(Number(p.userRatingCount))
@@ -925,7 +870,7 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
       routingSource: 'GOOGLE_PLACES_ROUTING_SUMMARIES_WALK',
       ratingGate:
         input.minRating > 0
-          ? 'GOOGLE_TEXT_MIN_RATING_' + input.minRating.toFixed(1)
+          ? 'LOCAL_HARD_MIN_RATING_' + input.minRating.toFixed(1)
           : 'OFF',
       openNowGate: input.openNowOnly ? 'STRICT_CONFIRMED_OPEN_ONLY' : 'OFF',
       cloudOnly: true,
@@ -944,8 +889,8 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
     },
     usage: {
       thisSearch: {
-        googleNearbyCalls: useTextSearch ? 0 : 1,
-        googleTextCalls: useTextSearch ? 1 : 0,
+        googleNearbyCalls: 1,
+        googleTextCalls: 0,
         googleRoutingSummaryPlaces: places.length,
         tomtomDiscover: 0,
         tomtomRoute: 0,
