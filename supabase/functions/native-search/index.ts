@@ -10,7 +10,7 @@
  * - conservative hard provider COGS ceiling: NOK 0.30
  * - result order: measured pedestrian route distance
  * - fail closed when the Top 10 cannot be proven inside the cost ceiling
- */ const BUILD_ID = '2026-09-19-provider-attempt-ledger-v39';
+ */ const BUILD_ID = '2026-09-20-text-rating-location-restriction-v40';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -391,6 +391,43 @@ function normalizeDiscoverPlace(item, input) {
 function discoverRadiusMeters(maxWalkMinutes) {
   return Math.min(10000, Math.max(2500, Math.round(maxWalkMinutes * 250)));
 }
+function textSearchRestrictionRectangle(latitude, longitude, radiusMeters) {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  const radius = Math.max(1, Number(radiusMeters) || 1);
+  const metersPerDegree = 111320;
+  const latDelta = radius / metersPerDegree;
+  const lowLatitude = Math.max(-90, lat - latDelta);
+  const highLatitude = Math.min(90, lat + latDelta);
+
+  if (lowLatitude <= -89.999999 || highLatitude >= 89.999999) {
+    return {
+      low: { latitude: lowLatitude, longitude: -180 },
+      high: { latitude: highLatitude, longitude: 180 }
+    };
+  }
+
+  const cosLat = Math.max(0.01, Math.abs(Math.cos(lat * Math.PI / 180)));
+  const lonDelta = Math.min(179.999, radius / (metersPerDegree * cosLat));
+  const normalizeLongitude = (value) => {
+    let normalized = value;
+    while (normalized < -180) normalized += 360;
+    while (normalized > 180) normalized -= 360;
+    return normalized;
+  };
+
+  return {
+    low: {
+      latitude: lowLatitude,
+      longitude: normalizeLongitude(lon - lonDelta)
+    },
+    high: {
+      latitude: highLatitude,
+      longitude: normalizeLongitude(lon + lonDelta)
+    }
+  };
+}
+
 async function discoverPlaces(apiKey, input, usage) {
   if (usage.tomtomDiscover >= 1) throw new Error('SEARCH_COST_CAP_REACHED');
   if (costNok(usage.tomtomDiscover + 1, usage.tomtomRoute) > SEARCH_COST_CAP_NOK) {
@@ -687,14 +724,15 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
       pageSize: 20,
       minRating: input.minRating,
       rankPreference: 'DISTANCE',
-      locationBias: {
-        circle: {
-          center: {
-            latitude: input.latitude,
-            longitude: input.longitude
-          },
+      // Rating searches must be geographically hard-bounded. A bias can
+      // return distant results that consume Google's 20-result candidate page
+      // before nearby qualifying places are considered.
+      locationRestriction: {
+        rectangle: textSearchRestrictionRectangle(
+          input.latitude,
+          input.longitude,
           radius
-        }
+        )
       },
       routingParameters: {
         origin: {
