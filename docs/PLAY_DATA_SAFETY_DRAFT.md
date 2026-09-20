@@ -1,6 +1,6 @@
 # WayNear — Play Data Safety working draft
 
-Last reviewed: 2026-09-19.
+Last reviewed: 2026-09-20.
 
 This is a submission worksheet, not a substitute for the Play Console form. Reconcile every answer against the exact release AAB, its dependency tree, the production backend and Google's current definitions immediately before submission.
 
