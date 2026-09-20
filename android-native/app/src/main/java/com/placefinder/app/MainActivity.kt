@@ -126,7 +126,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-58"
+private const val APP_BUILD_ID = "production-20260920-59"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
     onPrimary = Color(0xFFFFFFFF),
@@ -1323,9 +1323,10 @@ private fun NearTimeScreen(
                         }
                     } else {
                         Text(
-                            text = "NearTime uses your location only when Current location is selected. " +
-                                "It is sent securely to NearTime's search service and Google Maps Platform " +
-                                "to find nearby places and walking routes.",
+                            text = "WayNear accesses your foreground location only when you choose Current location. " +
+                                "Your selected approximate or precise location is sent securely to WayNear's search service " +
+                                "and Google Maps Platform to find nearby places and walking routes. " +
+                                "WayNear does not require an account, and you can use Type a location or Choose on map instead.",
                             style = MaterialTheme.typography.bodySmall
                         )
                         Spacer(Modifier.height(6.dp))
