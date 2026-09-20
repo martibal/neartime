@@ -1,6 +1,6 @@
 # WayNear — Google Play release gate
 
-Last reviewed: 2026-09-19.
+Last reviewed: 2026-09-20.
 
 This checklist is the executable release gate for the native Android app. The full declaration worksheet is `docs/GOOGLE_PLAY_SUBMISSION_PACKET.md`.
 
