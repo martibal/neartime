@@ -113,7 +113,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260919-39"
+private const val APP_BUILD_ID = "production-20260920-40"
 private const val LOG_TAG = "NearTimeNet"
 private const val RESULT_LIMIT = 10
 private const val DEFAULT_LATITUDE = 59.9110
@@ -308,6 +308,7 @@ private fun NearTimeScreen(
     var resultSort by remember { mutableStateOf(ResultSort.NEAREST) }
 
     var useCurrentLocation by remember { mutableStateOf(true) }
+    var typeLocationInputVisible by remember { mutableStateOf(false) }
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var currentLocationLabel by remember { mutableStateOf<String?>(null) }
     var currentLocationLookupFinished by remember { mutableStateOf(false) }
@@ -393,6 +394,7 @@ private fun NearTimeScreen(
 
     fun selectCurrentLocation() {
         useCurrentLocation = true
+        typeLocationInputVisible = false
         customLocation = null
         customLocationText = ""
         locationSuggestions = emptyList()
@@ -405,7 +407,7 @@ private fun NearTimeScreen(
             if (useCurrentLocation && currentLocation == null) {
                 infoDialogMessage =
                     "Please select a starting position before searching. " +
-                    "Try Current location again or choose Other place."
+                    "Try Current location again or Type a location."
                 return@launch
             }
 
@@ -442,7 +444,7 @@ private fun NearTimeScreen(
                         ?: run {
                             infoDialogMessage =
                                 "Please select a starting position before searching. " +
-                                "Try Current location again or choose Other place."
+                                "Try Current location again or Type a location."
                             searchState = SearchState.Idle
                             return@launch
                         }
@@ -625,6 +627,7 @@ private fun NearTimeScreen(
                                 )
                                 customLocationText = "Selected map point"
                                 useCurrentLocation = false
+                                typeLocationInputVisible = false
                                 locationSuggestions = emptyList()
                                 locationError = null
                                 mapPickerOpen = false
@@ -919,27 +922,73 @@ private fun NearTimeScreen(
                 Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    FilterChip(
-                        selected = useCurrentLocation,
-                        onClick = { selectCurrentLocation() },
-                        label = { Text("Current location") }
-                    )
-                    FilterChip(
-                        selected = !useCurrentLocation,
-                        onClick = {
-                            useCurrentLocation = false
-                            locationSuggestions = emptyList()
-                            locationError = null
-                        },
-                        label = { Text("Other place") }
-                    )
+                    if (useCurrentLocation) {
+                        Button(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            onClick = { selectCurrentLocation() }
+                        ) {
+                            Text("Current location")
+                        }
+                    } else {
+                        OutlinedButton(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            onClick = { selectCurrentLocation() }
+                        ) {
+                            Text("Current location")
+                        }
+                    }
+
+                    if (!useCurrentLocation && typeLocationInputVisible) {
+                        Button(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            onClick = {
+                                useCurrentLocation = false
+                                typeLocationInputVisible = true
+                            }
+                        ) {
+                            Text("Type a location")
+                        }
+                    } else {
+                        OutlinedButton(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            onClick = {
+                                useCurrentLocation = false
+                                typeLocationInputVisible = true
+                                customLocation = null
+                                customLocationText = ""
+                                locationSuggestions = emptyList()
+                                locationError = null
+                            }
+                        ) {
+                            Text("Type a location")
+                        }
+                    }
                 }
 
-                Spacer(Modifier.height(6.dp))
-                OutlinedButton(
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "or",
                     modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
                     onClick = {
                         val existingCustom = customLocation?.let {
                             GeoPoint(
@@ -970,9 +1019,9 @@ private fun NearTimeScreen(
                                 currentLocation == null ->
                                     "Current location is not available."
                                 !currentLocationLabel.isNullOrBlank() ->
-                                    "● Using your location · $currentLocationLabel"
+                                    "Starting from: $currentLocationLabel"
                                 else ->
-                                    "● Using your current GPS location"
+                                    "Starting from: Current GPS location"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = if (
@@ -1017,8 +1066,8 @@ private fun NearTimeScreen(
                             }
                         ) { Text("Allow GPS location") }
                     }
-                } else {
-                    Spacer(Modifier.height(6.dp))
+                } else if (typeLocationInputVisible) {
+                    Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = customLocationText,
                         onValueChange = {
@@ -1029,8 +1078,8 @@ private fun NearTimeScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        label = { Text("Place or address") },
-                        placeholder = { Text("e.g. hotel name or address") }
+                        label = { Text("Location") },
+                        placeholder = { Text("Enter an address or location") }
                     )
 
                     OutlinedButton(
@@ -1111,7 +1160,7 @@ private fun NearTimeScreen(
 
                     customLocation?.let {
                         Text(
-                            text = "Using: " + it.title,
+                            text = "Starting from: " + it.title,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -1122,6 +1171,16 @@ private fun NearTimeScreen(
                             text = it,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                } else {
+                    customLocation?.let {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = "Starting from: " + it.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1351,7 +1410,7 @@ private fun NearTimeScreen(
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "No account is required. Location access is optional; you can use another place or address instead.",
+                    text = "No account is required. Location access is optional; you can type an address or choose a point on the map instead.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
