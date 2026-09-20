@@ -126,7 +126,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-61"
+private const val APP_BUILD_ID = "production-20260920-62"
 private val RatingStarGold = Color(0xFFB8860B)
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
@@ -1070,13 +1070,17 @@ private fun NearTimeScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 12.dp)
+                    ) {
                         Text(
                             text = buildAnnotatedString {
                                 withStyle(
@@ -1100,19 +1104,33 @@ private fun NearTimeScreen(
                                 letterSpacing = 0.15.sp
                             )
                         )
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = "Find places by real walking time.",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (darkMode) "☾" else "☀")
+                    Row(
+                        modifier = Modifier.padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = if (darkMode) "☾" else "☀",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Switch(
                             checked = darkMode,
                             onCheckedChange = onDarkModeChange
                         )
                     }
                 }
+                Spacer(Modifier.height(4.dp))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                )
             }
 
             item {
