@@ -126,7 +126,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-57"
+private const val APP_BUILD_ID = "production-20260920-58"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
     onPrimary = Color(0xFFFFFFFF),
@@ -828,13 +828,33 @@ private fun NearTimeScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        searchState = SearchState.Idle
-                        selectedPlace = null
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Back to search")
+                    OutlinedButton(
+                        onClick = {
+                            searchState = SearchState.Idle
+                            selectedPlace = null
+                        }
+                    ) {
+                        Text("Back to search")
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            if (darkMode) "☾" else "☀",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Switch(
+                            checked = darkMode,
+                            onCheckedChange = onDarkModeChange
+                        )
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -865,10 +885,10 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.NEAREST
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF)
                         ),
                         label = { Text("Nearest") }
                     )
@@ -879,10 +899,10 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.HIGHEST_RATED
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF)
                         ),
                         label = { Text("Highest rated") }
                     )
@@ -904,11 +924,11 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.LONGEST_OPEN
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
-                            disabledContainerColor = if (darkMode) Color(0xFF0C1929) else MaterialTheme.colorScheme.surfaceVariant,
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF),
+                            disabledContainerColor = if (darkMode) Color(0xFF0C1929) else Color(0xFFD5DEE6),
                             disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         label = {
@@ -923,11 +943,11 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.LOWEST_PRICE
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else MaterialTheme.colorScheme.surface,
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
-                            disabledContainerColor = if (darkMode) Color(0xFF0C1929) else MaterialTheme.colorScheme.surfaceVariant,
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF),
+                            disabledContainerColor = if (darkMode) Color(0xFF0C1929) else Color(0xFFD5DEE6),
                             disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         label = {
