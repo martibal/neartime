@@ -906,7 +906,7 @@ module.exports._test = {
   discoverRadiusMeters,
   haversineMeters,
   normalizeDiscoverPlace,
-  openStateNow,
+  openStateNow: openingStateNow,
   proofState,
   topTenByWalkDistance,
   validateSearch,
