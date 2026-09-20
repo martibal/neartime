@@ -79,6 +79,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -118,20 +119,20 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-51"
+private const val APP_BUILD_ID = "production-20260920-52"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF6E52B5),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE6E0F2),
+    primaryContainer = Color(0xFFE4DEF0),
     onPrimaryContainer = Color(0xFF261A46),
-    background = Color(0xFFE8EDF2),
+    background = Color(0xFFDDE5EC),
     onBackground = Color(0xFF1D232B),
-    surface = Color(0xFFF2F5F7),
+    surface = Color(0xFFE9EFF4),
     onSurface = Color(0xFF1D232B),
-    surfaceVariant = Color(0xFFDCE3EA),
-    onSurfaceVariant = Color(0xFF55616E),
-    outline = Color(0xFFB4BEC8),
-    outlineVariant = Color(0xFFCDD5DE)
+    surfaceVariant = Color(0xFFD2DCE5),
+    onSurfaceVariant = Color(0xFF53606D),
+    outline = Color(0xFFAAB6C2),
+    outlineVariant = Color(0xFFC3CED8)
 )
 
 private val NearTimeDarkColors = darkColorScheme(
