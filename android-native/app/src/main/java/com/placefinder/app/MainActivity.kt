@@ -17,6 +17,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -43,6 +44,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -120,7 +122,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-54"
+private const val APP_BUILD_ID = "production-20260920-55"
 private val NearTimeLightColors = lightColorScheme(
     primary = Color(0xFF7B6AA9),
     onPrimary = Color(0xFFFFFFFF),
@@ -1085,7 +1087,23 @@ private fun NearTimeScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp),
-                            onClick = { selectCurrentLocation() }
+                            onClick = { selectCurrentLocation() },
+                            border = BorderStroke(
+                                width = 1.25.dp,
+                                color = if (darkMode) {
+                                    MaterialTheme.colorScheme.outline
+                                } else {
+                                    Color(0xFF9EABB8)
+                                }
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                } else {
+                                    Color(0xFFE7EDF2)
+                                },
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
                         ) {
                             Text("Current location")
                         }
@@ -1115,7 +1133,23 @@ private fun NearTimeScreen(
                                 customLocationText = ""
                                 locationSuggestions = emptyList()
                                 locationError = null
-                            }
+                            },
+                            border = BorderStroke(
+                                width = 1.25.dp,
+                                color = if (darkMode) {
+                                    MaterialTheme.colorScheme.outline
+                                } else {
+                                    Color(0xFF9EABB8)
+                                }
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                } else {
+                                    Color(0xFFE7EDF2)
+                                },
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
                         ) {
                             Text("Type a location")
                         }
@@ -1152,7 +1186,23 @@ private fun NearTimeScreen(
                                 )
                         mapPickerPoint = null
                         mapPickerOpen = true
-                    }
+                    },
+                    border = BorderStroke(
+                        width = 1.25.dp,
+                        color = if (darkMode) {
+                            MaterialTheme.colorScheme.outline
+                        } else {
+                            Color(0xFF9EABB8)
+                        }
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (darkMode) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            Color(0xFFE7EDF2)
+                        },
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
                 ) {
                     Text("Choose on map")
                 }
@@ -1409,6 +1459,7 @@ private fun NearTimeScreen(
             item {
                 PlaceTypeSelector(
                     selectedCategory = selectedCategory,
+                    darkMode = darkMode,
                     onSelected = { selectedCategory = it }
                 )
             }
@@ -1687,6 +1738,7 @@ private fun NearTimeScreen(
 @Composable
 private fun PlaceTypeSelector(
     selectedCategory: SearchCategory,
+    darkMode: Boolean,
     onSelected: (SearchCategory) -> Unit
 ) {
     var dialogOpen by remember { mutableStateOf(false) }
@@ -1702,7 +1754,23 @@ private fun PlaceTypeSelector(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(58.dp),
-            onClick = { dialogOpen = true }
+            onClick = { dialogOpen = true },
+            border = BorderStroke(
+                width = 1.25.dp,
+                color = if (darkMode) {
+                    MaterialTheme.colorScheme.outline
+                } else {
+                    Color(0xFF9EABB8)
+                }
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (darkMode) {
+                    MaterialTheme.colorScheme.surfaceVariant
+                } else {
+                    Color(0xFFE7EDF2)
+                },
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
