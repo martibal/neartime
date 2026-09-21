@@ -127,9 +127,12 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-64"
+private const val APP_BUILD_ID = "production-20260921-65"
 private val RatingStarGold = Color(0xFFB8860B)
-private val WayNearBrandPurple = Color(0xFF7542C8)
+private val WayNearLogoNavy = Color(0xFF0D197E)
+private val WayNearBrandPurple = Color(0xFF6634BB)
+private val WayNearLogoPink = Color(0xFFF07CB5)
+private val WayNearLogoLime = Color(0xFFBEFB63)
 private val NearTimeLightColors = lightColorScheme(
     primary = WayNearBrandPurple,
     onPrimary = Color(0xFFFFFFFF),
@@ -146,7 +149,7 @@ private val NearTimeLightColors = lightColorScheme(
 )
 
 private val NearTimeDarkColors = darkColorScheme(
-    primary = Color(0xFFBDA5F2),
+    primary = Color(0xFFC6A9F4),
     onPrimary = Color(0xFF251542),
     primaryContainer = Color(0xFF453468),
     onPrimaryContainer = Color(0xFFF0E8FF),
@@ -1100,9 +1103,24 @@ private fun NearTimeScreen(
                             .padding(end = 12.dp)
                     ) {
                         Text(
-                            text = "WayNear",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.ExtraBold,
+                            text = buildAnnotatedString {
+                                withStyle(
+                                    SpanStyle(
+                                        color = if (darkMode) Color(0xFFF8FCEB) else WayNearLogoNavy,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                ) {
+                                    append("Way")
+                                }
+                                withStyle(
+                                    SpanStyle(
+                                        color = if (darkMode) WayNearLogoLime else WayNearBrandPurple,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                ) {
+                                    append("Near")
+                                }
+                            },
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 letterSpacing = 0.15.sp
                             )
