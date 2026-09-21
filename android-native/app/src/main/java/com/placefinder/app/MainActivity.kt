@@ -128,7 +128,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-72"
+private const val APP_BUILD_ID = "production-20260921-73"
 private val RatingStarGold = Color(0xFFB8860B)
 private val WayNearLogoNavy = Color(0xFF0D197E)
 private val WayNearBrandPurple = Color(0xFF6634BB)
@@ -1077,16 +1077,19 @@ private fun NearTimeScreen(
                     .fillMaxWidth()
                     .background(
                         if (darkMode) {
-                            MaterialTheme.colorScheme.surface
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
                         } else {
-                            Color(0xFFE8EEF3).copy(alpha = 0.92f)
+                            Color(0xFFEAF0F4).copy(alpha = 0.90f)
                         }
                     )
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
+                )
                 Button(
                     modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                         .fillMaxWidth()
                         .height(58.dp),
                     enabled = searchButtonEnabled,
@@ -1190,6 +1193,7 @@ private fun NearTimeScreen(
             item {
                 SearchUsageCard(
                     quota = quotaStatus,
+                    darkMode = darkMode,
                     quotaError = quotaError,
                     billing = billingUiState,
                     onSubscribe = { billingManager.launchSubscription() },
@@ -1213,6 +1217,18 @@ private fun NearTimeScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                contentColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimary
+                                }
+                            ),
                             onClick = { selectCurrentLocation() }
                         ) {
                             Text("Current location")
@@ -1249,6 +1265,18 @@ private fun NearTimeScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                contentColor = if (darkMode) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimary
+                                }
+                            ),
                             onClick = {
                                 useCurrentLocation = false
                                 typeLocationInputVisible = true
@@ -1673,19 +1701,17 @@ private fun NearTimeScreen(
                         valueRange = 5f..30f,
                         steps = 24,
                         colors = SliderDefaults.colors(
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.94f),
                             thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                            activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.58f),
                             inactiveTrackColor = if (darkMode) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
                             } else {
-                                Color(0xFFB9AED2)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                             },
-                            inactiveTickColor = if (darkMode) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
-                            } else {
-                                Color(0xFF6F648F)
-                            }
+                            inactiveTickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = if (darkMode) 0.52f else 0.44f
+                            )
                         )
                     )
                 }
@@ -1761,19 +1787,17 @@ private fun NearTimeScreen(
                             valueRange = 0f..180f,
                             steps = 5,
                             colors = SliderDefaults.colors(
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.94f),
                                 thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                                activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.58f),
                                 inactiveTrackColor = if (darkMode) {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
                                 } else {
-                                    Color(0xFFB9AED2)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                                 },
-                                inactiveTickColor = if (darkMode) {
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
-                                } else {
-                                    Color(0xFF6F648F)
-                                }
+                                inactiveTickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                    alpha = if (darkMode) 0.52f else 0.44f
+                                )
                             )
                         )
                     }
@@ -1826,19 +1850,17 @@ private fun NearTimeScreen(
                         valueRange = 0f..5f,
                         steps = 9,
                         colors = SliderDefaults.colors(
-                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.94f),
                             thumbColor = MaterialTheme.colorScheme.primary,
-                            activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                            activeTickColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.58f),
                             inactiveTrackColor = if (darkMode) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
                             } else {
-                                Color(0xFFB9AED2)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                             },
-                            inactiveTickColor = if (darkMode) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
-                            } else {
-                                Color(0xFF6F648F)
-                            }
+                            inactiveTickColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = if (darkMode) 0.52f else 0.44f
+                            )
                         )
                     )
                 }
@@ -2163,13 +2185,31 @@ private fun PlaceTypeDialog(
 @Composable
 private fun SearchUsageCard(
     quota: SearchQuotaStatus?,
+    darkMode: Boolean,
     quotaError: String?,
     billing: BillingUiState,
     onSubscribe: () -> Unit,
     onBuyExtra: () -> Unit,
     onRestore: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (darkMode) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f)
+            } else {
+                Color(0xFFF0F4F7).copy(alpha = 0.88f)
+            }
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (darkMode) {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+            } else {
+                Color(0xFFB8C4CE).copy(alpha = 0.72f)
+            }
+        )
+    ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
