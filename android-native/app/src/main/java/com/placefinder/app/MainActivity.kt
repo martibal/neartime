@@ -85,6 +85,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -128,27 +129,19 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-73"
+private const val APP_BUILD_ID = "production-20260921-74"
 private val RatingStarGold = Color(0xFFB8860B)
 private val WayNearLogoNavy = Color(0xFF0D197E)
 private val WayNearBrandPurple = Color(0xFF6634BB)
 private val WayNearLogoPink = Color(0xFFF07CB5)
 private val WayNearLogoLime = Color(0xFFBEFB63)
 private val WayNearLogoCream = Color(0xFFF8FCEB)
-private val WayNearLightGlassBrush = Brush.linearGradient(
-    colors = listOf(
-        Color(0xFFC8D3DE),
-        Color(0xFFD5DEE7),
-        Color(0xFFC1CEDA),
-        Color(0xFFD0D9E3)
-    )
-)
 private val NearTimeLightColors = lightColorScheme(
     primary = WayNearBrandPurple,
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFE5DAF4),
     onPrimaryContainer = Color(0xFF28153F),
-    background = Color(0xFFC9D4DE),
+    background = Color(0xFFD8EFFC),
     onBackground = Color(0xFF25313D),
     surface = Color(0xFFEAF0F4),
     onSurface = Color(0xFF25313D),
@@ -163,7 +156,7 @@ private val NearTimeDarkColors = darkColorScheme(
     onPrimary = Color(0xFF251542),
     primaryContainer = Color(0xFF453468),
     onPrimaryContainer = Color(0xFFF0E8FF),
-    background = Color(0xFF071321),
+    background = Color(0xFF051426),
     onBackground = Color(0xFFEAF0F6),
     surface = Color(0xFF0E1D2E),
     onSurface = Color(0xFFEAF0F6),
@@ -380,6 +373,31 @@ private fun NearTimeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val gradientEndY = with(density) { 1200.dp.toPx() }
+    val pageBackgroundBrush = remember(darkMode, gradientEndY) {
+        if (darkMode) {
+            Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color(0xFF051426),
+                    0.42f to Color(0xFF0A1C34),
+                    0.72f to Color(0xFF211E39),
+                    1.00f to Color(0xFF593249)
+                ),
+                endY = gradientEndY
+            )
+        } else {
+            Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0.00f to Color(0xFFD8EFFC),
+                    0.38f to Color(0xFFE9F3F7),
+                    0.70f to Color(0xFFF4EEE6),
+                    1.00f to Color(0xFFF4D8B9)
+                ),
+                endY = gradientEndY
+            )
+        }
+    }
     val installHash = remember { getOrCreateInstallHash(context) }
 
     var quotaStatus by remember { mutableStateOf<SearchQuotaStatus?>(null) }
@@ -846,12 +864,13 @@ private fun NearTimeScreen(
         }
 
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground
         ) { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(pageBackgroundBrush)
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp)
             ) {
@@ -1110,18 +1129,7 @@ private fun NearTimeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    if (darkMode) {
-                        Brush.verticalGradient(
-                            listOf(
-                                NearTimeDarkColors.background,
-                                NearTimeDarkColors.background
-                            )
-                        )
-                    } else {
-                        WayNearLightGlassBrush
-                    }
-                )
+                .background(pageBackgroundBrush)
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
