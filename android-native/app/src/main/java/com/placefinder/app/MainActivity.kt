@@ -128,7 +128,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-69"
+private const val APP_BUILD_ID = "production-20260921-70"
 private val RatingStarGold = Color(0xFFB8860B)
 private val WayNearLogoNavy = Color(0xFF0D197E)
 private val WayNearBrandPurple = Color(0xFF6634BB)
@@ -1139,7 +1139,7 @@ private fun NearTimeScreen(
                             text = buildAnnotatedString {
                                 withStyle(
                                     SpanStyle(
-                                        color = WayNearLogoCream,
+                                        color = if (darkMode) WayNearLogoCream else WayNearLogoNavy,
                                         fontWeight = FontWeight.Bold
                                     )
                                 ) {
@@ -1147,7 +1147,7 @@ private fun NearTimeScreen(
                                 }
                                 withStyle(
                                     SpanStyle(
-                                        color = WayNearLogoLime,
+                                        color = if (darkMode) WayNearLogoLime else WayNearLogoPink,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 ) {
