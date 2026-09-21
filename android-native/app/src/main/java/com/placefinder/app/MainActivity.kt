@@ -80,8 +80,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -128,19 +128,27 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-67"
+private const val APP_BUILD_ID = "production-20260921-68"
 private val RatingStarGold = Color(0xFFB8860B)
 private val WayNearLogoNavy = Color(0xFF0D197E)
 private val WayNearBrandPurple = Color(0xFF6634BB)
 private val WayNearLogoPink = Color(0xFFF07CB5)
 private val WayNearLogoLime = Color(0xFFBEFB63)
 private val WayNearLogoCream = Color(0xFFF8FCEB)
+private val WayNearLightGlassBrush = Brush.linearGradient(
+    colors = listOf(
+        Color(0xFFC8D3DE),
+        Color(0xFFD5DEE7),
+        Color(0xFFC1CEDA),
+        Color(0xFFD0D9E3)
+    )
+)
 private val NearTimeLightColors = lightColorScheme(
     primary = WayNearBrandPurple,
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFE5DAF4),
     onPrimaryContainer = Color(0xFF28153F),
-    background = Color(0xFFDDE5EC),
+    background = Color(0xFFC9D4DE),
     onBackground = Color(0xFF25313D),
     surface = Color(0xFFEAF0F4),
     onSurface = Color(0xFF25313D),
@@ -1058,11 +1066,18 @@ private fun NearTimeScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         bottomBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(
+                        if (darkMode) {
+                            MaterialTheme.colorScheme.surface
+                        } else {
+                            Color(0xFFE8EEF3).copy(alpha = 0.92f)
+                        }
+                    )
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
@@ -1088,6 +1103,18 @@ private fun NearTimeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .background(
+                    if (darkMode) {
+                        Brush.verticalGradient(
+                            listOf(
+                                NearTimeDarkColors.background,
+                                NearTimeDarkColors.background
+                            )
+                        )
+                    } else {
+                        WayNearLightGlassBrush
+                    }
+                )
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1104,55 +1131,29 @@ private fun NearTimeScreen(
                             .weight(1f)
                             .padding(end = 12.dp)
                     ) {
-                        Box {
-                            Text(
-                                text = buildAnnotatedString {
-                                    withStyle(
-                                        SpanStyle(
-                                            color = NearTimeDarkColors.background,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    ) {
-                                        append("Way")
-                                    }
-                                    withStyle(
-                                        SpanStyle(
-                                            color = NearTimeDarkColors.background,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                    ) {
-                                        append("Near")
-                                    }
-                                },
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    letterSpacing = 0.15.sp,
-                                    drawStyle = Stroke(width = 2.4f)
-                                )
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(
+                                    SpanStyle(
+                                        color = WayNearLogoCream,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                ) {
+                                    append("Way")
+                                }
+                                withStyle(
+                                    SpanStyle(
+                                        color = WayNearLogoLime,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                ) {
+                                    append("Near")
+                                }
+                            },
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                letterSpacing = 0.15.sp
                             )
-                            Text(
-                                text = buildAnnotatedString {
-                                    withStyle(
-                                        SpanStyle(
-                                            color = WayNearLogoCream,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    ) {
-                                        append("Way")
-                                    }
-                                    withStyle(
-                                        SpanStyle(
-                                            color = WayNearLogoLime,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                    ) {
-                                        append("Near")
-                                    }
-                                },
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    letterSpacing = 0.15.sp
-                                )
-                            )
-                        }
+                        )
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = "Find places by real walking time.",
