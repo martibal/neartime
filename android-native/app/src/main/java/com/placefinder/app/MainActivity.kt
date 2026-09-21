@@ -126,25 +126,26 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260920-62"
+private const val APP_BUILD_ID = "production-20260921-63"
 private val RatingStarGold = Color(0xFFB8860B)
+private val WayNearBrandPurple = Color(0xFF6534B6)
 private val NearTimeLightColors = lightColorScheme(
-    primary = Color(0xFF7B6AA9),
+    primary = WayNearBrandPurple,
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE7E2EE),
-    onPrimaryContainer = Color(0xFF2D2543),
+    primaryContainer = Color(0xFFE5DAF4),
+    onPrimaryContainer = Color(0xFF28153F),
     background = Color(0xFFDDE5EC),
-    onBackground = Color(0xFF2A3440),
-    surface = Color(0xFFE8EEF3),
-    onSurface = Color(0xFF2A3440),
-    surfaceVariant = Color(0xFFD6DFE7),
-    onSurfaceVariant = Color(0xFF64727F),
-    outline = Color(0xFFAFBBC6),
-    outlineVariant = Color(0xFFC8D2DB)
+    onBackground = Color(0xFF25313D),
+    surface = Color(0xFFEAF0F4),
+    onSurface = Color(0xFF25313D),
+    surfaceVariant = Color(0xFFD4DEE7),
+    onSurfaceVariant = Color(0xFF526170),
+    outline = Color(0xFF8799A8),
+    outlineVariant = Color(0xFFB7C3CD)
 )
 
 private val NearTimeDarkColors = darkColorScheme(
-    primary = Color(0xFFB49AE8),
+    primary = Color(0xFFBDA5F2),
     onPrimary = Color(0xFF251542),
     primaryContainer = Color(0xFF453468),
     onPrimaryContainer = Color(0xFFF0E8FF),
@@ -847,7 +848,23 @@ private fun NearTimeScreen(
                         onClick = {
                             searchState = SearchState.Idle
                             selectedPlace = null
-                        }
+                        },
+                        border = BorderStroke(
+                            width = 1.25.dp,
+                            color = if (darkMode) {
+                                MaterialTheme.colorScheme.outline
+                            } else {
+                                Color(0xFF8799A8)
+                            }
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (darkMode) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                Color(0xFFEDF2F6)
+                            },
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        )
                     ) {
                         Text("Back to search")
                     }
@@ -895,9 +912,9 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.NEAREST
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFEDF2F6),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primary,
                             selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF)
                         ),
                         label = { Text("Nearest") }
@@ -909,9 +926,9 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.HIGHEST_RATED
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFEDF2F6),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primary,
                             selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF)
                         ),
                         label = { Text("Highest rated") }
@@ -934,9 +951,9 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.LONGEST_OPEN
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFEDF2F6),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primary,
                             selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF),
                             disabledContainerColor = if (darkMode) Color(0xFF0C1929) else Color(0xFFD5DEE6),
                             disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -953,9 +970,9 @@ private fun NearTimeScreen(
                             resultSort = ResultSort.LOWEST_PRICE
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFE7EDF2),
+                            containerColor = if (darkMode) Color(0xFF102035) else Color(0xFFEDF2F6),
                             labelColor = MaterialTheme.colorScheme.onSurface,
-                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else Color(0xFF8B78B8),
+                            selectedContainerColor = if (darkMode) Color(0xFF51416B) else MaterialTheme.colorScheme.primary,
                             selectedLabelColor = if (darkMode) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF),
                             disabledContainerColor = if (darkMode) Color(0xFF0C1929) else Color(0xFFD5DEE6),
                             disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1174,14 +1191,14 @@ private fun NearTimeScreen(
                                 color = if (darkMode) {
                                     MaterialTheme.colorScheme.outline
                                 } else {
-                                    Color(0xFF9EABB8)
+                                    Color(0xFF8799A8)
                                 }
                             ),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = if (darkMode) {
                                     MaterialTheme.colorScheme.surfaceVariant
                                 } else {
-                                    Color(0xFFE7EDF2)
+                                    Color(0xFFEDF2F6)
                                 },
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             ),
@@ -1220,14 +1237,14 @@ private fun NearTimeScreen(
                                 color = if (darkMode) {
                                     MaterialTheme.colorScheme.outline
                                 } else {
-                                    Color(0xFF9EABB8)
+                                    Color(0xFF8799A8)
                                 }
                             ),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = if (darkMode) {
                                     MaterialTheme.colorScheme.surfaceVariant
                                 } else {
-                                    Color(0xFFE7EDF2)
+                                    Color(0xFFEDF2F6)
                                 },
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             ),
@@ -1273,14 +1290,14 @@ private fun NearTimeScreen(
                         color = if (darkMode) {
                             MaterialTheme.colorScheme.outline
                         } else {
-                            Color(0xFF9EABB8)
+                            Color(0xFF8799A8)
                         }
                     ),
                     colors = ButtonDefaults.outlinedButtonColors(
                         containerColor = if (darkMode) {
                             MaterialTheme.colorScheme.surfaceVariant
                         } else {
-                            Color(0xFFE7EDF2)
+                            Color(0xFFEDF2F6)
                         },
                         contentColor = MaterialTheme.colorScheme.onSurface
                     )
@@ -1389,6 +1406,32 @@ private fun NearTimeScreen(
                     OutlinedButton(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !locationSearchBusy && customLocationText.trim().length >= 3,
+                        border = BorderStroke(
+                            width = 1.25.dp,
+                            color = if (darkMode) {
+                                MaterialTheme.colorScheme.outline
+                            } else {
+                                Color(0xFF8799A8)
+                            }
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (darkMode) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                Color(0xFFEDF2F6)
+                            },
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            disabledContainerColor = if (darkMode) {
+                                Color(0xFF101D2C)
+                            } else {
+                                Color(0xFFD6E0E8)
+                            },
+                            disabledContentColor = if (darkMode) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                Color(0xFF657482)
+                            }
+                        ),
                         onClick = {
                             scope.launch {
                                 locationSearchBusy = true
@@ -1849,14 +1892,14 @@ private fun PlaceTypeSelector(
                 color = if (darkMode) {
                     MaterialTheme.colorScheme.outline
                 } else {
-                    Color(0xFF9EABB8)
+                    Color(0xFF8799A8)
                 }
             ),
             colors = ButtonDefaults.outlinedButtonColors(
                 containerColor = if (darkMode) {
                     MaterialTheme.colorScheme.surfaceVariant
                 } else {
-                    Color(0xFFE7EDF2)
+                    Color(0xFFEDF2F6)
                 },
                 contentColor = MaterialTheme.colorScheme.onSurface
             )
