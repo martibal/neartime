@@ -58,6 +58,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -126,9 +127,9 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-63"
+private const val APP_BUILD_ID = "production-20260921-64"
 private val RatingStarGold = Color(0xFFB8860B)
-private val WayNearBrandPurple = Color(0xFF6534B6)
+private val WayNearBrandPurple = Color(0xFF7542C8)
 private val NearTimeLightColors = lightColorScheme(
     primary = WayNearBrandPurple,
     onPrimary = Color(0xFFFFFFFF),
@@ -1099,24 +1100,9 @@ private fun NearTimeScreen(
                             .padding(end = 12.dp)
                     ) {
                         Text(
-                            text = buildAnnotatedString {
-                                withStyle(
-                                    SpanStyle(
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                ) {
-                                    append("Way")
-                                }
-                                withStyle(
-                                    SpanStyle(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                ) {
-                                    append("Near")
-                                }
-                            },
+                            text = "WayNear",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.ExtraBold,
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 letterSpacing = 0.15.sp
                             )
@@ -1400,7 +1386,30 @@ private fun NearTimeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         label = { Text("Location") },
-                        placeholder = { Text("Enter an address or location") }
+                        placeholder = { Text("Enter an address or location") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = if (darkMode) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                Color(0xFFF5F8FA)
+                            },
+                            unfocusedContainerColor = if (darkMode) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                Color(0xFFF5F8FA)
+                            },
+                            disabledContainerColor = if (darkMode) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                Color(0xFFF5F8FA)
+                            },
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = if (darkMode) {
+                                MaterialTheme.colorScheme.outline
+                            } else {
+                                Color(0xFF8799A8)
+                            }
+                        )
                     )
 
                     OutlinedButton(
@@ -1422,14 +1431,14 @@ private fun NearTimeScreen(
                             },
                             contentColor = MaterialTheme.colorScheme.onSurface,
                             disabledContainerColor = if (darkMode) {
-                                Color(0xFF101D2C)
+                                MaterialTheme.colorScheme.surfaceVariant
                             } else {
-                                Color(0xFFD6E0E8)
+                                Color(0xFFEDF2F6)
                             },
                             disabledContentColor = if (darkMode) {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             } else {
-                                Color(0xFF657482)
+                                Color(0xFF526170)
                             }
                         ),
                         onClick = {
