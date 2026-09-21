@@ -127,12 +127,13 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-65"
+private const val APP_BUILD_ID = "production-20260921-66"
 private val RatingStarGold = Color(0xFFB8860B)
 private val WayNearLogoNavy = Color(0xFF0D197E)
 private val WayNearBrandPurple = Color(0xFF6634BB)
 private val WayNearLogoPink = Color(0xFFF07CB5)
 private val WayNearLogoLime = Color(0xFFBEFB63)
+private val WayNearLogoCream = Color(0xFFF8FCEB)
 private val NearTimeLightColors = lightColorScheme(
     primary = WayNearBrandPurple,
     onPrimary = Color(0xFFFFFFFF),
@@ -1106,7 +1107,7 @@ private fun NearTimeScreen(
                             text = buildAnnotatedString {
                                 withStyle(
                                     SpanStyle(
-                                        color = if (darkMode) Color(0xFFF8FCEB) else WayNearLogoNavy,
+                                        color = WayNearLogoCream,
                                         fontWeight = FontWeight.Bold
                                     )
                                 ) {
@@ -1114,7 +1115,7 @@ private fun NearTimeScreen(
                                 }
                                 withStyle(
                                     SpanStyle(
-                                        color = if (darkMode) WayNearLogoLime else WayNearBrandPurple,
+                                        color = WayNearLogoLime,
                                         fontWeight = FontWeight.ExtraBold
                                     )
                                 ) {
