@@ -37,8 +37,8 @@ import java.util.concurrent.TimeUnit
 internal data class BillingUiState(
     val ready: Boolean = false,
     val busy: Boolean = false,
-    val monthlyPrice: String = "39 kr",
-    val extraPrice: String = "19 kr",
+    val monthlyPrice: String? = null,
+    val extraPrice: String? = null,
     val monthlyAvailable: Boolean = false,
     val extraAvailable: Boolean = false,
     val entitlementSession: String? = null,
@@ -139,12 +139,10 @@ internal class NearTimeBillingManager(
                 ?.pricingPhaseList
                 ?.lastOrNull()
                 ?.formattedPrice
-                ?: "39 kr"
             val extraPrice = extraProduct
                 ?.oneTimePurchaseOfferDetailsList
                 ?.firstOrNull()
                 ?.formattedPrice
-                ?: "19 kr"
 
             _state.value = _state.value.copy(
                 monthlyPrice = monthlyPrice,
@@ -161,7 +159,7 @@ internal class NearTimeBillingManager(
         launchProduct(
             product = monthlyProduct,
             kind = BillingClient.ProductType.SUBS,
-            fallbackMessage = "The 39 kr monthly subscription is not available from Google Play yet."
+            fallbackMessage = "The monthly subscription is not available from Google Play yet."
         )
     }
 
