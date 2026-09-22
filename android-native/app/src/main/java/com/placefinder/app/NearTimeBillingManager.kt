@@ -2,6 +2,7 @@ package com.placefinder.app
 
 import android.app.Activity
 import android.content.Context
+import android.provider.Settings
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
@@ -461,9 +462,21 @@ internal fun getOrCreateInstallId(context: Context): String {
 }
 
 internal fun getOrCreateInstallHash(context: Context): String {
-    val raw = getOrCreateInstallId(context)
+    val androidId = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ANDROID_ID
+    )?.trim().orEmpty()
+
+    val stableQuotaIdentity = if (androidId.isNotBlank()) {
+        "android-device-v1:$androidId"
+    } else {
+        // Defensive fallback for broken/modified devices. Normal Android
+        // installs expose ANDROID_ID on every supported API level.
+        "install-fallback-v1:${getOrCreateInstallId(context)}"
+    }
+
     return MessageDigest.getInstance("SHA-256")
-        .digest(raw.toByteArray(StandardCharsets.UTF_8))
+        .digest(stableQuotaIdentity.toByteArray(StandardCharsets.UTF_8))
         .joinToString("") { byte -> "%02x".format(byte) }
 }
 
