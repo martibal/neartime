@@ -1021,6 +1021,14 @@ function firstRow(value) {
 function validInstallHash(value) {
   return typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
 }
+async function isAdminRequest(req) {
+  const token = clean(req.headers.get('X-WayNear-Admin-Token'));
+  if (!token || token.length < 20 || token.length > 256) return false;
+  const result = firstRow(await idempotencyRpc('neartime_admin_token_valid', {
+    p_token_hash: await sha256Hex(token)
+  }));
+  return result === true || (result && result.neartime_admin_token_valid === true);
+}
 async function resolveEntitlementHash(body) {
   const token = clean(body && body.entitlementSession);
   if (!token) return null;
@@ -1034,12 +1042,27 @@ async function resolveEntitlementHash(body) {
   }
   return clean(resolved.entitlement_hash);
 }
-async function usageStatus(body, entitlementHashOverride) {
+async function usageStatus(body, entitlementHashOverride, adminAuthorized = false) {
   const installHash = clean(body && body.installHash);
   if (!validInstallHash(installHash)) {
     const error = new Error('INVALID_INSTALL_ID');
     error.status = 400;
     throw error;
+  }
+  if (adminAuthorized) {
+    return {
+      access_mode: 'subscriber',
+      account_status: 'active',
+      trial_included: 5,
+      trial_used: 5,
+      trial_remaining: 0,
+      monthly_included: 30,
+      monthly_used: 0,
+      monthly_remaining: 30,
+      extra_remaining: 0,
+      total_available: 30,
+      billing_period_end: null
+    };
   }
   const entitlementHash = entitlementHashOverride === undefined ? await resolveEntitlementHash(body) : entitlementHashOverride;
   const usage = firstRow(await idempotencyRpc('neartime_usage_status', {
@@ -1071,7 +1094,7 @@ async function logicalRequestHash(body) {
     minRating: Number(body && body.minRating) || 0
   }));
 }
-async function quotaSearch(body, requestId) {
+async function quotaSearch(body, requestId, adminAuthorized = false) {
   const installHash = clean(body && body.installHash);
   if (!validInstallHash(installHash)) {
     const error = new Error('INVALID_INSTALL_ID');
@@ -1082,6 +1105,14 @@ async function quotaSearch(body, requestId) {
     const error = new Error('REQUEST_ID_REQUIRED');
     error.status = 400;
     throw error;
+  }
+
+  if (adminAuthorized) {
+    const result = await idempotentSearch(null, body, requestId);
+    return {
+      ...result,
+      quota: await usageStatus(body, null, true)
+    };
   }
 
   const entitlementHash = await resolveEntitlementHash(body);
@@ -1320,13 +1351,16 @@ Deno.serve(async function handler(req) {
   try {
     const body = await req.json();
     const action = clean(body && body.action) || 'search';
+    const adminAuthorized = (action === 'usage' || action === 'search')
+      ? await isAdminRequest(req)
+      : false;
 
     if (action === 'usage') {
-      return response(200, { quota: await usageStatus(body) });
+      return response(200, { quota: await usageStatus(body, undefined, adminAuthorized) });
     }
     if (action === 'search') {
       const requestId = clean(req.headers.get('Idempotency-Key')) || clean(body && body.requestId);
-      return response(200, await quotaSearch(body, requestId));
+      return response(200, await quotaSearch(body, requestId, adminAuthorized));
     }
     if (action === 'suggest') {
       const apiKey = await requireTomTomKey();
