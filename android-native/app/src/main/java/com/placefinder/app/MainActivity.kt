@@ -783,6 +783,8 @@ private fun NearTimeScreen(
     if (paywallOpen) {
         val allowance = quotaStatus
         val trialExhausted = allowance?.accessMode == "trial"
+        val monthlyPrice = billingUiState.monthlyPrice
+        val extraPrice = billingUiState.extraPrice
         Dialog(
             onDismissRequest = { paywallOpen = false }
         ) {
@@ -804,20 +806,33 @@ private fun NearTimeScreen(
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = if (trialExhausted) {
-                            "Continue with 30 searches every month for " +
-                                billingUiState.monthlyPrice + "/month. " +
-                                "Subscription renews automatically until cancelled."
+                            if (monthlyPrice != null) {
+                                "Continue with 30 searches every month for " +
+                                    monthlyPrice + "/month. " +
+                                    "Subscription renews automatically until cancelled."
+                            } else {
+                                "Google Play is loading the current subscription price."
+                            }
                         } else {
-                            "Add 20 extra searches for " +
-                                billingUiState.extraPrice + ". " +
-                                "Your monthly subscription stays unchanged."
+                            if (extraPrice != null) {
+                                "Add 20 extra searches for " +
+                                    extraPrice + ". " +
+                                    "Your monthly subscription stays unchanged."
+                            } else {
+                                "Google Play is loading the current extra-search price."
+                            }
                         },
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Spacer(Modifier.height(18.dp))
                     Button(
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !billingUiState.busy,
+                        enabled = !billingUiState.busy &&
+                            if (trialExhausted) {
+                                billingUiState.monthlyAvailable && monthlyPrice != null
+                            } else {
+                                billingUiState.extraAvailable && extraPrice != null
+                            },
                         onClick = {
                             paywallOpen = false
                             if (trialExhausted) {
@@ -829,10 +844,17 @@ private fun NearTimeScreen(
                     ) {
                         Text(
                             if (trialExhausted) {
-                                "Continue with Google Play · " +
-                                    billingUiState.monthlyPrice + "/month"
+                                if (monthlyPrice != null) {
+                                    "Continue with Google Play · " + monthlyPrice + "/month"
+                                } else {
+                                    "Loading Google Play price…"
+                                }
                             } else {
-                                "Get 20 searches · " + billingUiState.extraPrice
+                                if (extraPrice != null) {
+                                    "Get 20 searches · " + extraPrice
+                                } else {
+                                    "Loading Google Play price…"
+                                }
                             }
                         )
                     }
@@ -2344,15 +2366,20 @@ private fun SearchUsageCard(
             if (!isTestingAllowance && quota.accessMode == "trial" && quota.trialRemaining <= 0) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "30 searches every month · " + billing.monthlyPrice + "/month",
+                    text = billing.monthlyPrice?.let {
+                        "30 searches every month · $it/month"
+                    } ?: "Loading current price from Google Play…",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !billing.busy,
+                    enabled = !billing.busy && billing.monthlyAvailable && billing.monthlyPrice != null,
                     onClick = onSubscribe
                 ) {
-                    Text("Subscribe · " + billing.monthlyPrice + "/month")
+                    Text(
+                        billing.monthlyPrice?.let { "Subscribe · $it/month" }
+                            ?: "Loading Google Play price…"
+                    )
                 }
             }
 
@@ -2364,10 +2391,13 @@ private fun SearchUsageCard(
                 )
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !billing.busy,
+                    enabled = !billing.busy && billing.extraAvailable && billing.extraPrice != null,
                     onClick = onBuyExtra
                 ) {
-                    Text("Get 20 extra searches · " + billing.extraPrice)
+                    Text(
+                        billing.extraPrice?.let { "Get 20 extra searches · $it" }
+                            ?: "Loading Google Play price…"
+                    )
                 }
             }
 
