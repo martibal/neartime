@@ -31,8 +31,8 @@ android {
         applicationId = "com.placefinder.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 18
-        versionName = "1.0.18-production"
+        versionCode = 19
+        versionName = "1.0.19-production"
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         manifestPlaceholders["APP_LABEL"] = "WayNear"
