@@ -417,6 +417,7 @@ private fun NearTimeScreen(
     var currentLocationLookupFinished by remember { mutableStateOf(false) }
     var infoDialogMessage by remember { mutableStateOf<String?>(null) }
     var paywallOpen by remember { mutableStateOf(false) }
+    var lastSearchTapMs by remember { mutableStateOf(0L) }
     var mapPickerOpen by remember { mutableStateOf(false) }
     var mapPickerPoint by remember { mutableStateOf<GeoPoint?>(null) }
     var mapPickerInitialCenter by remember {
@@ -509,6 +510,10 @@ private fun NearTimeScreen(
     }
 
     fun runPlaceSearch() {
+        val nowMs = android.os.SystemClock.elapsedRealtime()
+        if (nowMs - lastSearchTapMs < 500L) return
+        lastSearchTapMs = nowMs
+
         scope.launch {
             if (useCurrentLocation && currentLocation == null) {
                 infoDialogMessage =
