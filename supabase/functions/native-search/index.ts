@@ -1029,6 +1029,21 @@ async function isAdminRequest(req) {
   }));
   return result === true || (result && result.neartime_admin_token_valid === true);
 }
+async function enforceSearchSafety(installHash, requestId) {
+  const gate = firstRow(await idempotencyRpc('neartime_search_safety_gate', {
+    p_install_hash: installHash,
+    p_request_id: requestId
+  }));
+  if (!gate || gate.allowed !== true) {
+    const reason = clean(gate && gate.reason) || 'search_safety_gate_failed';
+    const error = new Error(reason.toUpperCase());
+    error.status = reason === 'global_daily_cost_cap' ? 503 : 429;
+    error.retryAfterMs = Number(gate && gate.retry_after_ms) || 0;
+    throw error;
+  }
+  return gate;
+}
+
 async function resolveEntitlementHash(body) {
   const token = clean(body && body.entitlementSession);
   if (!token) return null;
@@ -1106,6 +1121,8 @@ async function quotaSearch(body, requestId, adminAuthorized = false) {
     error.status = 400;
     throw error;
   }
+
+  await enforceSearchSafety(installHash, requestId);
 
   if (adminAuthorized) {
     const result = await idempotentSearch(null, body, requestId);
@@ -1374,7 +1391,8 @@ Deno.serve(async function handler(req) {
   } catch (error) {
     return response(Number(error && error.status) || 502, {
       error: clean(error && error.message) || 'NATIVE_CLOUD_SEARCH_FAILED',
-      quota: error && error.quota ? error.quota : undefined
+      quota: error && error.quota ? error.quota : undefined,
+      retryAfterMs: Number(error && error.retryAfterMs) || undefined
     });
   }
 });
