@@ -13,6 +13,10 @@ val localProperties = Properties().apply {
 }
 
 val mapsApiKey = localProperties.getProperty("MAPS_API_KEY", "")
+val adminTestToken = localProperties
+    .getProperty("WAYNEAR_ADMIN_TEST_TOKEN", "")
+    .replace("\\", "\\\\")
+    .replace(""", "\\"")
 
 android {
     namespace = "com.placefinder.app"
@@ -26,10 +30,33 @@ android {
         versionName = "1.0.17-production"
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        manifestPlaceholders["APP_LABEL"] = "WayNear"
+        buildConfigField("String", "ADMIN_TEST_TOKEN", """")
+    }
+
+    buildTypes {
+        getByName("debug") {
+            manifestPlaceholders["APP_LABEL"] = "WayNear"
+        }
+
+        getByName("release") {
+            manifestPlaceholders["APP_LABEL"] = "WayNear"
+        }
+
+        create("admin") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".admin"
+            versionNameSuffix = "-admin"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = true
+            manifestPlaceholders["APP_LABEL"] = "WayNear Admin"
+            buildConfigField("String", "ADMIN_TEST_TOKEN", ""$adminTestToken"")
+        }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
