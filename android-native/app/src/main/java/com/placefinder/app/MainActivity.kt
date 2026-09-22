@@ -416,6 +416,7 @@ private fun NearTimeScreen(
     var currentLocationLabel by remember { mutableStateOf<String?>(null) }
     var currentLocationLookupFinished by remember { mutableStateOf(false) }
     var infoDialogMessage by remember { mutableStateOf<String?>(null) }
+    var paywallOpen by remember { mutableStateOf(false) }
     var mapPickerOpen by remember { mutableStateOf(false) }
     var mapPickerPoint by remember { mutableStateOf<GeoPoint?>(null) }
     var mapPickerInitialCenter by remember {
@@ -528,13 +529,7 @@ private fun NearTimeScreen(
                 return@launch
             }
             if (allowance.totalAvailable <= 0) {
-                searchState = SearchState.Error(
-                    if (allowance.accessMode == "trial") {
-                        "Your 5 free searches are used. Subscribe to continue."
-                    } else {
-                        "No searches remaining. Buy 20 extra searches to continue."
-                    }
-                )
+                paywallOpen = true
                 return@launch
             }
 
@@ -779,6 +774,74 @@ private fun NearTimeScreen(
                         ) {
                             Text("Cancel")
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    if (paywallOpen) {
+        val allowance = quotaStatus
+        val trialExhausted = allowance?.accessMode == "trial"
+        Dialog(
+            onDismissRequest = { paywallOpen = false }
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp)
+                ) {
+                    Text(
+                        text = if (trialExhausted) {
+                            "Your 5 free searches are used"
+                        } else {
+                            "No searches remaining"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = if (trialExhausted) {
+                            "Continue with 30 searches every month for " +
+                                billingUiState.monthlyPrice + "/month. " +
+                                "Subscription renews automatically until cancelled."
+                        } else {
+                            "Add 20 extra searches for " +
+                                billingUiState.extraPrice + ". " +
+                                "Your monthly subscription stays unchanged."
+                        },
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !billingUiState.busy,
+                        onClick = {
+                            paywallOpen = false
+                            if (trialExhausted) {
+                                billingManager.launchSubscription()
+                            } else {
+                                billingManager.launchExtraSearchPack()
+                            }
+                        }
+                    ) {
+                        Text(
+                            if (trialExhausted) {
+                                "Continue with Google Play · " +
+                                    billingUiState.monthlyPrice + "/month"
+                            } else {
+                                "Get 20 searches · " + billingUiState.extraPrice
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { paywallOpen = false }
+                    ) {
+                        Text("Not now")
                     }
                 }
             }
@@ -1074,7 +1137,7 @@ private fun NearTimeScreen(
 
     val searchButtonEnabled =
         searchState !is SearchState.Loading &&
-            (quotaStatus?.totalAvailable ?: 0) > 0 &&
+            quotaStatus != null &&
             if (useCurrentLocation) {
                 hasLocationPermission
             } else {
@@ -1083,7 +1146,10 @@ private fun NearTimeScreen(
 
     val searchButtonText = when {
         quotaStatus == null -> "Loading search allowance…"
-        quotaStatus?.totalAvailable == 0 -> "No searches remaining"
+        quotaStatus?.totalAvailable == 0 && quotaStatus?.accessMode == "trial" ->
+            "Subscribe to continue"
+        quotaStatus?.totalAvailable == 0 ->
+            "Get 20 extra searches"
         else -> "Find up to 10 places"
     }
 
