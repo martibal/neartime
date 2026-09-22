@@ -3003,6 +3003,10 @@ private fun postJsonOnce(
         requestBuilder.header("Idempotency-Key", it)
     }
 
+    if (BuildConfig.ADMIN_TEST_TOKEN.isNotBlank()) {
+        requestBuilder.header("X-WayNear-Admin-Token", BuildConfig.ADMIN_TEST_TOKEN)
+    }
+
     var phase = "EXECUTE"
     try {
         Log.i(LOG_TAG, "POST_PHASE $phase")
