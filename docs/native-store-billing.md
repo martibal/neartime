@@ -2,7 +2,7 @@
 
 Current Android monetization model:
 
-- Production intent: 5 free completed logical searches per anonymous installation.
+- Production intent: 5 free completed logical searches per anonymous Android device/user/app-signing identity.
 - A completed search consumes one logical search regardless of whether it returns 0, 5 or 10 qualifying places.
 - A technical/provider failure that does not complete normally does not consume the logical search under the current quota policy.
 - `neartime_monthly`: auto-renewing subscription, target Norwegian price 39 NOK/month, 30 searches per billing period.
@@ -32,6 +32,8 @@ The visible "of 5" number is diagnostic only during test mode and does not curre
 Before production, restore the backend trial limit to 5 and verify that the same counter shown to the user is the single gate that blocks further free searches.
 
 ## Security boundary
+
+Free-trial quota is keyed server-side by a SHA-256 hash derived from Android's app-scoped `ANDROID_ID`, rather than by the random installation ID. On supported Android versions this survives an ordinary uninstall/reinstall for the same device user and app-signing key, so reinstalling the app does not grant another five free searches. A factory reset, different Android user/profile, different device, or different signing identity can produce a different identifier; WayNear deliberately does not use invasive device fingerprinting to close those cases.
 
 The client cannot grant paid searches itself. Google Play purchase tokens are sent to WayNear's backend and verified with Google before an entitlement session or top-up is granted. The backend persists pseudonymous/HMAC-derived purchase/entitlement identifiers rather than using a WayNear email/login identity.
 
