@@ -18,7 +18,7 @@ a{color:#0b57d0}li{margin:7px 0}code{font-size:.95em}
 </head>
 <body><main>
 <h1>WayNear Privacy Policy</h1>
-<p class="meta">Effective and last updated: 20 September 2026</p>
+<p class="meta">Effective and last updated: 22 September 2026</p>
 <div class="card">
 <p>This Privacy Policy explains how the WayNear mobile application accesses, uses, transmits, and retains user and device data. WayNear is a place-search utility that helps users find nearby places by walking time.</p>
 
@@ -30,8 +30,9 @@ a{color:#0b57d0}li{margin:7px 0}code{font-size:.95em}
 <h2>2. Custom place or address searches</h2>
 <p>If you choose <strong>Type a location</strong>, the text you enter and a location bias may be sent through WayNear's search service to TomTom services to return location suggestions and resolve the location you select. WayNear does not intentionally persist the typed address query in its application database.</p>
 
-<h2>3. Anonymous installation identifier</h2>
-<p>WayNear creates a random identifier for the app installation. It is used to operate the anonymous free-search allowance, prevent duplicate requests, reduce abuse, and associate paid entitlement with the installation without requiring a WayNear name, email address, or password. The search service normally receives a cryptographic hash of this identifier. Billing-related requests may send the installation identifier to WayNear's billing service. WayNear does not use this identifier for advertising.</p>
+<h2>3. Anonymous device and installation identifiers</h2>
+<p>WayNear does not require a user account. To prevent the five free searches from resetting after a normal uninstall/reinstall, the Android app derives a one-way cryptographic hash from Android's app-scoped device identifier and sends only that hash to WayNear's search service for free-search quota enforcement and abuse prevention. WayNear does not use this identifier for advertising or cross-app tracking.</p>
+<p>WayNear also creates a separate random identifier for the app installation for billing/session and operational purposes. Billing-related requests may send this random installation identifier to WayNear's billing service. Neither identifier requires a WayNear name, email address, password, or user profile.</p>
 
 <h2>4. Search preferences and operational telemetry</h2>
 <p>WayNear sends search inputs such as place category, walking-time limit, open-now preference, and minimum time until closing to the search service. To operate the service, enforce API-cost limits, prevent duplicate provider calls, and diagnose failures, WayNear may retain limited operational records such as:</p>
@@ -56,7 +57,7 @@ a{color:#0b57d0}li{margin:7px 0}code{font-size:.95em}
 <p>WayNear uses data only to provide the requested search functionality, maintain service reliability and security, and control provider costs. WayNear does not sell personal data and does not use the app to serve advertising. Data is transmitted to service providers only as needed to provide and operate these functions, subject to their applicable terms.</p>
 
 <h2>8. Retention</h2>
-<p>Search-origin location and custom address input are intended to be processed for the requested operation rather than retained in WayNear's application database. Anonymous installation/quota identifiers, limited operational telemetry, and verified purchase/subscription state may be retained for as long as reasonably necessary for app functionality, reliability, abuse prevention, cost control, purchase entitlement, accounting, support, debugging, and applicable legal obligations. Service providers may apply their own retention practices.</p>
+<p>Search-origin location and custom address input are intended to be processed for the requested operation rather than retained in WayNear's application database. Anonymous device/quota and installation identifiers, limited operational telemetry, and verified purchase/subscription state may be retained for as long as reasonably necessary for app functionality, reliability, abuse prevention, cost control, purchase entitlement, accounting, support, debugging, and applicable legal obligations. Service providers may apply their own retention practices.</p>
 
 <h2>9. Security</h2>
 <p>WayNear uses HTTPS for network communication with its production services. No method of electronic transmission or storage is completely secure, but the service is designed to minimise the amount of personal data retained by WayNear.</p>
