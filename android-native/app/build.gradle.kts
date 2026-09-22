@@ -18,6 +18,11 @@ val adminTestToken = localProperties
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
 
+val uploadStoreFile = localProperties.getProperty("WAYNEAR_UPLOAD_STORE_FILE", "")
+val uploadKeyAlias = localProperties.getProperty("WAYNEAR_UPLOAD_KEY_ALIAS", "")
+val uploadStorePassword = localProperties.getProperty("WAYNEAR_UPLOAD_STORE_PASSWORD", "")
+val uploadKeyPassword = localProperties.getProperty("WAYNEAR_UPLOAD_KEY_PASSWORD", "")
+
 android {
     namespace = "com.placefinder.app"
     compileSdk = 37
@@ -34,6 +39,28 @@ android {
         buildConfigField("String", "ADMIN_TEST_TOKEN", "\"\"")
     }
 
+    signingConfigs {
+        create("release") {
+            require(uploadStoreFile.isNotBlank()) {
+                "WAYNEAR_UPLOAD_STORE_FILE is missing from local.properties"
+            }
+            require(uploadKeyAlias.isNotBlank()) {
+                "WAYNEAR_UPLOAD_KEY_ALIAS is missing from local.properties"
+            }
+            require(uploadStorePassword.isNotBlank()) {
+                "WAYNEAR_UPLOAD_STORE_PASSWORD is missing from local.properties"
+            }
+            require(uploadKeyPassword.isNotBlank()) {
+                "WAYNEAR_UPLOAD_KEY_PASSWORD is missing from local.properties"
+            }
+
+            storeFile = file(uploadStoreFile)
+            storePassword = uploadStorePassword
+            keyAlias = uploadKeyAlias
+            keyPassword = uploadKeyPassword
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["APP_LABEL"] = "WayNear"
@@ -41,6 +68,7 @@ android {
 
         getByName("release") {
             manifestPlaceholders["APP_LABEL"] = "WayNear"
+            signingConfig = signingConfigs.getByName("release")
         }
 
         create("admin") {
