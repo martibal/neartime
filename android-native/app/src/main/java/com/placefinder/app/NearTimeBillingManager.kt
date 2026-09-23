@@ -104,54 +104,71 @@ internal class NearTimeBillingManager(
     }
 
     private fun queryProducts() {
-        val products = listOf(
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(MONTHLY_PRODUCT_ID)
-                .setProductType(BillingClient.ProductType.SUBS)
-                .build(),
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(EXTRA_PRODUCT_ID)
-                .setProductType(BillingClient.ProductType.INAPP)
-                .build()
-        )
-        val params = QueryProductDetailsParams.newBuilder().setProductList(products).build()
-
-        billingClient.queryProductDetailsAsync(params) { result, detailsResult ->
-            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-                _state.value = _state.value.copy(
-                    message = null,
-                    isError = false
+        val subscriptionParams = QueryProductDetailsParams.newBuilder()
+            .setProductList(
+                listOf(
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(MONTHLY_PRODUCT_ID)
+                        .setProductType(BillingClient.ProductType.SUBS)
+                        .build()
                 )
-                return@queryProductDetailsAsync
-            }
-
-            monthlyProduct = detailsResult.productDetailsList.firstOrNull {
-                it.productId == MONTHLY_PRODUCT_ID
-            }
-            extraProduct = detailsResult.productDetailsList.firstOrNull {
-                it.productId == EXTRA_PRODUCT_ID
-            }
-
-            val monthlyPrice = monthlyProduct
-                ?.subscriptionOfferDetails
-                ?.firstOrNull()
-                ?.pricingPhases
-                ?.pricingPhaseList
-                ?.lastOrNull()
-                ?.formattedPrice
-            val extraPrice = extraProduct
-                ?.oneTimePurchaseOfferDetailsList
-                ?.firstOrNull()
-                ?.formattedPrice
-
-            _state.value = _state.value.copy(
-                monthlyPrice = monthlyPrice,
-                extraPrice = extraPrice,
-                monthlyAvailable = monthlyProduct != null,
-                extraAvailable = extraProduct != null,
-                message = null,
-                isError = false
             )
+            .build()
+
+        val inAppParams = QueryProductDetailsParams.newBuilder()
+            .setProductList(
+                listOf(
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(EXTRA_PRODUCT_ID)
+                        .setProductType(BillingClient.ProductType.INAPP)
+                        .build()
+                )
+            )
+            .build()
+
+        billingClient.queryProductDetailsAsync(subscriptionParams) { subscriptionResult, subscriptionDetails ->
+            if (subscriptionResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                monthlyProduct = subscriptionDetails.productDetailsList.firstOrNull {
+                    it.productId == MONTHLY_PRODUCT_ID
+                }
+            }
+
+            billingClient.queryProductDetailsAsync(inAppParams) { inAppResult, inAppDetails ->
+                if (inAppResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                    extraProduct = inAppDetails.productDetailsList.firstOrNull {
+                        it.productId == EXTRA_PRODUCT_ID
+                    }
+                }
+
+                val monthlyPrice = monthlyProduct
+                    ?.subscriptionOfferDetails
+                    ?.firstOrNull()
+                    ?.pricingPhases
+                    ?.pricingPhaseList
+                    ?.lastOrNull()
+                    ?.formattedPrice
+                val extraPrice = extraProduct
+                    ?.oneTimePurchaseOfferDetailsList
+                    ?.firstOrNull()
+                    ?.formattedPrice
+
+                val productQueryFailed =
+                    subscriptionResult.responseCode != BillingClient.BillingResponseCode.OK ||
+                    inAppResult.responseCode != BillingClient.BillingResponseCode.OK
+
+                _state.value = _state.value.copy(
+                    monthlyPrice = monthlyPrice,
+                    extraPrice = extraPrice,
+                    monthlyAvailable = monthlyProduct != null,
+                    extraAvailable = extraProduct != null,
+                    message = if (productQueryFailed) {
+                        "Google Play could not load one or more purchase products."
+                    } else {
+                        null
+                    },
+                    isError = productQueryFailed
+                )
+            }
         }
     }
 
