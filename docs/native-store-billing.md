@@ -12,24 +12,13 @@ Current Android monetization model:
 
 The native Kotlin app uses Google Play Billing Library 9.1.0. Google Play remains the source of truth for localized checkout price and purchase state.
 
-## Current test mode
+## Current quota state
 
-The production five-search gate is **not enabled yet**. The backend trial policy is deliberately set to a very high test allowance while development continues.
+The production five-search gate is enabled server-side: five free search attempts are available before a subscription is required.
 
-The Android UI exposes a temporary test observer:
+The Android UI reads the server-owned quota state. Completed logical searches consume quota according to the active backend policy, while technical/provider failures are released and do not consume paid quota.
 
-`X of 5 used`
-
-This display reads the real anonymous `trial_used` counter so development can verify the intended production semantics:
-
-- 0-result completed search -> +1;
-- 5-result completed search -> +1;
-- 10-result completed search -> +1;
-- technical/provider failure -> no increment under the current policy.
-
-The visible "of 5" number is diagnostic only during test mode and does not currently block the sixth search.
-
-Before production, restore the backend trial limit to 5 and verify that the same counter shown to the user is the single gate that blocks further free searches.
+Google Play license-tester subscriptions use accelerated billing periods, so manual billing tests must not assume a test "month" lasts a real month.
 
 ## Security boundary
 
@@ -53,7 +42,7 @@ Before the subscription is enabled for production:
 - provide an easy-to-use in-app link to Google Play's subscription-management/cancellation page;
 - ensure store listing, Play product configuration and in-app copy describe the same offer.
 
-The current app has Restore purchases but does not yet have the required Manage subscription/cancellation link. That is a release blocker for paid subscription launch.
+The app includes both Restore purchases and a visible Manage subscription link. For an active/grace subscription, Manage subscription deep-links to the specific Google Play subscription management page.
 
 ## Play testing
 
