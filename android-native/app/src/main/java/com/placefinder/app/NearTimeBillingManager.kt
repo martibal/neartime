@@ -1,7 +1,10 @@
 package com.placefinder.app
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import com.android.billingclient.api.AcknowledgePurchaseParams
 import com.android.billingclient.api.BillingClient
@@ -178,6 +181,23 @@ internal class NearTimeBillingManager(
             kind = BillingClient.ProductType.SUBS,
             fallbackMessage = "The monthly subscription is not available from Google Play yet."
         )
+    }
+
+    fun openSubscriptionManagement() {
+        val packageName = activity.packageName
+        val specificUri = Uri.parse(
+            "https://play.google.com/store/account/subscriptions" +
+                "?sku=$MONTHLY_PRODUCT_ID&package=$packageName"
+        )
+        val generalUri = Uri.parse(
+            "https://play.google.com/store/account/subscriptions"
+        )
+
+        try {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, specificUri))
+        } catch (_: ActivityNotFoundException) {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, generalUri))
+        }
     }
 
     fun launchExtraSearchPack() {
@@ -374,13 +394,17 @@ internal class NearTimeBillingManager(
             if (active != null) {
                 activateSubscription(active)
             } else {
-                if (showMessage) {
-                    _state.value = _state.value.copy(
-                        message = "No active monthly subscription found in Google Play.",
-                        isError = false
-                    )
-                }
-                queryUnconsumedExtraPurchases()
+                clearEntitlementSession(activity)
+                _state.value = _state.value.copy(
+                    entitlementSession = null,
+                    message = if (showMessage) {
+                        "No active monthly subscription found in Google Play."
+                    } else {
+                        null
+                    },
+                    isError = false,
+                    revision = _state.value.revision + 1
+                )
             }
         }
     }
@@ -505,5 +529,12 @@ private fun saveEntitlementSession(context: Context, token: String) {
     context.getSharedPreferences(ACCESS_PREFS, Context.MODE_PRIVATE)
         .edit()
         .putString(ENTITLEMENT_SESSION_KEY, token)
+        .apply()
+}
+
+private fun clearEntitlementSession(context: Context) {
+    context.getSharedPreferences(ACCESS_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .remove(ENTITLEMENT_SESSION_KEY)
         .apply()
 }
