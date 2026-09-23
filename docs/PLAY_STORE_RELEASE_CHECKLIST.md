@@ -1,6 +1,6 @@
 # WayNear — Google Play release gate
 
-Last reviewed: 2026-09-20.
+Last reviewed: 2026-09-23.
 
 This checklist is the executable release gate for the native Android app. The full declaration worksheet is `docs/GOOGLE_PLAY_SUBMISSION_PACKET.md`.
 
@@ -36,8 +36,8 @@ This checklist is the executable release gate for the native Android app. The fu
 - [x] Google Maps Android SDK/API-key configuration is required by the `Choose on map` start-point picker; keep it and restrict the production key to the Android app/package/signing certificate.
 - [ ] Put the actual verified developer/privacy email in the public Privacy Policy.
 - [ ] If the app is renamed, update Privacy Policy, Terms and all Play metadata.
-- [ ] Add an in-app **Manage subscription** / cancellation link before paid subscription launch.
-- [ ] Ensure the subscription offer UI clearly shows localized price, billing frequency, auto-renewal, benefit/quota and availability of free functionality.
+- [x] Add an in-app **Manage subscription** / cancellation link before paid subscription launch.
+- [x] Subscription offer UI shows Google Play localized price, monthly billing frequency, auto-renewal wording and the 30-search recurring benefit.
 - [ ] Implement Android Location Button and `android:onlyForLocationButton="true"` before any release subject to the 2027-01-27 enforcement deadline. Because WayNear targets API 37 and uses precise location for a one-time nearby-search action, treat this as a pre-production policy gate rather than postponing it.
 
 ## Organization developer-account setup
@@ -80,14 +80,14 @@ This checklist is the executable release gate for the native Android app. The fu
 
 ## Billing / monetization
 
-- [ ] Create `neartime_monthly` in Play Console with the final base plan/price.
-- [ ] Create `neartime_search_pack_20` as a one-time in-app product if retained.
+- [x] Create `neartime_monthly` in Play Console with the active monthly base plan.
+- [x] Create `neartime_search_pack_20` as an active one-time in-app product.
 - [ ] Confirm the subscription provides sustained recurring value and the quota/benefit matches the store/in-app description.
-- [ ] Confirm localized price comes from Google Play Billing rather than a hard-coded authoritative value.
-- [ ] Add easy online subscription cancellation/management access in-app.
+- [x] Confirm localized price comes from Google Play Billing rather than a hard-coded authoritative value.
+- [x] Add easy online subscription cancellation/management access in-app.
 - [ ] Verify purchase, pending purchase, restore, cancellation, expiry, grace and refund/revocation behavior on a Play-distributed test build.
 - [ ] Configure Google Play Developer API / RTDN credentials if the production entitlement path requires them.
-- [ ] Confirm the final package name in Google Play Developer API configuration.
+- [x] Confirm the Google Play backend package name is `com.placefinder.app`.
 
 ## Store listing
 
@@ -106,12 +106,12 @@ This checklist is the executable release gate for the native Android app. The fu
 ## Release/signing
 
 - [ ] Configure Play App Signing.
-- [ ] Generate and protect the upload key outside the repository.
-- [ ] Configure a release signing build.
-- [ ] Generate a signed Android App Bundle (`.aab`), not a debug APK.
-- [ ] Confirm release AAB contains no debug endpoints/secrets.
-- [ ] Confirm server API keys remain server-side.
-- [ ] Confirm release versionCode/versionName are intentional.
+- [x] Generate and protect the upload key outside the repository.
+- [x] Configure a release signing build.
+- [x] Generate a signed Android App Bundle (`.aab`), not a debug APK.
+- [x] Release build leaves `ADMIN_TEST_TOKEN` empty; admin bypass is confined to the separate `.admin` build type.
+- [x] Google Places server credentials and Play service-account credentials remain server-side.
+- [x] Current release is versionCode 21 / versionName 1.0.21-production.
 - [ ] Review Play Pre-launch report.
 - [ ] Resolve all policy/review warnings before promoting the release.
 
