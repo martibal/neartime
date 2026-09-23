@@ -129,7 +129,7 @@ import kotlin.math.roundToInt
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
 private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
 private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260921-75"
+private const val APP_BUILD_ID = "production-20260923-76"
 private val RatingStarGold = Color(0xFFB8860B)
 private val WayNearLogoNavy = Color(0xFF0D197E)
 private val WayNearBrandPurple = Color(0xFF6634BB)
@@ -320,6 +320,10 @@ private data class SearchQuotaStatus(
     val totalAvailable: Int,
     val billingPeriodEnd: String?
 )
+
+private fun SearchQuotaStatus.hasActiveSubscription(): Boolean =
+    accessMode != "trial" &&
+        accountStatus.lowercase(Locale.ROOT) in setOf("active", "grace")
 
 private data class SearchResponse(
     val places: List<PlaceResult>,
@@ -788,6 +792,7 @@ private fun NearTimeScreen(
     if (paywallOpen) {
         val allowance = quotaStatus
         val trialExhausted = allowance?.accessMode == "trial"
+        val needsSubscription = allowance?.hasActiveSubscription() != true
         val monthlyPrice = billingUiState.monthlyPrice
         val extraPrice = billingUiState.extraPrice
         Dialog(
@@ -800,17 +805,17 @@ private fun NearTimeScreen(
                     modifier = Modifier.padding(20.dp)
                 ) {
                     Text(
-                        text = if (trialExhausted) {
-                            "Your 5 free searches are used"
-                        } else {
-                            "No searches remaining"
+                        text = when {
+                            trialExhausted -> "Your 5 free searches are used"
+                            needsSubscription -> "Subscription required"
+                            else -> "No searches remaining"
                         },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = if (trialExhausted) {
+                        text = if (needsSubscription) {
                             if (monthlyPrice != null) {
                                 "Continue with 30 searches every month for " +
                                     monthlyPrice + "/month. " +
@@ -833,14 +838,14 @@ private fun NearTimeScreen(
                     Button(
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !billingUiState.busy &&
-                            if (trialExhausted) {
+                            if (needsSubscription) {
                                 billingUiState.monthlyAvailable && monthlyPrice != null
                             } else {
                                 billingUiState.extraAvailable && extraPrice != null
                             },
                         onClick = {
                             paywallOpen = false
-                            if (trialExhausted) {
+                            if (needsSubscription) {
                                 billingManager.launchSubscription()
                             } else {
                                 billingManager.launchExtraSearchPack()
@@ -848,7 +853,7 @@ private fun NearTimeScreen(
                         }
                     ) {
                         Text(
-                            if (trialExhausted) {
+                            if (needsSubscription) {
                                 if (monthlyPrice != null) {
                                     "Continue with Google Play · " + monthlyPrice + "/month"
                                 } else {
@@ -1173,7 +1178,8 @@ private fun NearTimeScreen(
 
     val searchButtonText = when {
         quotaStatus == null -> "Loading search allowance…"
-        quotaStatus?.totalAvailable == 0 && quotaStatus?.accessMode == "trial" ->
+        quotaStatus?.totalAvailable == 0 &&
+            quotaStatus?.hasActiveSubscription() != true ->
             "Subscribe to continue"
         quotaStatus?.totalAvailable == 0 ->
             "Get 20 extra searches"
@@ -2368,7 +2374,13 @@ private fun SearchUsageCard(
                 )
             }
 
-            if (!isTestingAllowance && quota.accessMode == "trial" && quota.trialRemaining <= 0) {
+            val hasActiveSubscription = quota.hasActiveSubscription()
+            val subscriptionRequired =
+                !isTestingAllowance &&
+                    quota.totalAvailable <= 0 &&
+                    !hasActiveSubscription
+
+            if (subscriptionRequired) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = billing.monthlyPrice?.let {
@@ -2388,10 +2400,10 @@ private fun SearchUsageCard(
                 }
             }
 
-            if (quota.accessMode != "trial" && quota.monthlyRemaining <= 0) {
+            if (!isTestingAllowance && hasActiveSubscription && quota.totalAvailable <= 0) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Extra packs require an active subscription.",
+                    text = "Monthly searches used. Add 20 extra searches.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Button(
