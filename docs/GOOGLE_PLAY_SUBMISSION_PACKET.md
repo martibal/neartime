@@ -1,6 +1,6 @@
 # WayNear — Google Play submission packet
 
-Last reviewed against Google Play documentation: 2026-09-20.
+Last reviewed against Google Play documentation: 2026-09-23.
 
 This file is the authoritative worksheet for Google Play submission. It records every Play Console declaration or supporting document that WayNear is expected to need. It is not itself uploaded to Google Play. The final Play Console answers must be checked against the exact release AAB and current policy wording immediately before submission.
 
@@ -262,9 +262,12 @@ Required policy behavior before monetized production release:
 - subscription purchases must be acknowledged after verification;
 - consumable search packs must only be consumed after successful server verification/credit.
 
-Current hard blocker:
+Current implementation:
 
-- [ ] Add a visible **Manage subscription** / cancellation link before enabling the subscription for production.
+- [x] A visible **Manage subscription** link is shown for active/grace subscribers and opens the Google Play management page for `neartime_monthly`.
+- [x] Restore purchases is available.
+- [x] Localized subscription and search-pack prices come from Google Play Billing.
+- [x] Server verification occurs before entitlement/top-up credit.
 
 The Play Store product configuration and in-app text must agree. Do not hard-code a price as authoritative; display the localized price returned by Google Play.
 
@@ -320,7 +323,7 @@ These are not all Google-policy violations by themselves, but they must be resol
 - The Google Maps Android API-key manifest entry is intentional because Maps Compose is used for the explicit `Choose on map` start-point picker. Restrict the production key to the final package and signing certificate.
 - Several old architecture/COGS documents describe superseded provider paths. They are engineering history and must not be used as Play Console declaration sources.
 - `docs/purchase-funnel-events.md` contained the retired 3-success/5-attempt trial model; this audit updates it to the current one-counter model.
-- The subscription UI does not yet contain a Google Play subscription-management/cancellation link.
+- The subscription UI contains a Google Play subscription-management/cancellation link for active/grace subscriptions.
 - The final privacy contact email cannot be completed until the developer account/contact address is chosen.
 
 ## 22. Authoritative repository files for Play submission
