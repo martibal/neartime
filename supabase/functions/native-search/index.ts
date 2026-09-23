@@ -10,7 +10,7 @@
  * - conservative hard provider COGS ceiling: NOK 0.30
  * - result order: measured pedestrian route distance
  * - fail closed when the Top 10 cannot be proven inside the cost ceiling
- */ const BUILD_ID = '2026-09-20-nearby-rating-filter-v41';
+ */ const BUILD_ID = '2026-09-23-bars-primary-type-v49';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -45,6 +45,14 @@ const GOOGLE_CATEGORY_TYPES = Object.freeze({
   banks:['bank'], atm:['atm'], post_office:['post_office'], shipping_courier:['courier_service'],
   car_repair_tyres:['car_repair','tire_shop'], car_wash:['car_wash'], veterinary:['veterinary_care'],
   pet_care:['pet_care'], pet_stores:['pet_store']
+});
+
+const GOOGLE_PRIMARY_CATEGORY_TYPES = Object.freeze({
+  // Bars & drinks is intentionally primary-type strict. A restaurant, cafe or
+  // shop that merely also carries a secondary "bar" tag must not leak into
+  // this category. Night clubs belong here because WayNear has no separate
+  // night-club category.
+  bars_drinks: ['bar','pub','cocktail_bar','wine_bar','gastropub','night_club']
 });
 
 const BAD_POI_IDS = new Set([
@@ -688,6 +696,7 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
   const input = validateSearch(raw);
   const key = await requireGooglePlacesKey();
   const includedTypes = GOOGLE_CATEGORY_TYPES[input.category];
+  const includedPrimaryTypes = GOOGLE_PRIMARY_CATEGORY_TYPES[input.category] || null;
   if (!includedTypes || !includedTypes.length) {
     const e = new Error('GOOGLE_CATEGORY_NOT_MAPPED');
     e.status = 500;
@@ -737,7 +746,9 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
       method: 'POST',
       headers: commonHeaders,
       body: JSON.stringify({
-        includedTypes,
+        ...(includedPrimaryTypes
+          ? { includedPrimaryTypes }
+          : { includedTypes }),
         maxResultCount: 20,
         rankPreference: 'DISTANCE',
         locationRestriction: {
@@ -781,7 +792,12 @@ async function search(_tomTomKey, raw, beforeProviderAttempt) {
     if (clean(p.businessStatus) === 'CLOSED_PERMANENTLY') continue;
 
     const sourceTypes = Array.isArray(p.types) ? p.types : [];
-    if (!sourceTypes.some((type) => includedTypes.includes(type))) continue;
+    const primaryType = clean(p.primaryType);
+    if (includedPrimaryTypes) {
+      if (!primaryType || !includedPrimaryTypes.includes(primaryType)) continue;
+    } else if (!sourceTypes.some((type) => includedTypes.includes(type))) {
+      continue;
+    }
 
     const opening = googleOpeningState(p);
     if (input.openNowOnly && opening.isOpenNow !== true) continue;
