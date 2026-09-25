@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WayNear — Find nearby places by walking time</title>
+  <meta name="description" content="WayNear helps you find nearby places within the walking time you choose, with filters for opening hours, time until closing and rating.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://waynearapp.com/">
+  <link rel="icon" href="/app-icon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/app-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="WayNear">
+  <meta property="og:title" content="WayNear — Find nearby places by walking time">
+  <meta property="og:description" content="Choose how far you want to walk and find nearby places that match your filters and stay open long enough.">
+  <meta property="og:url" content="https://waynearapp.com/">
+  <meta property="og:image" content="https://waynearapp.com/app-icon.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="WayNear — Find nearby places by walking time">
+  <meta name="twitter:description" content="Find nearby places within the walking time you choose.">
+  <meta name="twitter:image" content="https://waynearapp.com/app-icon.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "WayNear",
+    "url": "https://waynearapp.com/",
+    "applicationCategory": "TravelApplication",
+    "operatingSystem": "Android",
+    "description": "WayNear helps users find nearby places within a chosen walking time and filter them by opening hours, time until closing and rating.",
+    "image": "https://waynearapp.com/app-icon.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "WayNear"
+    }
+  }
+  </script>
+
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #5f6f7e;
+      --line: rgba(38, 57, 72, .13);
+      --card: rgba(255, 255, 255, .76);
+      --card-strong: rgba(255, 255, 255, .92);
+      --accent: #204d62;
+      --accent-soft: #dbe9ef;
+      --lime: #a8d947;
+      --shadow: 0 22px 70px rgba(47, 67, 82, .10);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      line-height: 1.55;
+      background:
+        radial-gradient(circle at 84% 8%, rgba(255, 185, 142, .30), transparent 31rem),
+        radial-gradient(circle at 9% 22%, rgba(150, 205, 232, .38), transparent 30rem),
+        linear-gradient(180deg, #edf7fb 0%, #f8f4ee 47%, #f8fafb 100%);
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      width: min(1080px, calc(100% - 36px));
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 26px 0;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      text-decoration: none;
+      font-size: 1.18rem;
+      font-weight: 800;
+      letter-spacing: -.025em;
+    }
+
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 39px;
+      height: 39px;
+      border-radius: 12px;
+      background: #17384a;
+      color: #fff;
+      box-shadow: 0 9px 22px rgba(23, 56, 74, .20);
+      font-weight: 900;
+      letter-spacing: -.12em;
+      padding-right: 3px;
+    }
+
+    nav {
+      display: flex;
+      gap: 20px;
+      font-size: .94rem;
+      color: var(--muted);
+    }
+
+    nav a {
+      text-decoration: none;
+    }
+
+    nav a:hover { color: var(--ink); }
+
+    main {
+      padding: 64px 0 86px;
+    }
+
+    .hero {
+      max-width: 860px;
+    }
+
+    .eyebrow {
+      margin: 0 0 15px;
+      color: var(--accent);
+      font-size: .83rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 830px;
+      margin: 0;
+      font-size: clamp(3rem, 7vw, 6.4rem);
+      line-height: .98;
+      letter-spacing: -.062em;
+      font-weight: 820;
+    }
+
+    .lead {
+      max-width: 690px;
+      margin: 28px 0 0;
+      color: #425466;
+      font-size: clamp(1.16rem, 2vw, 1.45rem);
+      line-height: 1.55;
+    }
+
+    .feature-card {
+      margin-top: 58px;
+      padding: clamp(26px, 5vw, 46px);
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+    }
+
+    .feature-card h2 {
+      margin: 0 0 25px;
+      font-size: clamp(1.65rem, 3vw, 2.3rem);
+      letter-spacing: -.035em;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 15px 34px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .features li {
+      position: relative;
+      padding: 14px 0 14px 30px;
+      border-bottom: 1px solid var(--line);
+      font-size: 1.04rem;
+    }
+
+    .features li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 21px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 0 5px rgba(168, 217, 71, .18);
+    }
+
+    .features strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 1.02rem;
+    }
+
+    .features span {
+      color: var(--muted);
+    }
+
+    .store {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      margin-top: 28px;
+      padding: 26px 28px;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--card-strong);
+    }
+
+    .store h2 {
+      margin: 0 0 5px;
+      font-size: 1.25rem;
+      letter-spacing: -.02em;
+    }
+
+    .store p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .qr-placeholder {
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      width: 102px;
+      height: 102px;
+      border-radius: 18px;
+      border: 1px dashed rgba(32, 77, 98, .32);
+      background: #f8fbfc;
+      color: #71818e;
+      text-align: center;
+      font-size: .72rem;
+      line-height: 1.25;
+    }
+
+    footer {
+      padding: 28px 0 38px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      gap: 22px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      text-decoration: none;
+    }
+
+    .footer-links a:hover { color: var(--ink); }
+
+    @media (max-width: 720px) {
+      header {
+        align-items: flex-start;
+      }
+
+      nav {
+        gap: 12px;
+        font-size: .86rem;
+      }
+
+      main {
+        padding-top: 42px;
+      }
+
+      .features {
+        grid-template-columns: 1fr;
+      }
+
+      .store {
+        align-items: flex-start;
+      }
+
+      .qr-placeholder {
+        width: 86px;
+        height: 86px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .shell {
+        width: min(100% - 28px, 1080px);
+      }
+
+      nav a:first-child {
+        display: none;
+      }
+
+      h1 {
+        font-size: clamp(2.75rem, 15vw, 4.3rem);
+      }
+
+      .store {
+        flex-direction: column;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="brand" href="/" aria-label="WayNear home">
+        <span class="mark" aria-hidden="true">WN</span>
+        <span>WayNear</span>
+      </a>
+      <nav aria-label="Site navigation">
+        <a href="#what-it-does">What it does</a>
+        <a href="/privacy">Privacy</a>
+        <a href="mailto:support@waynearapp.com">Support</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p class="eyebrow">Nearby places, filtered for the walk ahead</p>
+        <h1 id="page-title">Find places within the walk time you choose.</h1>
+        <p class="lead">
+          WayNear helps you find nearby places that are close enough to walk to and,
+          when opening-hour data is available, stay open long enough for what you need.
+        </p>
+      </section>
+
+      <section class="feature-card" id="what-it-does" aria-labelledby="features-title">
+        <h2 id="features-title">What WayNear does</h2>
+        <ul class="features">
+          <li>
+            <strong>Choose your starting point</strong>
+            <span>Use your current location, type a place or address, or choose a point on the map.</span>
+          </li>
+          <li>
+            <strong>Set how long you want to walk</strong>
+            <span>Search by actual walking time instead of guessing from straight-line distance.</span>
+          </li>
+          <li>
+            <strong>Pick the kind of place you need</strong>
+            <span>Find restaurants, cafés, shops, pharmacies, bars, hotels and many other place types.</span>
+          </li>
+          <li>
+            <strong>Filter by opening time</strong>
+            <span>Show places that are open now and set a minimum amount of time they need to remain open.</span>
+          </li>
+          <li>
+            <strong>Set a minimum rating</strong>
+            <span>Remove places below the rating threshold you choose before they reach the result list.</span>
+          </li>
+          <li>
+            <strong>Get a focused result list</strong>
+            <span>WayNear returns up to 10 matching places and lets you compare the results that meet your criteria.</span>
+          </li>
+          <li>
+            <strong>Open the place in Google Maps</strong>
+            <span>View the place or hand off to Google Maps for walking directions when you are ready to go.</span>
+          </li>
+          <li>
+            <strong>Built for quick decisions</strong>
+            <span>Designed for the moment when you care about walking distance, opening time and whether a place fits right now.</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="store" aria-labelledby="store-title">
+        <div>
+          <h2 id="store-title">WayNear for Android</h2>
+          <p>Google Play link and QR code will appear here when the production listing is live.</p>
+        </div>
+        <div class="qr-placeholder" aria-label="Google Play QR code placeholder">
+          Play Store<br>QR code<br>coming soon
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-inner">
+        <span>© 2026 WayNear</span>
+        <div class="footer-links">
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Use</a>
+          <a href="mailto:support@waynearapp.com">support@waynearapp.com</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
