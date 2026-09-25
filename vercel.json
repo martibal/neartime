@@ -3,6 +3,22 @@
   "framework": null,
   "builds": [
     {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "robots.txt",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "sitemap.xml",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "android-native/app/src/main/res/drawable-nodpi/ic_launcher_full.png",
+      "use": "@vercel/static"
+    },
+    {
       "src": "legal/*.html",
       "use": "@vercel/static"
     },
@@ -40,6 +56,22 @@
     }
   ],
   "routes": [
+    {
+      "src": "/",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/robots.txt",
+      "dest": "/robots.txt"
+    },
+    {
+      "src": "/sitemap.xml",
+      "dest": "/sitemap.xml"
+    },
+    {
+      "src": "/app-icon.png",
+      "dest": "/android-native/app/src/main/res/drawable-nodpi/ic_launcher_full.png"
+    },
     {
       "src": "/privacy",
       "dest": "/legal/privacy.html"

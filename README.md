@@ -31,10 +31,10 @@ Production search endpoint:
 ## Google Play / legal
 
 Public privacy policy:
-https://neartime.vercel.app/privacy
+https://waynearapp.com/privacy
 
 Public terms:
-https://neartime.vercel.app/terms
+https://waynearapp.com/terms
 
 Release checklist:
 `docs/PLAY_STORE_RELEASE_CHECKLIST.md`
