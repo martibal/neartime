@@ -168,6 +168,7 @@ async function main() {
   let policy = null;
   try {
     policy = await prepareFixture(db, token, runId);
+    const probeStartedAt = (await db.query('select now() as started_at')).rows[0].started_at;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -200,7 +201,7 @@ async function main() {
       coalesce(sum(estimated_micro_usd),0)::bigint as reserved_micro_usd
       from public.api_cost_reservations
       where entitlement_hash=$1 and cost_bucket='provider_cogs'
-        and reserved_at >= now()-interval '15 minutes'`, [ENTITLEMENT]);
+        and reserved_at >= $2`, [ENTITLEMENT, probeStartedAt]);
     const row = ledger.rows[0];
     if (Number(row.actual_micro_usd) > PROVIDER_COGS_MICRO_USD) {
       throw new Error('Actual provider COGS exceeded funded test wallet.');
