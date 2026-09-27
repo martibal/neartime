@@ -128,9 +128,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 private const val BACKEND_BASE_URL = "https://pcckllkvnootomwxsmlu.supabase.co/functions/v1/native-search"
-private const val SUPABASE_QUOTA_RPC_URL = "https://pcckllkvnootomwxsmlu.supabase.co/rest/v1/rpc/neartime_record_client_quota_usage"
-private const val SUPABASE_PUBLISHABLE_KEY = "sb_publishable_dY1cvBi7OU0M3cF3qYusRQ_TpLo7b9Y"
-private const val APP_BUILD_ID = "production-20260923-80"
+private const val APP_BUILD_ID = "production-20260927-81-security"
 private val RatingStarGold = Color(0xFFB8860B)
 private val WayNearLogoNavy = Color(0xFF0D197E)
 private val WayNearBrandPurple = Color(0xFF6634BB)
@@ -1635,15 +1633,10 @@ private fun NearTimeScreen(
                                 locationError = null
                                 try {
                                     val bias = currentLocation ?: GeoPoint(DEFAULT_LATITUDE, DEFAULT_LONGITUDE)
-                                    val quotaEventId = UUID.randomUUID()
                                     locationSuggestions = suggestLocationsBackend(
                                         customLocationText.trim(), bias.latitude, bias.longitude
                                     )
-                                    recordClientQuotaUsage(
-                                        service = "tomtom_places_suggest",
-                                        eventId = quotaEventId
-                                    )
-                                    if (locationSuggestions.isEmpty()) {
+if (locationSuggestions.isEmpty()) {
                                         locationError = "No matching start location found."
                                     }
                                 } catch (e: Exception) {
@@ -1673,13 +1666,8 @@ private fun NearTimeScreen(
                                         locationSearchBusy = true
                                         locationError = null
                                         try {
-                                            val quotaEventId = UUID.randomUUID()
                                             val resolved = resolveLocationBackend(suggestion)
-                                            recordClientQuotaUsage(
-                                                service = "tomtom_places_details",
-                                                eventId = quotaEventId
-                                            )
-                                            customLocation = resolved
+customLocation = resolved
                                             customLocationText = resolved.title
                                             locationSuggestions = emptyList()
                                         } catch (e: Exception) {
@@ -3558,42 +3546,6 @@ private fun launchExternalUri(
     } catch (_: ActivityNotFoundException) {
         // No compatible map/browser app.
         // Deliberately no paid API fallback.
-    }
-}
-
-private suspend fun recordClientQuotaUsage(
-    service: String,
-    eventId: UUID
-) = withContext(Dispatchers.IO) {
-    runCatching {
-        val payload = JSONObject()
-            .put("p_service", service)
-            .put("p_units", 1)
-            .put("p_event_id", eventId.toString())
-
-        val request = Request.Builder()
-            .url(SUPABASE_QUOTA_RPC_URL)
-            .post(
-                payload
-                    .toString()
-                    .toByteArray(StandardCharsets.UTF_8)
-                    .toRequestBody(JSON_MEDIA_TYPE)
-            )
-            .header("apikey", SUPABASE_PUBLISHABLE_KEY)
-            .header("Authorization", "Bearer $SUPABASE_PUBLISHABLE_KEY")
-            .header("Content-Type", "application/json")
-            .build()
-
-        HTTP_CLIENT.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                Log.w(
-                    LOG_TAG,
-                    "QUOTA_TELEMETRY_FAILED build=$APP_BUILD_ID code=${response.code}"
-                )
-            }
-        }
-    }.onFailure {
-        Log.w(LOG_TAG, "QUOTA_TELEMETRY_FAILED build=$APP_BUILD_ID", it)
     }
 }
 
