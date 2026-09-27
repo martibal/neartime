@@ -10,7 +10,7 @@
  * - conservative hard provider COGS ceiling: NOK 0.30
  * - result order: measured pedestrian route distance
  * - fail closed when the Top 10 cannot be proven inside the cost ceiling
- */ const BUILD_ID = '2026-09-23-bars-primary-type-v49';
+ */ const BUILD_ID = '2026-09-27-security-hardening-v50';
 const RESULT_LIMIT = 10;
 const DISCOVER_LIMIT = 100;
 const MAX_ROUTE_CALLS = 24;
@@ -276,6 +276,19 @@ async function fetchJson(url, options, source) {
     throw error;
   } finally{
     clearTimeout(timeout);
+  }
+}
+async function recordClientProviderQuota(service) {
+  try {
+    await idempotencyRpc('neartime_record_provider_quota_usage', {
+      p_provider: 'tomtom',
+      p_service: service,
+      p_units: 1,
+      p_request_id: crypto.randomUUID(),
+      p_build_id: BUILD_ID
+    });
+  } catch (error) {
+    console.error('CLIENT_PROVIDER_QUOTA_WRITE_FAILED', service, error instanceof Error ? error.message : error);
   }
 }
 function costNok(discoverCalls, routeCalls) {
