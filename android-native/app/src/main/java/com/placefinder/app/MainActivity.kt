@@ -1636,7 +1636,7 @@ private fun NearTimeScreen(
                                     locationSuggestions = suggestLocationsBackend(
                                         customLocationText.trim(), bias.latitude, bias.longitude
                                     )
-if (locationSuggestions.isEmpty()) {
+                                    if (locationSuggestions.isEmpty()) {
                                         locationError = "No matching start location found."
                                     }
                                 } catch (e: Exception) {
@@ -1667,7 +1667,7 @@ if (locationSuggestions.isEmpty()) {
                                         locationError = null
                                         try {
                                             val resolved = resolveLocationBackend(suggestion)
-customLocation = resolved
+                                            customLocation = resolved
                                             customLocationText = resolved.title
                                             locationSuggestions = emptyList()
                                         } catch (e: Exception) {
